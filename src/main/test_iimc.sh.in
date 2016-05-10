@@ -5,30 +5,44 @@
 EXE=@EXEEXT@
 srcdir=@srcdir@
 aigdir=${srcdir}/examples/aig19
+ctldir=${srcdir}/examples/ctl
 
-# The separator IFS is set to a comma so that we can have spaces between
-# arguments.
+# The separator IFS is set to a colon so that we can have spaces between
+# arguments.  Each entry consists of a list of arguments and an expected
+# result, separated by a comma.
 
-IFS=,
+IFS=:
 argslist="\
--t print_expr -t print_dot -t print_verilog ${aigdir}/safety/counter3.aig > /dev/null,\
--t sr -t ic3 ${aigdir}/safety/counter3.aig,\
--t sr -t ic3 --cnf_techmap ${aigdir}/safety/gaxb.aig,\
--t bmc --bmc_bound 10 ${aigdir}/safety/sss.aig,\
--t sr -t bdd_fw_reach --bdd_sweeping ${aigdir}/safety/gaxb.aig,\
--t bddsweep -t fair ${aigdir}/liveness/cnt3bits.aig,\
--t sr -t satsweep -t bmc --bmc_bound 4 -t ic3r ${aigdir}/safety/sss.aig,\
--t bmc --bmc_bound 1 -t ic3 ${aigdir}/safety/sss.aig"
+-t print_expr -t print_dot -t print_verilog ${aigdir}/counter3.aig > /dev/null,:\
+-t sr -t ic3 ${aigdir}/counter3.aig,0:\
+-t sr -t ic3 --cnf_techmap ${aigdir}/gaxb.aig,0:\
+-t bmc --bmc_bound 10 ${aigdir}/sss.aig,2:\
+-t sr -t bdd_fw_reach --bdd_sweeping ${aigdir}/gaxb.aig,0:\
+-t bddsweep -t fair ${aigdir}/cnt3bits.aig,0:\
+-t sr -t satsweep -t bmc --bmc_bound 4 -t ic3r ${aigdir}/sss.aig,0:\
+-t bmc --bmc_bound 1 -t ic3 ${aigdir}/sss.aig,0:\
+-t sr -t iictl --ctl ${ctldir}/cube.ctl ${ctldir}/cube.aig,1:\
+--ctl ${ctldir}/gcd.ctl ${ctldir}/gcd.aig --pi 1,0:\
+-t coi -t check --ctl ${ctldir}/simple4.ctl ${ctldir}/simple4.aig --pi 7,0:\
+-t sr -t fcbmc ${aigdir}/hanoi4.aig,1"
 
 verbosity=0
 
 exitstatus=0
 count=0
-for args in $argslist
+for argsres in $argslist
 do
-  echo "executing" "./iimc$EXE -v $verbosity $args"
-  eval "./iimc$EXE -v $verbosity $args"
+  IFS=, # to sepatate arguments from expected result
+  set -- $argsres
+  echo "executing" "./iimc$EXE -v $verbosity $1"
+  result=`eval "./iimc$EXE -v $verbosity $1"`
   failed=`expr $? != 0`
+  if [ $failed = 0 ]; then
+    if [ X$result != X$2 ]; then
+      echo iimc says: $result expected was: $2
+      failed=1
+    fi
+  fi
   exitstatus=`expr $exitstatus + $failed`
   count=`expr $count + 1`
 done

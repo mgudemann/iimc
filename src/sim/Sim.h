@@ -47,17 +47,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "AIG.h"
 #include "Model.h"
 
-namespace {
-  
-  /**
-   * This is the low-level function that evaluates the AIG node values
-   * according to the topological sort
-   */
-  void simulateAig(Opt::AIG& aig, std::vector<char>& nodeValues);
-
-
-}
-
 namespace Sim {
 
   /**

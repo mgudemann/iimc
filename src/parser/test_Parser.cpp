@@ -55,7 +55,7 @@ namespace {
   typedef po::positional_options_description pos_desc;
   typedef po::variables_map var_map;
 
-  const string default_file_0 = "/examples/aig19/safety/counter3.aig";
+  const string default_file_0 = "/examples/aig19/counter3.aig";
   const string default_file_1 = "/examples/dimacs/par8-1-c.cnf";
   pos_desc pos_opt;
 

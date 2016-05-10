@@ -108,12 +108,14 @@ namespace std {
 
 namespace {
 
+#if 0
 #ifndef NIOS
   std::ostream& operator<<(std::ostream& ostr, CNFCut& c)
   {
     ostr << *static_cast<CNF::Cut*>(&c) << ": " << c.getCost();
     return ostr;
   }
+#endif
 #endif
 
   template<typename TTT, typename Map>
@@ -260,6 +262,7 @@ namespace {
     }
   };
 
+#if 0
   void printCover(std::vector<std::vector<long> >& c)
   {
     for(unsigned i = 0; i < c.size(); ++i) {
@@ -271,6 +274,7 @@ namespace {
     }
     std::cout << std::endl;
   }
+#endif
 
   class generateCNF
   {
@@ -357,6 +361,7 @@ namespace {
     }
   };
 
+#if 0
   void printCuts(std::vector<std::vector<CNFCut> >& cuts)
   {
     for(unsigned i = 0; i < cuts.size(); ++i) {
@@ -366,6 +371,7 @@ namespace {
       }
     }
   }
+#endif
 } // namespace
 
 namespace CNF

@@ -42,10 +42,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "COI.h"
 #include "IC3.h"
 #include "IIC.h"
+#include "IICTL.h"
 #include "Error.h"
 #include "Expr.h"
 #include "ExprUtil.h"
 #include "Fair.h"
+#include "FCBMC.h"
 #include "FSIS.h"
 #include "options.h"
 #include "SAT.h"
@@ -187,6 +189,42 @@ namespace Options {
        ("ic3_stats",
         "ic3 option: Extract and print statistics about the ic3 run")
  
+      ("iictl_verbosity",
+       value<int>(),
+       "IICTL Option: verbosity level for IICTL")
+
+      ("iictl_ic3timeout",
+        value<int>()->default_value(10),
+        "IICTL Option: Timeout for CTG IC3 queries")
+
+      ("iictl_xic3propagate",
+        "IICTL Option: Disable usage of propagation for failing IC3 queries to extract inductive clauses")
+
+      ("iictl_use_bdd_reach",
+       "IICTL Option: Use BDD forward reachability information")
+
+      ("iictl_ic3incremental",
+       "IICTL Option: Use IC3 incrementally")
+
+      ("iictl_count_reach",
+       "IICTL Option: Count the number of states in the overapproximate reachability set")
+
+      ("iictl_gen_aggr",
+        value<int>()->default_value(1),
+       "IICTL Option: Agression level for generalization traces (0-2)")
+
+      ("iictl_fair_grppt", 
+       value<int>()->default_value(3),
+       "IICTL option: The type of proof processing to apply on global reachability proofs in FAIR queries initiated by IICTL (0-3). 0 = NONE, 1 = STRENGTHEN, 2 = WEAKEN, 3 = SHRINK")
+
+      ("iictl_fair_global_first", "IICTL option: possibly do the global reachability query first in FAIR queries. Without this option, those queries are never done first")
+
+      ("iictl_xsat_renew",
+       "IICTL Option: Disable renewal of lifting SAT database after generalizing a trace")
+
+      ("iictl_interlv_blift",
+       "IICTL Option: Apply a round of basic lifting whenever a literal is dropped during the forall-exists procedure")
+
       ("fair_xincr",
        "FAIR Option: Disable incremental use of IC3")
 
@@ -338,7 +376,15 @@ namespace Options {
 
       ("cnf_timeout", value<double>(), "Maximum time for hard effort CNF conversion.  After timeout, it will still produce correct CNF.")
 
+      ("cnf_wilson", "Use Wilson translation for conversion to CNF")
+
       ("fair_k", value<int>()->default_value(1), "fair option: set K for query")
+
+      ("fair_timeout", value<int>()->default_value(-1), "fair option: set timeout")
+
+      ("fcbmc_timeout", value<int>()->default_value(60), "FCBMC: set timeout") 
+
+      ("fcbmc_bound", value<int>()->default_value(8191), "FCBMC: set bound for k") 
 
       ("pi", value<unsigned>()->default_value(0), "Property index")
       ;
@@ -464,7 +510,9 @@ namespace Options {
         else if (*it == "conclude")        t = new Conclusion(model);
         else if (*it == "dimacs")          t = new CNF::DIMACSAction(model);
         else if (*it == "fair")            t = new Fair::FairAction(model);
+        else if (*it == "iictl")           t = new IICTL::IICTLAction(model);
         else if (*it == "check")           t = new IIC::IICAction(model);
+        else if (*it == "fcbmc")           t = new FCBMC::FCBMCAction(model);
         else if (*it == "standard")        standard = true;
         else throw InputError("Unknown tactic: " + *it);
         if(!standard)

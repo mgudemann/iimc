@@ -1,0 +1,18 @@
+#! /bin/sh
+
+EXE=@EXEEXT@
+srcdir=@srcdir@
+
+datafiles=${@:-"egefo0.ctl reset.ctl until.ctl response.ctl syntaxError.ctl reduction.ctl mult.ctl"}
+count=`echo $datafiles | wc -w`
+
+exitstatus=0
+for file in $datafiles
+do
+  ./test_Prop$EXE ${srcdir}/src/properties/tests/$file
+  failed=`expr $? != 0`
+  exitstatus=`expr $exitstatus + $failed`
+done
+echo "$exitstatus failed sub-tests out of $count"
+
+exit $exitstatus

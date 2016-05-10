@@ -207,7 +207,6 @@ namespace std
     return ostr;
   }
 
-  template <>
   template <typename T, int ident>
   struct hash< ::Opt::UniqueIntegralType<T, ident> > : public std::unary_function< ::Opt::UniqueIntegralType<T, ident>, size_t>
   {

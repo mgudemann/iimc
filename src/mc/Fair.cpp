@@ -34,7 +34,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "Fair.h"
 
-#include "Error.h"
 #include "Expr.h"
 #include "ExprUtil.h"
 #include "Model.h"
@@ -54,6 +53,7 @@ using namespace std;
 
 namespace {
 
+#if 0
   void primeVector(Expr::Manager::View & ev, const vector<ID> & in, vector<ID> & out) {
     for(vector<ID>::const_iterator it = in.begin(); it != in.end(); ++it) {
       if(*it != ev.btrue() && *it != ev.bfalse())
@@ -62,6 +62,7 @@ namespace {
         out.push_back(*it);
     }
   }
+#endif
 
   class Timeout {
   };
@@ -336,40 +337,48 @@ namespace {
         if (ts < st.k) timeStep(st, fitrln, 1, st.ev.btrue());
       }
 
-      vector<ID> conj;
-      for (int i = -st.k; st.k > 0 && i < 1+st.k; ++i) {
-        if (i == -1 || i == 0) continue;
+      if (st.k > 0) {
         vector<ID> disj;
-        vector<ID> eq;
-        for (vector<ID>::const_iterator it = st.svars.begin(); 
-             it != st.svars.end(); ++it) {
-          eq.push_back(st.ev.apply(Expr::Or, 
-                                   primeFormula(st.ev, *it, i),
-                                   st.ev.apply(Expr::Not, *it)));
-          eq.push_back(st.ev.apply(Expr::Or, 
-                                   primeFormula(st.ev, st.ev.apply(Expr::Not, *it), i),
-                                   *it));
-        }
-        disj.push_back(st.ev.apply(Expr::And, eq));
-        for (int j = i+1; j <= (i < 0 ? -1 : 1+st.k); ++j) {
-          vector<ID> disjc(disj);
+        for (int i = -st.k; i <= 1+st.k; ++i) {
+          if (i == 0) continue;
+          vector<ID> eq;
           for (vector<ID>::const_iterator it = st.svars.begin(); 
                it != st.svars.end(); ++it) {
-            disjc.push_back(st.ev.apply(Expr::And, 
-                                        primeFormula(st.ev, *it, i),
-                                        primeFormula(st.ev, 
-                                                     st.ev.apply(Expr::Not, *it), j)));
-            disjc.push_back(st.ev.apply(Expr::And, 
-                                        primeFormula(st.ev, *it, j),
-                                        primeFormula(st.ev, 
-                                                     st.ev.apply(Expr::Not, *it), i)));
+            eq.push_back(st.ev.apply(Expr::Or, 
+                                     primeFormula(st.ev, *it, i),
+                                     st.ev.apply(Expr::Not, *it)));
+            eq.push_back(st.ev.apply(Expr::Or, 
+                                     primeFormula(st.ev, st.ev.apply(Expr::Not, *it), i),
+                                     *it));
           }
-          conj.push_back(st.ev.apply(Expr::Or, disjc));
+          disj.push_back(st.ev.apply(Expr::And, eq));
         }
+
+        vector<ID> conj;
+        for (int i = -st.k; i < 1+st.k; ++i) {
+          if (i == -1 || i == 0) continue;
+          for (int j = i+1; j <= (i < 0 ? -1 : 1+st.k); ++j) {
+            vector<ID> disjc;
+            for (vector<ID>::const_iterator it = st.svars.begin(); 
+                 it != st.svars.end(); ++it) {
+              disjc.push_back(st.ev.apply(Expr::And, 
+                                          primeFormula(st.ev, *it, i),
+                                          primeFormula(st.ev, 
+                                                       st.ev.apply(Expr::Not, *it), j)));
+              disjc.push_back(st.ev.apply(Expr::And, 
+                                          primeFormula(st.ev, *it, j),
+                                          primeFormula(st.ev, 
+                                                       st.ev.apply(Expr::Not, *it), i)));
+            }
+            conj.push_back(st.ev.apply(Expr::Or, disjc));
+          }
+        }
+        disj.push_back(st.ev.apply(Expr::And, conj));
+        SAT::Clauses eqc, fieqc;
+        Expr::tseitin(st.ev, st.ev.apply(Expr::Or, disj), eqc);
+        ficnf(st, eqc, fi, fieqc);
+        st.fairV->add(fieqc, gid);
       }
-      SAT::Clauses eqc;
-      Expr::tseitin(st.ev, st.ev.apply(Expr::And, conj), eqc);
-      st.fairV->add(eqc, gid);
 
       for (vector<SAT::Clauses>::const_iterator it = st.rproofs.begin(); 
            it != st.rproofs.end(); ++it) {
@@ -711,8 +720,13 @@ namespace {
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
     st.opts.ic3_opts.propagate = true;
+    int64_t startTime = Util::get_user_cpu_time();
     MC::ReturnValue rv = IC3::reach2(st.m, st.opts.ic3_opts, trace, &proofs, &incr, 
                                      &dummy, &indCubes);
+    if(st.m.verbosity() > Options::Informative)
+      cout << "IC3 query CPU time: "
+           << (Util::get_user_cpu_time() - startTime) / 1000000.0
+           << " seconds" << endl;
     st.opts.ic3_opts.incremental = false;
     st.opts.ic3_opts.propagate = false;
     incr.clear();
@@ -760,8 +774,13 @@ namespace {
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
     st.opts.ic3_opts.propagate = true;
+    int64_t startTime = Util::get_user_cpu_time();
     MC::ReturnValue rv = IC3::reach2(st.m, st.opts.ic3_opts, trace, &proofs, &incr, 
                                      &dummy, &indCubes);
+    if(st.m.verbosity() > Options::Informative)
+      cout << "IC3 query CPU time: "
+           << (Util::get_user_cpu_time() - startTime) / 1000000.0
+           << " seconds" << endl;
     st.opts.ic3_opts.incremental = false;
     st.opts.ic3_opts.propagate = false;
     incr.clear();
@@ -844,6 +863,7 @@ namespace {
   }
 
   bool check(State & st) {
+    int64_t stime = Util::get_user_cpu_time();
     // 072511
     int kcp = st.k;
     st.k = st.c_k;
@@ -867,6 +887,11 @@ namespace {
       while (getSkeleton(st, skel)) {
         if (st.m.verbosity() > Options::Terse) 
           cout << "Fair: skeleton size = " << skel.size() << endl;
+        if (st.m.verbosity() > Options::Verbose) {
+          for (vector< vector<ID> >::const_iterator it = skel.begin();
+               it != skel.end(); ++it)
+            printVector(st, *it);
+        }
         assert (skel.size() > 0);
 
         vector<bool> sched(1+skel.size(), false);
@@ -880,6 +905,9 @@ namespace {
           gfirst = rand() < st.gd * INT_MAX;
         unsigned offset = rand() % skel.size(), i;
         vector< vector<Transition> > traces(sched.size());
+        //The index of the skeleton state for which global reachability is to
+        //be checked (randomly selected)
+        unsigned skelIndex = 0; 
         vector< vector<IC3::CubeSet> > incr(sched.size(), vector<IC3::CubeSet>());
         while (true) {
           if (st.m.options().count("fair_xincr"))
@@ -903,11 +931,21 @@ namespace {
                  ? 1
                  : i+1) {
             if (sched[i]) continue;
+            //Check timeout
+            if (st.opts.timeout > 0) {
+              int64_t sofar = Util::get_user_cpu_time() - stime;
+              if (sofar / 1000000 >= st.opts.timeout) {
+                if (st.m.verbosity() > Options::Terse)
+                  cout << "Fair: timeout" << endl;
+                throw Timeout();
+              }
+            }
             try {
               if (i == 0) {
                 SAT::Clauses proof;
                 vector<Transition> trace;
-                if (globalReach(st, skel[rand() % skel.size()], 
+                skelIndex = rand() % skel.size();
+                if (globalReach(st, skel[skelIndex], 
                                 proof, st.opts.printCex ? &trace : NULL,
                                 incr[i])) {
                   addGlobalProof(st, proof);
@@ -952,15 +990,30 @@ namespace {
             if(st.lasso) {
               traces[0].pop_back();
               st.lasso->stem = traces[0];
-              for(unsigned i = 1; i < traces.size(); ++i) {
-                assert(traces[i].size() > 1);
-                traces[i].pop_back();
-                st.lasso->loop.insert(st.lasso->loop.end(), traces[i].begin(), traces[i].end());
+              unsigned lassoLength = 0;
+              for(unsigned i = 0; i < skel.size(); ++i) {
+                unsigned traceIndex = ((i + skelIndex) % skel.size()) + 1;
+                assert(traces[traceIndex].size() > 1);
+                traces[traceIndex].pop_back();
+                st.lasso->loop.insert(st.lasso->loop.end(), traces[traceIndex].begin(), traces[traceIndex].end());
+                lassoLength += traces[traceIndex].size();
               }
+              if (st.m.verbosity() > Options::Informative)
+                cout << "Counterexample of stem length "
+                     << st.lasso->stem.size() << " and lasso length "
+                     << lassoLength << endl;
             }
             return false;
           }
           st.opts.ic3_opts.timeout *= 2;
+          if (st.opts.timeout > 0) {
+            int64_t sofar = Util::get_user_cpu_time() - stime;
+            int remTime = st.opts.timeout - sofar / 1000000;
+            if (st.opts.ic3_opts.timeout > 0)
+              st.opts.ic3_opts.timeout = min(st.opts.ic3_opts.timeout, remTime);
+            else
+              st.opts.ic3_opts.timeout = remTime;
+          }
         }
       SAFE:
         if (rcsz < st.rconstraints.size())
@@ -986,6 +1039,8 @@ namespace Fair {
 
   MC::ReturnValue check(Model & m, FairOptions & opts, Lasso * lasso,
                         vector<SAT::Clauses> * proofs) {
+    if (m.verbosity() > Options::Silent)
+      cout << "Fair: starting" << endl;
     static vector< vector<Record> > records;
     ExprAttachment * eat = (ExprAttachment *) m.attachment(Key::EXPR);
     vector<ID> init(eat->initialConditions());
@@ -1026,10 +1081,15 @@ namespace Fair {
       cout << "FAIR: using " << sz << " previous proofs" << endl;
     
     MC::ReturnValue rv;
-    if (st.trivial || check(st))
-      rv.returnType = MC::Proof;
-    else
-      rv.returnType = MC::CEX;
+    try {
+      if (st.trivial || check(st))
+        rv.returnType = MC::Proof;
+      else
+        rv.returnType = MC::CEX;
+    }
+    catch (Timeout to) {
+      rv.returnType = MC::Unknown;
+    }
 
     if (crec.size() > sz) records.push_back(crec);
 

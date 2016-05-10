@@ -60,7 +60,7 @@ typedef uint64_t TS;
  */
 class Model {
 public:
-  enum Mode { mNONE, mIC3, mFAIR};
+  enum Mode { mNONE, mIC3, mFAIR, mIICTL };
   class Action;
   class Attachment;
   class AttachmentFactory;
@@ -196,6 +196,8 @@ public:
 class Model::Action {
 public:
   Action(Model & model) : _model(model), _ts(0) {}
+
+  virtual ~Action() {}
 
   void make();
 

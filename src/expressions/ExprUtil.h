@@ -49,6 +49,8 @@ namespace Expr {
   typedef std::unordered_map<ID, ID> IDMap;
   typedef std::unordered_multimap<ID, ID> IDMMap;
   typedef std::vector<ID> IDVector;
+  typedef std::unordered_set<ID> IDSet;
+  typedef std::unordered_map<ID, IDSet> IDSetMap;
 
   /**
    * Creates a string representation of the expression.
@@ -75,6 +77,11 @@ namespace Expr {
    */
   void conjuncts(Manager::View & v, ID id, IDVector & rv);
 
+  /**
+   * Returns true if expression is a clause
+   */
+  bool isClause(Manager::View & v, ID id, IDVector * lits = NULL);
+
   void variables(Manager::View & v, ID id, std::set<ID> & rv);
   void variables(Manager::View & v, IDVector & ids, std::set<ID> & rv);
 
@@ -100,6 +107,8 @@ namespace Expr {
                std::vector<IDVector> & rv_clauses, IDMap* satIdOfId = NULL,
                bool assert_roots = true);
 
+  void wilson(Manager::View & v, ID id, std::vector<IDVector> & rv_clauses);
+  void wilson(Manager::View & v, IDVector & ids, std::vector<IDVector> & rv_clauses);
   /**
    * Adds the immediate containing expression of each subexpression of
    * id.  Use IDMap::equal_range() to retrieve the parents of an
@@ -107,8 +116,23 @@ namespace Expr {
    */
   void parents(Manager::View & v, ID id, IDMMap & map);
 
+  /**
+   * Returns the set of (strict) descendants of each subexpression of id. 
+   */
+  void descendants(Manager::View & v, ID id, IDSetMap & map);
+
+  /**
+   * Returns the set of (strict) ancestors of expression "node" that are
+   * subexpressions of the expression "id". The ancestors are
+   * topologically-sorted.
+   */
+  void ancestors(Manager::View & v, ID node, ID id, IDVector & ancestors);
+
   ID AIGOfExpr(Manager::View & v, ID id);
   void AIGOfExprs(Manager::View & v, std::vector<ID> & ids);
+
+  ID AOIOfExpr(Manager::View & v, ID id);
+  void AOIOfExprs(Manager::View & v, std::vector<ID> & ids);
 
   /**
    * Creates a string encoding the expression(s) in dot format.

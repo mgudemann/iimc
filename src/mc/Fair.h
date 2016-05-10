@@ -63,6 +63,7 @@ namespace Fair {
       proofProc = IC3::STRENGTHEN;
       global_last = false;
       iictl = false;
+      timeout = opts["fair_timeout"].as<int>();
     }
     IC3::IC3Options ic3_opts;
     int k;
@@ -71,6 +72,7 @@ namespace Fair {
     IC3::ProofProcType proofProc;
     bool global_last;
     bool iictl;
+    int timeout;
   };
 
   MC::ReturnValue check(Model & m, FairOptions & opts, Lasso * lasso = NULL,

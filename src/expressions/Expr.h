@@ -83,6 +83,8 @@ namespace Expr {
       friend class Manager;
     public:
 
+      virtual ~View();
+
       Manager & manager();
 
       /**

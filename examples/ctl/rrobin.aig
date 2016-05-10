@@ -1,0 +1,22 @@
+aig 24 2 5 2 17
+24
+32
+2 10
+4 12
+48
+6
+8
+	
+i0 ir0
+i1 ir1
+l0 ack0
+l1 ack1
+l2 req0
+l3 req1
+l4 robin
+o0 ack0
+o1 ack1
+c
+bliftoaig
+1.9
+rrobin.blif

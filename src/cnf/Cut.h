@@ -48,7 +48,7 @@ namespace CNF
 
 namespace std
 {
-  template <> void swap(::CNF::Cut& c1, ::CNF::Cut& c2);
+  void swap(::CNF::Cut& c1, ::CNF::Cut& c2);
 }
 
 namespace CNF
@@ -191,7 +191,7 @@ namespace CNF
       enumMembers(aig, s, i);
     }
 
-    friend void ::std::swap<Cut>(Cut& c1, Cut& c2);
+    friend void ::std::swap(Cut& c1, Cut& c2);
     friend void merge(const Cut& c1, const Cut& c2, Cut& cout);
     friend bool merge(const Cut& c1, const Cut& c2, unsigned k, Cut& cout);
   };
@@ -350,7 +350,6 @@ namespace CNF
 
 namespace std
 {
-  template <>
   void swap(::CNF::Cut& c1, ::CNF::Cut& c2)
   {
     swap(c1.inputs, c2.inputs);

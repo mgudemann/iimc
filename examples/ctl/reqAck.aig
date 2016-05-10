@@ -1,0 +1,39 @@
+aig 73 1 13 2 59 0 0 0 1
+48
+62
+70
+78
+86
+2
+94
+102
+110
+118
+120
+134
+142
+144
+147
+147
+%#
+$"1/'*&-/,+.6%#(!>?BFADN;>VY29F032a:
+ehnvyi0 nd
+l0 ra.slv.count<6>
+l1 ra.slv.count<9>
+l2 ra.slv.count<1>
+l3 ra.state<1>
+l4 ra.slv.count<4>
+l5 req
+l6 ra.slv.count<7>
+l7 ra.slv.count<2>
+l8 ra.slv.count<5>
+l9 ra.slv.count<8>
+l10 ra.slv.count<0>
+l11 ra.state<0>
+l12 ra.slv.count<3>
+o0 ack
+o1 fair
+c
+bliftoaig
+1.9
+reqAck.blif

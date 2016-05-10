@@ -40,7 +40,6 @@ POSSIBILITY OF SUCH DAMAGE.
 /** @file IC3.h **/
 
 #include "BddAttachment.h"
-#include "BMC.h"
 #include "CNFAttachment.h"
 #include "COI.h"
 #include "ExprAttachment.h"
@@ -109,6 +108,7 @@ namespace IC3 {
       inf_weak = opts.count("ic3_weak_inf");
       try_unlifted = opts.count("ic3_try_unlifted");
       stats = opts.count("ic3_stats");
+      initCube = NULL;
     }
     bool reverse;
     int timeout;
@@ -135,6 +135,7 @@ namespace IC3 {
     bool inf_weak;
     bool try_unlifted;
     bool stats;
+    std::vector<ID> * initCube;
   };
 
   MC::ReturnValue check(Model & m, IC3Options & opts,
@@ -144,7 +145,8 @@ namespace IC3 {
                         std::vector<CubeSet> * cubes = NULL,
                         std::vector<LevClauses> * propClauses = NULL,
                         CubeSet * indCubes = NULL,
-                        bool useRAT = true);
+                        bool useRAT = true,
+                        bool * bmcProof = NULL);
 
   MC::ReturnValue reach(Model & m, IC3Options & opts,
                         std::vector< std::vector< std::vector<ID> > > & proofs,

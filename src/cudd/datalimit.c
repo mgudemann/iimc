@@ -42,7 +42,7 @@ static char rcsid[] UNUSED = "$Id: datalimit.c,v 1.6 2008/04/25 07:00:55 fabio E
 /*---------------------------------------------------------------------------*/
 
 #ifndef RLIMIT_DATA_DEFAULT
-#define RLIMIT_DATA_DEFAULT 268435456	/* assume 64MB by default */
+#define RLIMIT_DATA_DEFAULT 268435456	/* assume 256MB by default */
 #endif
 
 /*---------------------------------------------------------------------------*/

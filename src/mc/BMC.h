@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "COI.h"
 #include "Expr.h"
 #include "ExprAttachment.h"
+#include "IC3.h"
 #include "Model.h"
 #include "MC.h"
 #include "ProofAttachment.h"
@@ -53,7 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 /** namespace of BMC */
 namespace BMC {
   struct BMCOptions {
-    BMCOptions() : timeout(-1), sim(false), useCOI(true), printCex(false), constraints(NULL), iictl(false) {}
+    BMCOptions() : timeout(-1), sim(false), useCOI(true), printCex(false), constraints(NULL), iictl(false), proofProc(IC3::STRENGTHEN) {}
     size_t lo;
     size_t * bound;
     int timeout;
@@ -67,10 +68,12 @@ namespace BMC {
     bool iictl;
     SAT::Clauses * iictl_clauses;
     bool silent;
+    IC3::ProofProcType proofProc;
   };
 
   // Procedure that performs BMC on the given model with the given bound.
-  MC::ReturnValue check(Model &model, const BMCOptions & opts, std::vector<Transition> * cexTrace = NULL);
+  MC::ReturnValue check(Model &model, const BMCOptions & opts, std::vector<Transition> * cexTrace = NULL,
+                        std::vector< std::vector<ID> > * proofCNF = NULL);
 
   // Defines the basic BMC tactic.
   class BMCAction : public Model::Action {

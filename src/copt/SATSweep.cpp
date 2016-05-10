@@ -274,6 +274,7 @@ bool checkEquivalence(Model& model, AIG& aig1, AIG& aig2, RefIDMap& idOfAigRef1,
   return true;
 }
 
+#if 0
 void tr(AIG& aig, NodeRef ref, vector<NodeIndex>& liveVars, vector<NodeIndex>& liveNodes, vector<char>& visited) {
   
   if(isNot(ref))
@@ -362,6 +363,7 @@ void findLiveNodes(AIG& aig, vector<NodeIndex>& liveVars, vector<NodeIndex>& liv
     tr(aig, ref, liveVars, liveNodes, visited);
   }
 }
+#endif
 
 /*
  * Get the indices of AIG nodes in the cone with the root "index". Only adds
@@ -415,10 +417,12 @@ void getSupport(const AIG& aig, NodeIndex index, unordered_set<NodeIndex>& suppo
   getSupport(aig, rchild, supportVars, visited);
 }
 
+#if 0
 void getStructuralSupport(const AIG& aig, NodeIndex index, unordered_set<NodeIndex>& supportVars) {
   vector<char> visited(aig.size(), 0);
   getSupport(aig, index, supportVars, visited);
 }
+#endif
 
 void getStructuralSupport(const AIG& aig, list<NodeIndex>::const_iterator first, unsigned numNodes, unordered_set<NodeIndex>& supportVars) {
   vector<char> visited(aig.size(), 0);
@@ -929,7 +933,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
         return;
       }
     }
-    if(numNodesAfter != numNodesBefore || numClassesBefore != numClassesBefore)
+    if(numNodesAfter != numNodesBefore || numClassesAfter != numClassesBefore)
       persist = 0;
     else
       ++persist;

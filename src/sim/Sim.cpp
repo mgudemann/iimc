@@ -47,6 +47,10 @@ using namespace std;
 
 namespace {
 
+  /**
+   * This is the low-level function that evaluates the AIG node values
+   * according to the topological sort
+   */
   void simulateAig(Opt::AIG& aig, vector<char>& nodeValues) {
     for(unsigned i = 1; i < aig.size(); ++i) {
       //Skip nodes that don't have fanins

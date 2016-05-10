@@ -1,0 +1,40 @@
+aig 52 7 9 4 36
+50
+56
+6
+74
+80
+86
+92
+98
+104
+16
+30
+28
+22
+$-'
+!<)#E7
+1	=5D=/,9%ORi0 amount<1>
+i1 din<2>
+i2 spin
+i3 amount<0>
+i4 din<0>
+i5 din<3>
+i6 din<1>
+l0 dout<1>
+l1 inr<2>
+l2 spl
+l3 dout<2>
+l4 inr<0>
+l5 inr<3>
+l6 dout<0>
+l7 dout<3>
+l8 inr<1>
+o0 dout<1>
+o1 dout<3>
+o2 dout<0>
+o3 dout<2>
+c
+bliftoaig
+1.9
+spinner4.blif

@@ -35,6 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "FSIS.h"
 #include "IC3.h"
 
+#include "BMC.h"
 #include "Error.h"
 #include "Expr.h"
 #include "ExprUtil.h"
@@ -920,9 +921,10 @@ namespace {
       st.init = st.ss.init->newView(st.ev);
       st.ss.init->add(init_clauses);
 
-      for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i) {
-        st.ss.init->add((*st.ss.opts.constraints)[i]);
-      }
+      if(st.ss.opts.constraints)
+        for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i) {
+          st.ss.init->add((*st.ss.opts.constraints)[i]);
+        }
     }
     else if (!st.ss.opts.bmcsz) {
       st.ss.bddInit = false;
@@ -1935,7 +1937,9 @@ namespace {
       // 2. try brute force reduction four times
       unsigned int i = 0;
       int cnt = complete? cube.size() : 3;
-      for (; i < cube.size() && cnt >= 0; ++i, --cnt) {
+      for (; i < cube.size() && cnt >= 0; ++i) {
+        if(keep.find(cube[i]) != keep.end())
+          continue;
         vector<ID> dcube(cube.size()-1);
         for (unsigned int j = 0, l = 0; j < cube.size(); ++j)
           if (j != i)
@@ -1946,6 +1950,7 @@ namespace {
           break;
         }
         keep.insert(cube[i]);
+        --cnt;
       }
       if (i == cube.size() || cnt < 0) return;
     }
@@ -2009,6 +2014,7 @@ namespace {
           prepareAssign(st, asgn, -1, true);
       }
       while (_lo <= _hi) {
+        resetAssignment(asgn);
         k = (_lo+_hi)/2;
         vector<ID> copy1(cube);
         if (mem_consecution(mem, st, k, lo, copy1, st.ss.opts.printCex ? &asgn : NULL)) {
@@ -2700,6 +2706,21 @@ namespace {
 
     CubeSet cubes = st.cubes[k+1];
 
+    if(st.opts.initCube) {
+      assert(st.ss.simpleInit);
+      //Need to change st.ss.initially which is used by consecution
+      st.ss.initially.clear();
+      st.ss.initially.insert(st.opts.initCube->begin(), st.opts.initCube->end());
+      //Remove clauses that are not implied by the provided initial condition
+      for(CubeSet::iterator it = cubes.begin(); it != cubes.end();) {
+        vector<ID> cube = *it;
+        if(!initiation(st, cube))
+          cubes.erase(it++);
+        else
+          ++it;
+      }
+    }
+
     for(CubeSet::const_iterator it = cubes.begin(); it != cubes.end(); ++it)
       addCubeToManager(st, 1, *it, true);
 
@@ -3005,7 +3026,7 @@ namespace {
         Expr::tseitin(*st.ev, st.npi, st.negPropPrimedCNF);
       }
       else {
-        st.transRel = cnfat->getPlainCNF();
+        st.transRel = cnfat->getCNF();
         for(SAT::Clauses::const_iterator it = st.opts.iictl_clauses->begin();
             it != st.opts.iictl_clauses->end(); ++it) {
           SAT::Clause cls;
@@ -3083,6 +3104,7 @@ namespace {
     cout << "number of literals = " << numLits << endl;
   }
 
+#if 0
   void addProperty(Model & m, vector< vector<ID> > & proof) {
     Expr::Manager::View * ev = m.newView();
     //Get CNF for property
@@ -3097,6 +3119,7 @@ namespace {
 
     delete ev;
   }
+#endif
 
   bool deriveStrongerProof(ProofPostProcState & st, vector< vector<ID> > & proof,
       IC3::IC3Options & opts, bool forceMicProperty = false) {
@@ -3258,12 +3281,14 @@ namespace {
       }
     }
     else {
-      //Add property
+      //Add property ***No need as it is included in transRel
+      /*
       SAT::Clauses prop = *st.opts.iictl_clauses;
       vector<ID> & repClause = prop.back();
       assert(repClause.size() == 1);
       repClause[0] = ev->apply(Expr::Not, repClause[0]);
       satMgr->add(prop);
+      */
     }
 
     // include user-provided constraints
@@ -3308,12 +3333,15 @@ namespace {
       vector<ID> repClause1 = negPropOrProofClauses.back();
       assert(repClause1.size() == 1);
       negPropOrProofClauses.pop_back();
-      vector<ID> repClause2 = st.negPropPrimedCNF.back();
-      assert(repClause2.size() == 1);
-      negPropOrProofClauses.insert(negPropOrProofClauses.end(), st.negPropPrimedCNF.begin(), st.negPropPrimedCNF.end());
-      negPropOrProofClauses.pop_back();
+      ID rep2 = ev->newVar("_npprep_");
+      SAT::Clauses negPropPrimedCNFwithRep(st.negPropPrimedCNF);
+      for(SAT::Clauses::iterator it = negPropPrimedCNFwithRep.begin();
+          it != negPropPrimedCNFwithRep.end(); ++it) {
+        it->push_back(ev->apply(Expr::Not, rep2));
+      }
+      negPropOrProofClauses.insert(negPropOrProofClauses.end(), negPropPrimedCNFwithRep.begin(), negPropPrimedCNFwithRep.end());
       //Form the OR of the two representatives
-      ID r = ev->apply(Expr::Or, repClause1[0], repClause2[0]);
+      ID r = ev->apply(Expr::Or, repClause1[0], rep2);
       Expr::tseitin(*ev, r, negPropOrProofClauses);
     }
 
@@ -3865,7 +3893,8 @@ namespace IC3 {
                         vector<CubeSet> * cubes,
                         vector<LevClauses> * propClauses,
                         CubeSet * indCubes,
-                        bool useRAT) {
+                        bool useRAT,
+                        bool * bmcProof) {
     RchAttachment const * rat = (RchAttachment *) m.constAttachment(Key::RCH);
     unsigned int clb = useRAT ? rat->cexLowerBound() : 0;
     m.constRelease(rat);
@@ -3882,7 +3911,8 @@ namespace IC3 {
       bopts.iictl = opts.iictl;
       bopts.iictl_clauses = opts.iictl_clauses;
       bopts.silent = opts.silent;
-      rv = BMC::check(m, bopts, cexTrace);
+      bopts.proofProc = opts.proofProc;
+      rv = BMC::check(m, bopts, cexTrace, proofCNF);
     }
     if (rv.returnType != MC::Unknown) {
       if(opts.printCex) {
@@ -3891,9 +3921,12 @@ namespace IC3 {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
+        delete ev;
       }
       return rv;
     }
+    if(bmcProof)
+      *bmcProof = false;
     if (m.verbosity() > Options::Silent && !opts.silent)
       cout << "IC3: starting" << (opts.reverse ? " (reverse)" : "") << endl;
     int rseed = m.options()["rand"].as<int>();
@@ -4177,6 +4210,8 @@ namespace IC3 {
       //assert(verifyProof(m, proof, opts.constraints, opts, gprop));
     }
     else if (type == SHRINK) {
+      deriveSmallerProof(st, proof, opts);
+      clean(proof);
       //assert(verifyProof(m, proof, opts.constraints, opts, gprop));
     }
     else
@@ -4263,12 +4298,13 @@ namespace IC3 {
       rawProof = &((*proofs)[0]);
     }
     vector<ID> gprop;
-    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes, propClauses, indCubes, false);
+    bool bmcProof = true;
+    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes, propClauses, indCubes, false, &bmcProof);
     opts.cycle = old_cycle;
     int timeout = opts.timeout;
     opts.timeout = -1;
     
-    if(rv.returnType == MC::Proof && rawProof) {
+    if(rv.returnType == MC::Proof && rawProof && !bmcProof) {
       if(!opts.proofProc == NONE) 
         postProcessProof(m, *rawProof, opts.proofProc, opts, &gprop);
       if(!opts.iictl)
@@ -4323,6 +4359,7 @@ namespace FSIS {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
+        delete ev;
       }
       return rv;
     }

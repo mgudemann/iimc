@@ -83,7 +83,10 @@ public:
       ID pi = view->apply(Expr::Not, npi);
       cnf.clear();
       cnf.insert(cnf.end(), _core_cnf.begin(), _core_cnf.end());
-      Expr::tseitin(*view, pi, cnf);
+      //if(_model.options().count("cnf_wilson"))
+      //  Expr::wilson(*view, pi, cnf);
+      //else
+        Expr::tseitin(*view, pi, cnf);
       //SAT::Clauses simpCNF;
       //if(_model.verbosity() > Options::Terse)
       //  std::cout << "CNF before simp " << cnf.size() << std::endl;
@@ -119,6 +122,7 @@ protected:
 private:
   void techMap(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);
   void tseitin(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);
+  void wilson(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);
   void nice(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);
   std::vector<std::vector<ID> > cnf;
   std::vector<ID> roots;

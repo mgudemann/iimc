@@ -1,0 +1,37 @@
+aig 120 4 7 1 109
+78
+106
+166
+182
+202
+218
+240
+22
+	
+$+&%5";
+
+<
+*$. D
+ODJ87
+
+NfQX_
+W`v_ry|{\|x~|—~›Ÿ0u§Gb®¢¡²
+>·®¡Ç`
+
+€EÇÑÒ¸¾”¼
+i0 start<1>
+i1 clock
+i2 start<0>
+i3 start<2>
+l0 ba.lock
+l1 busMgmt.state<1>
+l2 meteo.state<0>
+l3 cm.state
+l4 meteo.state<1>
+l5 ba.locker
+l6 busMgmt.state<0>
+o0 busMgmt.state<0>
+c
+bliftoaig
+1.9
+pf.blif

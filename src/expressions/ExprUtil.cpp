@@ -189,6 +189,7 @@ namespace Expr {
     for (int i = 0; i < n; ++i)
       juncts(v, args[i], rv, jop);
   }
+
   void disjuncts(Manager::View & v, ID id, IDVector & rv) { juncts(v, id, rv, Or); }
   void conjuncts(Manager::View & v, ID id, IDVector & rv) { juncts(v, id, rv, And); }
 
@@ -384,6 +385,222 @@ namespace Expr {
       }
   }
 
+  bool isLit(Manager::View & v, ID id) {
+    if(v.op(id) == Var)
+      return true;
+    if(v.op(id) == Not) {
+      int n;
+      const ID * const args = v.arguments(id, &n);
+      assert(n == 1);
+      if(v.op(args[0]) == Var)
+        return true;
+    }
+    return false;
+  }
+
+  void litsAndNonLitsOf(Manager::View & v, IDVector & in, IDVector & lits, IDVector & nonLits) {
+    for(IDVector::const_iterator it = in.begin(); it != in.end(); ++it) {
+      if(isLit(v, *it))
+        lits.push_back(*it);
+      else
+        nonLits.push_back(*it);
+    }
+  }
+
+  bool isClause(Manager::View & v, ID id, IDVector * lits) {
+    IDVector disjs;
+    disjuncts(v, id, disjs);
+    for(IDVector::const_iterator it = disjs.begin(); it != disjs.end(); ++it) {
+      if(!isLit(v, *it)) {
+        return false;
+      }
+    }
+    if(lits)
+      *lits = disjs;
+    return true;
+  }
+
+  ID wilson_rep(Manager::View & v) {
+    static unsigned i = 0;
+    ostringstream buf;
+    buf << "wr";
+    buf << i++;
+    return v.newVar(buf.str());
+  }
+
+  void wilsonRec(Manager::View & v, ID id, vector<IDVector> & rv_clauses,
+                 unordered_set<ID> & seen, unordered_map<ID, ID> & reps, unordered_set<ID> & crClauses) {
+    if(seen.find(id) != seen.end())
+      return;
+    seen.insert(id);
+
+    int n;
+    const ID * args = v.arguments(id, &n);
+
+    IDVector lits2;
+    if(v.op(id) == True) {
+      return;
+    }
+
+    if(isClause(v, id, &lits2)) {
+      rv_clauses.push_back(lits2);
+    }
+    else if(v.op(id) == And) { // G1 & G2 & ...
+      for(int i = 0; i < n; ++i) {
+        wilsonRec(v, args[i], rv_clauses, seen, reps, crClauses);
+      }
+    }
+    else if(v.op(id) == Not && v.op(args[0]) == Or) { // !(G1 | G2 | ...)
+      //Get the children of the Or
+      int numArgs;
+      const ID * const orArgs = v.arguments(args[0], &numArgs);
+      IDVector conjs;
+      for(int i = 0; i < numArgs; ++i) {
+        conjs.push_back(v.apply(Not, orArgs[i]));
+      }
+      wilsonRec(v, v.apply(And, conjs), rv_clauses, seen, reps, crClauses);
+    }
+    else if(v.op(id) == Not && v.op(args[0]) == And) { // !(G1 & G2 & ...)
+      //Get the children of the And
+      int numArgs;
+      const ID * const andArgs = v.arguments(args[0], &numArgs);
+      IDVector disjs;
+      for(int i = 0; i < numArgs; ++i) {
+        disjs.push_back(v.apply(Not, andArgs[i]));
+      }
+      wilsonRec(v, v.apply(Or, disjs), rv_clauses, seen, reps, crClauses);
+    }
+    else {
+      //cout << v.op(id) << endl;
+      assert(v.op(id) == Or);
+      IDVector disjs;
+      disjuncts(v, id, disjs);
+      //Extract the literals from the disjuncts
+      IDVector lits, nonLits;
+      litsAndNonLitsOf(v, disjs, lits, nonLits);
+      //This should not be a clause because that should have been caught in
+      //the pure clause case.
+      assert(!nonLits.empty());
+      if(nonLits.size() == 1 && !lits.empty()) {
+        if(v.op(nonLits[0]) == And) {
+          //Form 1a: G = G1 & G2 & ...
+          unordered_map<ID, ID>::iterator it = reps.find(nonLits[0]);
+          ID rep;
+          if(it != reps.end()) {
+            rep = it->second;
+          }
+          else {
+            rep = wilson_rep(v);
+            reps.insert(unordered_map<ID, ID>::value_type(nonLits[0], rep));
+          }
+          IDVector clause = lits;
+          clause.push_back(rep);
+          if(lits.size() != 1 || rep != v.apply(Not, lits[0]))
+            rv_clauses.push_back(clause);
+          if(crClauses.find(rep) == crClauses.end()) {
+            int numArgs;
+            const ID * const andArgs = v.arguments(nonLits[0], &numArgs);
+            for(int i = 0; i < numArgs; ++i) {
+              wilsonRec(v, v.apply(Or, v.apply(Not, rep), andArgs[i]), rv_clauses, seen, reps, crClauses);
+            }
+            crClauses.insert(rep);
+          }
+        }
+        else if(v.op(nonLits[0]) == Not) {
+          int numArgs;
+          const ID * const notArgs = v.arguments(nonLits[0], &numArgs);
+          if(v.op(notArgs[0]) == Or) {
+            //Form 1b: G = !(G1 | G2 | ...)
+            const ID * const orArgs = v.arguments(notArgs[0], &numArgs);
+            IDVector conjs;
+            for(int i = 0; i < numArgs; ++i) {
+              conjs.push_back(v.apply(Not, orArgs[i]));
+            }
+            lits.push_back(v.apply(And, conjs));
+            wilsonRec(v, v.apply(Or, lits), rv_clauses, seen, reps, crClauses);
+          }
+          else {
+            //cout << v.op(notArgs[0]) << endl;
+            assert(v.op(notArgs[0]) == And);
+            //Form 1c: G = !(G1 & G2 & ...)
+            const ID * const andArgs = v.arguments(notArgs[0], &numArgs);
+            IDVector disjs = lits;
+            for(int i = 0; i < numArgs; ++i) {
+              disjs.push_back(v.apply(Not, andArgs[i]));
+            }
+            wilsonRec(v, v.apply(Or, disjs), rv_clauses, seen, reps, crClauses);
+          }
+        }
+      }
+      else {
+        //Form 1d: G = G1 | G2 | ...
+        IDVector clause = lits;
+        for(unsigned i = 0; i < nonLits.size(); ++i) {
+          unordered_map<ID, ID>::iterator it = reps.find(nonLits[i]);
+          ID rep;
+          if(it != reps.end()) {
+            rep = it->second;
+          }
+          else {
+            rep = wilson_rep(v);
+            reps.insert(unordered_map<ID, ID>::value_type(nonLits[i], rep));
+          }
+          clause.push_back(rep);
+          if(crClauses.find(rep) == crClauses.end()) {
+            wilsonRec(v, v.apply(Or, v.apply(Not, rep), nonLits[i]), rv_clauses, seen, reps, crClauses);
+            crClauses.insert(rep);
+          }
+        }
+        rv_clauses.push_back(clause);
+      }
+    }
+  }
+
+  void wilson(Manager::View & v, ID id,
+              vector<IDVector> & rv_clauses) {
+    unordered_set<ID> seen, crClauses;
+    unordered_map<ID, ID> reps;
+    ID aoied = AOIOfExpr(v, id);
+    if(aoied == v.btrue() || aoied == v.bfalse()) {
+      IDVector clause;
+      clause.push_back(aoied);
+      rv_clauses.push_back(clause);
+    }
+    else
+      wilsonRec(v, aoied, rv_clauses, seen, reps, crClauses);
+  }
+
+
+  void wilson(Manager::View & v, IDVector & ids,
+              vector<IDVector> & rv_clauses) {
+    unordered_set<ID> seen, crClauses;
+    unordered_map<ID, ID> reps;
+    IDVector aoied = ids;
+    AOIOfExprs(v, aoied);
+    for(IDVector::const_iterator it = aoied.begin(); it != aoied.end(); ++it) {
+      //cout << stringOf(v, *it) << endl;
+      if(*it == v.btrue() || *it == v.bfalse()) {
+        IDVector clause;
+        clause.push_back(*it);
+        rv_clauses.push_back(clause);
+      }
+      else {
+        wilsonRec(v, *it, rv_clauses, seen, reps, crClauses);
+      }
+      /*
+      cout << "===================================" << endl;
+      for(vector< vector<ID> >::iterator it = rv_clauses.begin(); it != rv_clauses.end(); ++it) {
+        for(vector<ID>::iterator it2 = it->begin(); it2 != it->end(); ++it2) {
+          cout << stringOf(v, *it2) << " ";
+        }
+        cout << endl;
+      }
+      */
+
+
+    }
+  }
+
   void parents(Manager::View & v, ID id, IDMMap & map) {
     class parents_folder : public Manager::View::Folder {
     public:
@@ -399,6 +616,54 @@ namespace Expr {
     };
     parents_folder mf(v, map);
     v.fold(mf, id);
+  }
+
+  void descendants(Manager::View & v, ID id, IDSetMap & map) {
+    class descendants_folder : public Manager::View::Folder {
+    public:
+      descendants_folder(Manager::View & v, IDSetMap & _map) :
+        Manager::View::Folder(v), map(_map) {}
+      virtual ID fold(ID id, int n, const ID * const args) {
+        IDSet & descendants = map[id];
+        for (int i = 0; i < n; ++i) {
+          descendants.insert(args[i]);
+          IDSet & childDescendants = map[args[i]];
+          descendants.insert(childDescendants.begin(), childDescendants.end());
+        }
+        return id;
+      }
+    private:
+      IDSetMap & map;
+    };
+
+    descendants_folder df(v, map);
+    v.fold(df, id);
+  }
+
+  void ancestors(Manager::View & v, ID node, ID id, IDVector & ancestors) {
+    class ancestors_folder : public Manager::View::Folder {
+    public:
+      ancestors_folder(Manager::View & v, ID _node, IDVector & _ancestors) :
+        Manager::View::Folder(v), ancestors(_ancestors) {
+          ancestorsSet.insert(_node);
+      }
+      virtual ID fold(ID id, int n, const ID * const args) {
+        //Is an ancestor of node if any of its arguments is an ancestor
+        for(int i = 0; i < n; ++i) {
+          if(ancestorsSet.find(args[i]) != ancestorsSet.end()) {
+            if(ancestorsSet.insert(id).second) //Not already there
+              ancestors.push_back(id);
+          }
+        }
+        return id;
+      }
+    private:
+      IDVector & ancestors;
+      unordered_set<ID> ancestorsSet;
+    };
+
+    ancestors_folder af(v, node, ancestors);
+    v.fold(af, id);
   }
 
   class aoe_folder : public Manager::View::Folder {
@@ -482,6 +747,58 @@ namespace Expr {
   }
   void AIGOfExprs(Manager::View & v, vector<ID> & ids) {
     aoe_folder af(v);
+    v.fold(af, ids);
+  }
+
+  class aoi_folder : public Manager::View::Folder {
+  public:
+    aoi_folder(Manager::View & v) : Manager::View::Folder(v) {}
+    virtual ID fold(ID id, int n, const ID * const args) {
+      switch(view().op(id)) {
+      case True:
+      case Var:
+        return id;
+      case Not:
+        return view().apply(Not, args[0]);
+      case And: {
+        vector<ID> vargs;
+        vOf(n, args, vargs);
+        return view().apply(And, vargs);
+      }
+      case Or: {
+        vector<ID> vargs;
+        vOf(n, args, vargs);
+        return view().apply(Or, vargs);
+      }
+      case Equiv: {
+        ID id0 = args[0];
+        ID id1 = args[1];
+        return view().apply(And,
+                            view().apply(Or, view().apply(Not, id0), id1),
+                            view().apply(Or, id0, view().apply(Not, id1)));
+      }
+      case ITE:
+      case TITE:
+      case BV:
+      default:
+        assert (false);
+        return id;
+      }
+    }
+  private:
+    void vOf(int n, const ID * const args, vector<ID> & vargs) {
+      for (int i = 0; i < n; ++i)
+        vargs.push_back(args[i]);
+    }
+  };
+
+  ID AOIOfExpr(Manager::View & v, ID id) {
+    aoi_folder af(v);
+    return v.fold(af, id);
+  }
+
+  void AOIOfExprs(Manager::View & v, vector<ID> & ids) {
+    aoi_folder af(v);
     v.fold(af, ids);
   }
 

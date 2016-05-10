@@ -166,22 +166,22 @@ namespace SAT {
           v = _args[0];
           pos = false;
         }
-        VMap::iterator it = vmap.find(v);
-        if (it == vmap.end()) {
+        VMap::iterator mapIt = vmap.find(v);
+        if (mapIt == vmap.end()) {
 #ifdef USE_MINISAT
           Minisat::Var vi = satMan.newVar();
 #else
           int vi = SAT_AddVariable(satMan);
 #endif
           pair<VMap::iterator, bool> rv = vmap.insert(VMap::value_type(v, vi));
-          it = rv.first;
+          mapIt = rv.first;
           ivmap.insert(IVMap::value_type(vi, v));
         }
 #ifdef USE_MINISAT
-        Minisat::Var sv = it->second;
+        Minisat::Var sv = mapIt->second;
         lits[i] = Minisat::mkLit(sv, !pos);
 #else
-        int sv = it->second;
+        int sv = mapIt->second;
         _lits[i] = 2*sv + (pos ? 0 : 1);
 #endif
       }
@@ -255,9 +255,9 @@ namespace SAT {
           v = _args[0];
           pos = false;
         }
-        VMap::iterator it = vmap.find(v);
-        if(it != vmap.end()) {
-          Minisat::Var mv = it->second;
+        VMap::iterator vit = vmap.find(v);
+        if(vit != vmap.end()) {
+          Minisat::Var mv = vit->second;
           assumps.push(Minisat::mkLit(mv, !pos));
         }
       }

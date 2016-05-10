@@ -1,0 +1,223 @@
+aig 572 31 51 38 490
+250
+262
+278
+300
+310
+332
+342
+352
+362
+372
+382
+390
+416
+432
+486
+512
+616
+626
+652
+662
+674
+684
+694
+732
+742
+756
+764
+770
+780
+790
+800
+810
+840
+850
+860
+874
+884
+894
+920
+930
+940
+950
+966
+982
+1014
+1030
+1040
+1048
+1058
+1068
+1094
+1096
+150
+150
+88
+70
+1098
+1107
+160
+1108
+27
+96
+1112
+154
+1114
+140
+86
+1117
+1118
+78
+1121
+1124
+148
+1126
+324
+1042
+1129
+216
+1132
+1135
+1136
+164
+1142
+110
+128
+1144
+206
+100
+446
+e#<*^CD)ek]Q*+sW+1y,}
+2tz~
+‚	!)-5Ï8nÔNØRÞº_Ã&t@ƒøðõÑ)p–¸Ÿ…Šå+‘”í-µ­	«³×¦ªQ°T»W[®^‡a‘2íYÉ™5+¤Ò¡7Ó†Ü©9xä¯;û)ù€'‰y¬“ùþÇ=Šð ŠŽÕ?€æñÍÑ¤Œîðó÷ýƒ‹“˜Ÿ¼£Ù¿.Ä2‰@ÍAá«Ô@è² Ûß¡CF£ÑÌÈ‡ÄÂ‘À•À—À™À›¼ÄÊÐØàê$ô*ú2ž…¼cŠé
+õüŠ‘–Ÿ¹¢ØëÂ`Æd‡E½ÐFí'ð%ÚaÛc‚çë‘–”Ù—Ù!°å¹L³U‹±´Ÿ·ªŽ$–­
+©°³”&¾	Ç<A"íRµÅýf€çÎHÒLW°Ú•„àœ‹[fê“]ƒnô›_ûþ£a½Hˆ«cïaÑ½ÒÁ
+¾
+Â¡¦Çd®±×xÚïÝÅ’»ŒËÏ
+ãk‘¾ÒëlãwÝƒp†3†²æÀ”™n ³£§lª±­±j´s·úŠ#º H¤L±y•ŒÊ°´¿z¾?Ñ›ÒŸ
+œ
+ –ÑÕÝ}ÃÖ¿½ßäëÉ¢îó€J÷ù‚ë…éŠ±X´4³à“î¾ÂÇ’&²{¥–Çñ¢¿d¶øÇeÉ‰Á0ÄðgµÅó&ÚýÝå"²i0 PCOffset_s2i
+i1 ItlbMiss_v2e
+i2 Reset_s1
+i3 SEqualsT_v1e
+i4 BGEZnext_s1e
+i5 BDynamicBit_v1r
+i6 MemStall_s1
+i7 SystemBit_s2e
+i8 SIsNegative_v1e
+i9 NonCacheable_s1
+i10 BGTZnext_s1e
+i11 BLEZnext_s1e
+i12 MipsMode_s2e
+i13 L2Miss_s2
+i14 Phi1
+i15 ImmPC_s1e
+i16 ADynamicBit_v1r
+i17 RegPC_s1e
+i18 BNEnext_s1e
+i19 ICacheLineValid_s2r
+i20 EPCNSel_s1m
+i21 BEQnext_s1e
+i22 PCPacketNum_s2i<0>
+i23 EPCSel_s1m
+i24 Except_s1w
+i25 Match_v2r
+i26 PC_bit31_s2i
+i27 BLTZnext_s1e
+i28 ExtDataValid_s2
+i29 PCPacketNum_s2i<1>
+i30 Stall_s1
+l0 PresState_s1<3>
+l1 PrevState_s2<0>
+l2 NonCacheable_s2
+l3 BKill_s1e
+l4 PCOffset_s1r
+l5 SecondIssue_s1e
+l6 PrevState_s2<3>
+l7 Hold_s2e
+l8 ReadCache_s2r
+l9 SecondIssueCond_s1e
+l10 BDrvA_s1e
+l11 NonCacheableHeld_s1
+l12 AKill_s1e
+l13 SecondIssueMips_s1e
+l14 PresState_s1<1>
+l15 ReadCache_s2i
+l16 ExtMuxSelect_s1
+l17 PCPacketNum_s1r<0>
+l18 LatchNonCachePkt_s2
+l19 ADynamicBit_s2r
+l20 Except_s2w
+l21 ItlbMiss_s2
+l22 PrevState_s2<1>
+l23 TakenBranch_s2e
+l24 EPCNSel_s2m
+l25 ItlbMiss_s1
+l26 Hold_s1e
+l27 ReadCache_s1r
+l28 BDynamicBit_s1e
+l29 ADrvB_s1e
+l30 MipsMode_s1
+l31 ADynamicBit_s1e
+l32 LatchDataReg_s1
+l33 Reset_s2
+l34 BDynamicBit_s2r
+l35 IncPC_s2e
+l36 PresState_s1<2>
+l37 IFetchStall_s2
+l38 ADrvB_s2r
+l39 PCOffset_s2r
+l40 SecondIssue_s2e
+l41 PrevState_s2<2>
+l42 IFetchStall_s1
+l43 IStall_s1
+l44 WriteCache_s2
+l45 LatchShiftReg_s1
+l46 PresState_s1<0>
+l47 IStall_s2
+l48 EPCSel_s2m
+l49 PCPacketNum_s1r<1>
+l50 BDrvA_s2r
+o0 IAddrError_v2i
+o1 IStall_s1
+o2 Jump4_s1e
+o3 AKill_s1e
+o4 BKill_s1e
+o5 WriteData_s2
+o6 DataEnable_s2
+o7 EPCMuxSel_s2m
+o8 latchEPC_s1w
+o9 MipsMode_b_s2e
+o10 ExtMuxSelect_s1
+o11 Jump1_s1e
+o12 LatchShiftReg_s1
+o13 Jump5_v1e
+o14 ADrvB_s2r
+o15 NonCacheableHeld_s1
+o16 TagEnable_s2
+o17 Jump3_s1e
+o18 HoldPC_s2e
+o19 Gamma1_s1
+o20 EPCBufEnable_s2m
+o21 IFetchStall_s1
+o22 LatchTags_s1r
+o23 HoldPC_s2r
+o24 PCUnitPsi2_s2
+o25 WritePack_s2<1>
+o26 WriteTag_s2
+o27 Jump0_s1e
+o28 KillOne_s1e
+o29 RestoreIStallPC_s1
+o30 BDrvA_s2r
+o31 LatchInstrs_s1r
+o32 TakenBranch_s2e
+o33 LatchDataReg_s1
+o34 Jump2_s1e
+o35 WritePack_s2<0>
+o36 LatchNonCachePkt_s2
+o37 ICacheMiss_v2r
+c
+bliftoaig
+1.9
+IFetchControl.blif

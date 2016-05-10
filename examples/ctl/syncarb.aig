@@ -1,0 +1,149 @@
+aig 174 16 48 16 110
+8
+32
+52
+38
+56
+42
+30
+10
+20
+88 1
+40
+116
+44
+26
+132
+136
+140
+144
+12
+148
+92
+152
+16
+156
+160
+22
+100
+58
+2
+94
+86
+4
+6
+114
+24
+14
+164
+168
+172
+28
+54
+74
+176
+180
+184
+188
+192
+18
+284
+288
+292
+298
+302
+306
+310
+316
+320
+324
+328
+332
+336
+340
+344
+348
+%/W07I-II7I&M)"q7g9@Ö;6E7,}9Y;O=Fó?XyV@Zz|&b6`"b,Ähénz0tF∞zX¥}πüﬂ±üŸ±ù›„≠«V˘Ω&Ûı`…+Á>É+ Õ≈tˇAø18ë1D·C˜?2ﬂ;JÖQ≥M,Åi0 req<7>
+i1 req<14>
+i2 req<2>
+i3 req<13>
+i4 req<6>
+i5 req<1>
+i6 req<5>
+i7 req<12>
+i8 req<0>
+i9 req<9>
+i10 req<4>
+i11 req<11>
+i12 req<15>
+i13 req<8>
+i14 req<10>
+i15 req<3>
+l0 lreq<13>
+l1 lreq<3>
+l2 c1.token
+l3 c2.token
+l4 c12.token
+l5 c13.token
+l6 lreq<10>
+l7 lreq<6>
+l8 lreq<9>
+l9 c0.token
+l10 c3.token
+l11 c11.token
+l12 c14.token
+l13 lreq<15>
+l14 c8.waiting
+l15 c6.waiting
+l16 c4.waiting
+l17 c2.waiting
+l18 lreq<1>
+l19 c0.waiting
+l20 c9.token
+l21 c14.waiting
+l22 lreq<12>
+l23 c12.waiting
+l24 c10.waiting
+l25 lreq<4>
+l26 c6.token
+l27 c15.token
+l28 lreq<7>
+l29 c8.token
+l30 c7.token
+l31 lreq<14>
+l32 lreq<2>
+l33 c5.token
+l34 lreq<11>
+l35 lreq<5>
+l36 c15.waiting
+l37 c13.waiting
+l38 c11.waiting
+l39 lreq<8>
+l40 c4.token
+l41 c10.token
+l42 c9.waiting
+l43 c7.waiting
+l44 c5.waiting
+l45 c3.waiting
+l46 c1.waiting
+l47 lreq<0>
+o0 ack<13>
+o1 ack<2>
+o2 ack<6>
+o3 ack<14>
+o4 ack<1>
+o5 ack<10>
+o6 ack<5>
+o7 ack<15>
+o8 ack<0>
+o9 ack<9>
+o10 ack<11>
+o11 ack<4>
+o12 ack<8>
+o13 ack<12>
+o14 ack<3>
+o15 ack<7>
+c
+bliftoaig
+1.9
+syncarb.blif

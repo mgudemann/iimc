@@ -235,11 +235,6 @@ public:
     delete global;
   }
 
-  HSView * view() {
-    HSView * v = new HSView(this);
-    return v;
-  }
-
 protected:
   HashedStructure<N> * global;
 };

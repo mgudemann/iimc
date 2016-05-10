@@ -1,0 +1,292 @@
+aig 996 14 91 18 891
+249
+269
+272
+291
+327
+339
+463
+491
+505
+517
+543
+557
+583
+70
+595
+605
+625
+200
+749
+763
+142
+773
+787
+92
+819
+842
+912
+916
+927
+941
+955
+114
+971
+997
+184
+1007
+1029
+1055
+180
+62
+1073
+1087
+134
+8
+1111
+1171
+1193
+189
+1209
+14
+1233
+1247
+1259
+182
+1291
+182
+10
+1339
+1361
+1469
+1491
+1501
+1527
+76
+1541
+1559
+1569
+70
+1570
+1585
+1595
+1617
+1639
+1699
+1717
+116
+128
+1725
+1760
+1778
+1799
+1813
+1861
+1889
+1905
+1906
+1921
+1945
+1955
+1983
+1993
+70
+81
+102
+152
+0
+100
+166
+182
+210
+170
+86
+84
+162
+34
+72
+189
+208
+40
+-ì$oQDMvOML/æ&8'"c}b1‹	Vû:¶/÷©I¨Pﬁ
+àlıSUã{Ã«íyõwöçjÑ°‰€N£ﬂOßîáÊM≠èÏN≥§ŒW®º–	¢(*2πªË¯9≥5π6◊3¡4Ös69√	9@6H;T&<`-?jÛ:Ê7ôp´√≈	ß•ŒÆ	ˇ?Ç`¥‡Ê›©ﬂmﬂÂ•E∆…∑π	’”’¬‹	ÉiÜb—¨»©¥NÄ˚˘eùem™h§e´cÚ˜“¬œˇôËöÖÇê˛Ö‹éìóíôØ2ØÌQ˙∏1∑ª3ª¿2ø∞∏º
+¿
+$&00èÿ€9∑¨O∏?/À41	3:DB2JTY(>c√[√ë8Ó5—Y‘Rü˙∏˜≥Å∂∞πÈSÏB∑í≤èÂì‰Á≈«◊y⁄w«˘÷Œ˘v˚¥ÆüLüÌÔ ´»çmèlílîk
+ãç≠+∞)∆]«_ı!Ä##
+$,'4≥µ*è(„•ˆÕÛ–¶”≥∂\ËîºëëCî
+ﬂ∫¢∑†GË£?ÎÓ‡¨zÌÎ£π=∏´à∂ ≥ùÂ†û£∂uÆ=Í€7€©ÑñÅ∂4≤µΩe¿cü
+√¢æsÖ/ÑÁ‘–nÕ¬»T˙¶§£éÄÀ…¡ë¡ç˙ƒò¡‡]˝Â˛˚Î¸Í3˘Û…%˙˝ı
+¸Ñ¸åÅò#É§.ÇÆ∑˛ò˚öMõO«Ÿ«œå	 ‡«¨¿jÚÙ†ñûä˙π∑Ô—Ô˜¥	ÚÿÔ“%˚ÅQÄáíçOåì¶x÷⁄÷√•ß	ÎØ
+ÚìÈÅ˝É“ä–êìúôÏ:§ò≤ë	ë	ﬂÜ†É∑	;∏	ÎÌ≤	Gø	¬	ı
+∞	ü	Ä€	£	Åﬂ	®	„	‹	
+‡	‰	§ 
+¨Æ "(*¡	√	"Ê	#—	*¥
+(2∏	0:Ó	8⁄†ÿHæ	FRÄ
+P\ä	Zı	4	1—◊‘’ØˇØôˆ	≤ÜØã	±é	vë	
+P≈
+√
+É
+À
+ 
+≠
+ö
+ñ
+Bì
+⁄
+1éh¿Ï	vÈ	÷	èË
+Í
+›∫
+Ë	äÂ	œ	ß“	†’	Ë∏¸
+;∫ZÏò
+lï
+È	üÏ	‡Ô	¯ÄÎ
+Ì
+ògáäı
+
+ñ£Å¶ˇÖ	•Ö	ç	 à	¨Ö	∏ïç
+≠â
+≥æk™á
+ªà
+∆ä
+ç
+Ω	ç
+î
+ã
+ú
+å
+®
+&ê
+¥
+.í
+æ
+«é
+‡ã
+…ü	’ü	Îÿ¢	‹ü	·ÃÂ˛Ü¢ÔÒçõêôì±ÉÖãßß ∆ïóÚ?°ï£Ä™¨∞™†§ù»#ﬁπî<ëù	∑û	ç	Àè	ﬁË0ñ	û	‹§	©	ê≤	•	ª	ˆ%õÈê	Óç	∫	ª	ø	√	«	Õ	”	›	∏ÉÇâÕœ–Õ∑î–÷ÕéÉ	™]äVºËJÂ’ìË≥µ¿≤	Ω
+æÃ1Ä2É‡HùP»Ÿ€	Ÿ„
+‡˜w˙Ú˝i0 DataOut_i<7>
+i1 DataOut_i<2>
+i2 phy_tx_mode
+i3 rxd
+i4 rxdn
+i5 DataOut_i<6>
+i6 rxdp
+i7 DataOut_i<1>
+i8 DataOut_i<5>
+i9 rst
+i10 DataOut_i<0>
+i11 DataOut_i<4>
+i12 TxValid_i
+i13 DataOut_i<3>
+l0 i_tx_phy.one_cnt<1>
+l1 i_tx_phy.sd_bs_o
+l2 TxReady_o
+l3 i_tx_phy.hold_reg<3>
+l4 i_rx_phy.one_cnt<1>
+l5 i_rx_phy.hold_reg<5>
+l6 i_tx_phy.state<0>
+l7 rst_cnt<0>
+l8 i_tx_phy.hold_reg<6>
+l9 i_rx_phy.shift_en
+l10 i_tx_phy.bit_cnt<0>
+l11 i_tx_phy.txoe_r2
+l12 rst_cnt<3>
+l13 i_rx_phy.rxdn_s
+l14 i_tx_phy.txoe_r1
+l15 i_tx_phy.ld_sop_d
+l16 i_tx_phy.ld_data_d
+l17 i_tx_phy.sft_done_r
+l18 i_rx_phy.fs_state<2>
+l19 i_tx_phy.append_eop_sync3
+l20 i_rx_phy.rxdn_s1
+l21 i_rx_phy.hold_reg<0>
+l22 i_tx_phy.append_eop_sync2
+l23 i_rx_phy.fs_ce_r3
+l24 i_rx_phy.bit_cnt<1>
+l25 n110_inv
+l26 i_rx_phy.dpll_state<0>
+l27 i_rx_phy.rx_valid
+l28 i_rx_phy.hold_reg<3>
+l29 i_tx_phy.hold_reg<1>
+l30 i_tx_phy.append_eop_sync1
+l31 i_rx_phy.fs_ce_r2
+l32 i_rx_phy.rx_valid_r
+l33 i_rx_phy.one_cnt<2>
+l34 i_tx_phy.tx_ready
+l35 i_rx_phy.hold_reg<6>
+l36 txdn
+l37 i_rx_phy.sd_nrzi
+l38 i_rx_phy.rxd_s
+l39 i_tx_phy.ld_data
+l40 i_tx_phy.one_cnt<0>
+l41 i_tx_phy.hold_reg<4>
+l42 i_rx_phy.fs_ce_r1
+l43 i_rx_phy.rxd_t1
+l44 i_tx_phy.bit_cnt<2>
+l45 i_tx_phy.state<1>
+l46 rst_cnt<1>
+l47 i_rx_phy.rx_en
+l48 i_tx_phy.hold_reg<7>
+l49 i_rx_phy.rxdp_t1
+l50 rst_cnt<4>
+l51 i_tx_phy.ld_eop_d
+l52 i_rx_phy.fs_ce_d
+l53 i_rx_phy.rxdp_s
+l54 i_rx_phy.rx_valid1
+l55 i_rx_phy.rxdp_s1r
+l56 i_rx_phy.rxdn_t1
+l57 i_rx_phy.fs_state<1>
+l58 i_tx_phy.append_eop
+l59 i_tx_phy.sd_raw_o
+l60 i_rx_phy.bit_cnt<2>
+l61 i_rx_phy.hold_reg<1>
+l62 i_tx_phy.one_cnt<2>
+l63 fs_ce
+l64 i_tx_phy.hold_reg<2>
+l65 i_rx_phy.one_cnt<0>
+l66 i_rx_phy.hold_reg<4>
+l67 i_rx_phy.rxdn_s1r
+l68 usb_rst
+l69 i_tx_phy.hold_reg<5>
+l70 i_rx_phy.hold_reg<7>
+l71 i_tx_phy.tx_ip
+l72 rst_cnt<2>
+l73 i_tx_phy.state<2>
+l74 i_tx_phy.bit_cnt<1>
+l75 i_rx_phy.rxd_s1
+l76 i_rx_phy.rxdp_s1
+l77 i_tx_phy.tx_ready_d
+l78 i_tx_phy.sd_nrzi_o
+l79 n272_1_inv
+l80 i_rx_phy.dpll_state<1>
+l81 i_tx_phy.tx_ip_sync
+l82 i_rx_phy.fs_state<0>
+l83 i_rx_phy.synced_d
+l84 i_rx_phy.bit_cnt<0>
+l85 i_tx_phy.sft_done
+l86 i_tx_phy.hold_reg<0>
+l87 i_tx_phy.data_done
+l88 i_rx_phy.sd_r
+l89 i_rx_phy.rx_active
+l90 i_rx_phy.hold_reg<2>
+o0 LineState_o<0>
+o1 txdp
+o2 txdn
+o3 DataIn_o<1>
+o4 RxError_o
+o5 DataIn_o<6>
+o6 usb_rst
+o7 LineState_o<1>
+o8 DataIn_o<2>
+o9 DataIn_o<7>
+o10 DataIn_o<3>
+o11 RxValid_o
+o12 DataIn_o<4>
+o13 TxReady_o
+o14 DataIn_o<0>
+o15 txoe
+o16 RxActive_o
+o17 DataIn_o<5>
+c
+usb_phy
+This file was written by ABC on Sun Dec 18 20:48:06 2011
+For information about AIGER format, refer to http://fmv.jku.at/aiger

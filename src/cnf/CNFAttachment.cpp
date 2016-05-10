@@ -44,7 +44,7 @@ using namespace std;
 namespace
 {
 
-  enum CNFModet {TSEITIN, TECHMAP, NICE};
+  enum CNFModet {TSEITIN, WILSON, TECHMAP, NICE};
 
   CNFModet getMode(Model& model)
   {
@@ -54,6 +54,8 @@ namespace
     } else if(model.options().count("cnf_nice")) {
       assert (false);
       return NICE;
+    } else if(model.options().count("cnf_wilson")) {
+      return WILSON;
     } else {
       return TSEITIN;
     }
@@ -73,6 +75,7 @@ CNFAttachment::CNFAttachment(Model& model) : Model::Attachment(model), _last_npi
         break;
       }
     case NICE:
+    case WILSON:
     case TSEITIN:
       {
         ExprAttachment::Factory f;
@@ -299,6 +302,39 @@ void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * vi
   }
 }
 
+
+void CNFAttachment::wilson(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>& inputs, vector<ID>& fns, vector<vector<ID> >& _cnf)
+{
+  if (model().verbosity() > Options::Silent)
+    cout << "CNFAttachment: building CNF using Wilson translation\n";
+
+  // construct transition relation
+  vector<ID> tr;
+  for (unsigned int i = 0; i < latches.size(); ++i)
+    tr.push_back(view->apply(Expr::Equiv, 
+                             view->prime(latches[i]),
+                             fns[i]));
+  vector<ID> constraints = eat->constraints();
+  for(vector<ID>::const_iterator it = constraints.begin();
+      it != constraints.end(); ++it) {
+    if(*it != view->btrue()) { //Ignore trivial constraints
+      tr.push_back(*it);
+      tr.push_back(Expr::primeFormula(*view, *it));
+    }
+  }
+
+  // convert to CNF
+  Expr::wilson(*view, tr, _cnf);
+
+  // convert property separately
+  if (eat->outputs().size() > 0) {
+    ID npi = eat->outputFnOf(eat->outputs()[0]);
+    _last_npi = npi;
+    ID pi = view->apply(Expr::Not, npi);
+    Expr::wilson(*view, pi, _pi_cnf);
+  }
+}
+
 namespace
 {
   void cnf_stats(std::string prefix, vector<vector<ID> >& cnf)
@@ -335,6 +371,14 @@ void CNFAttachment::build()
     case NICE:
       nice(eat, view, latches, inputs, fns, _cnf);
       break;
+    case WILSON:
+      tseitin(eat, view, latches, inputs, fns, _cnf);
+      if (model().verbosity() > Options::Terse)
+        cnf_stats("CNFAttachment:", _cnf); 
+      _cnf.clear();
+      _pi_cnf.clear();
+      wilson(eat, view, latches, inputs, fns, _cnf);
+      break;
     case TSEITIN:
       tseitin(eat, view, latches, inputs, fns, _cnf);
       break;
@@ -351,7 +395,7 @@ void CNFAttachment::build()
   }
 
   _core_cnf.insert(_core_cnf.end(), cnf.begin(), cnf.end());
-  if (getMode(_model) == TSEITIN)
+  if (getMode(_model) == TSEITIN || getMode(_model) == WILSON)
     cnf.insert(cnf.end(), _pi_cnf.begin(), _pi_cnf.end());
 
   // clean up

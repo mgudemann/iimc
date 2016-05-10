@@ -13,7 +13,7 @@ iimc_SOURCES =
 AM_CPPFLAGS = @AM_CPPFLAGS@
 check_PROGRAMS =
 check_SCRIPTS =
-EXTRA_DIST = LICENSE LICENSE.zchaff examples/aig19 examples/dimacs
+EXTRA_DIST = LICENSE LICENSE.zchaff examples/aig19 examples/dimacs examples/ctl
 dist_check_DATA =
 TESTS =
 CLEANFILES =
@@ -41,10 +41,11 @@ include $(top_srcdir)/src/copt/copt.make
 include $(top_srcdir)/src/sopt/sopt.make
 include $(top_srcdir)/src/truthtable/truthtable.make
 include $(top_srcdir)/src/cnf/cnf.make
+include $(top_srcdir)/src/properties/properties.make
 include $(top_srcdir)/src/mc/mc.make
 include $(top_srcdir)/src/main/main.make
 
-AM_CPPFLAGS += $(BOOST_CPPFLAGS) -I$(top_srcdir)/src/cudd
+AM_CPPFLAGS += $(BOOST_CPPFLAGS) -I$(top_srcdir)/src/cudd -D __STDC_LIMIT_MACROS -D __STDC_FORMAT_MACROS
 
 TESTS += $(check_SCRIPTS)
 CLEANFILES += $(check_SCRIPTS)

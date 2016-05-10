@@ -1,4 +1,11 @@
+abqueues2fair.aig --pi 0
+abqueues2mfair.aig --pi 0
+abqueues4fair.aig --pi 0
+abqueues4mfair.aig --pi 0
+abqueues8fair.aig --pi 0
+abqueues8mfair.aig --pi 0
 am2910.auto.aig --pi 0
+bakery.aig --pi 0
 CAB.auto.aig --pi 0
 CAB.auto.aig --pi 1
 CAB.auto.aig --pi 2
@@ -165,6 +172,10 @@ syncarb.auto.aig --pi 46
 syncarb.auto.aig --pi 47
 tstrst.auto.aig --pi 0
 usb_phy.auto.aig --pi 0
+v2Miim.auto.aig --pi 0
+v2Miim.auto.aig --pi 1
+v2Miim.auto.aig --pi 2
+v2Miim.auto.aig --pi 3
 vcordic.auto.aig --pi 0
 viper.auto.aig --pi 0
 viper.auto.aig --pi 1

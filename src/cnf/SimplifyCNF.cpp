@@ -128,7 +128,10 @@ namespace CNF {
           if (m.verbosity() > Options::Informative)
             cout << "SimplifyCNF: replacing: " << Expr::stringOf(*ev, pv) << endl;
           // replace clauses
-          Expr::tseitin(*ev, ev->apply(Expr::Equiv, pv, fns[i]), out);
+          if (m.options().count("cnf_wilson")) 
+            Expr::wilson(*ev, ev->apply(Expr::Equiv, pv, fns[i]), out);
+          else
+            Expr::tseitin(*ev, ev->apply(Expr::Equiv, pv, fns[i]), out);
         }
       }
 

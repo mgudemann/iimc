@@ -1,0 +1,12 @@
+aig 5 1 2 1 2
+10
+9
+5
+i0 i
+l0 state<0>
+l1 state<1>
+o0 p
+c
+bliftoaig
+20071012
+af_ag.blif

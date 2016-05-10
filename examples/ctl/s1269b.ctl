@@ -1,0 +1,18 @@
+#PASS: (0)
+AG EX true
+#PASS: (1)
+AG AF(~I679 & ~I680 & ~I681)
+#PASS: (2)
+EG(~I679 & ~I680 & ~I681)
+#PASS: (3)
+AG EF EG(~I679 & ~I680 & ~I681)
+#PASS: (4)
+AG(EF(~I682 & ~I683) & EF(I682 & ~I683) & EF(~I682 & I683) & EF(I682 & I683))
+#PASS: (5)
+EX EG(~I682 & I683)
+#PASS: (6)
+EX EX EG(I682 & I683)
+#PASS: (7)
+AG AF I683
+#PASS: (8)
+A ~I681 U (qINSo<2> & ~qINSo<1> & qINSo<0>)

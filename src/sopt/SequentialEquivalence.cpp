@@ -347,6 +347,11 @@ void SequentialEquivalenceAction::exec() {
       ev->keep(justiceS[i]);
     }
 
+    vector<ID> ctlProps(eat->ctlProperties());
+    eat->clearCtlProperties();
+    Expr::varSub(*ev, lmap, ctlProps);
+    eat->addCtlProperties(ctlProps);
+
     model().release(eat);
     model().release(seqat);
   }

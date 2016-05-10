@@ -43,9 +43,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BMC.h"
 #include "ExprAttachment.h"
 #include "Fair.h"
+#include "FCBMC.h"
 #include "IC3.h"
+#include "IICTL.h"
 #include "MC.h"
 #include "Model.h"
+#include "PropCtlDriver.h"
 #include "Error.h"
 
 #include <boost/program_options.hpp>
@@ -69,7 +72,32 @@ namespace IIC {
 
       ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
       unsigned int pi = model().options()["pi"].as<unsigned int>();
-      if (eat->bad().size() > 0 && pi < eat->bad().size()) { // safety
+      if (model().options().count("ctl") > 0) { // CTL model checking
+        std::string filename =  model().options()["ctl"].as<std::string>();
+        ctl_driver driver(eat);
+        if (driver.parse(filename))
+          throw InputError("Error(s) in property file " + filename);
+        std::vector<ID> properties = eat->ctlProperties();
+        if (pi >= properties.size())
+          throw InputError("Property index out of range");
+        eat->clearBadFns();
+        eat->clearJusticeSets();
+        ID ctlp = properties[pi];
+        eat->clearCtlProperties();
+        eat->addCtlProperty(ctlp);
+        std::set<ID> support;
+        Expr::Manager::View * v = model().newView();
+        Expr::variables(*v, ctlp, support);
+        delete v;
+        std::set<ID> outputs(eat->outputs().begin(),eat->outputs().end());
+        std::vector<ID> poutputs;
+        set_intersection(support.begin(), support.end(), outputs.begin(), outputs.end(), inserter(poutputs, poutputs.end()));
+        std::vector<ID> poutFns = eat->outputFnOf(poutputs);
+        eat->clearOutputFns();
+        eat->setOutputFns(poutputs, poutFns);
+        model().setDefaultMode(Model::mIICTL);
+      }
+      else if (eat->bad().size() > 0 && pi < eat->bad().size()) { // safety
         if (model().verbosity() > Options::Silent &&
             (eat->bad().size() > 1 ||
              eat->fairness().size() > 0 || 
@@ -143,9 +171,19 @@ namespace IIC {
         IC3::IC3Action(model()).make();
       }
       else if (model().defaultMode() == Model::mFAIR) {
+        FCBMC::FCBMCAction(model()).make();
+        const ProofAttachment * pat = (const ProofAttachment *) model().attachment(Key::PROOF);
+        bool hc = pat->hasConclusion();
+        model().constRelease(pat);
+        if (hc) return;
         Fair::FairOptions opts(options());
         opts.ic3_opts.sccH = true;
         Fair::FairAction(model(), &opts).make();
+      }
+      else if (model().defaultMode() == Model::mIICTL) {
+        IICTL::IICTLOptions opts(options());
+        // opts.ic3_opts.sccH = true; // ???
+        IICTL::IICTLAction(model(), &opts).make();
       }
     }
   };

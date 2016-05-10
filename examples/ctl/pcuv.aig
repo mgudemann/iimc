@@ -1,0 +1,195 @@
+aig 223 15 69 14 139
+192
+1
+36
+1
+1
+214
+232
+248
+1
+250
+1
+1
+56
+58
+0
+18
+264
+30
+1
+28
+282
+1
+298
+0
+308
+0
+1
+0
+0
+324
+92
+4
+1
+12
+334
+16
+14
+350
+0
+0
+364
+1
+24
+382
+1
+1
+398
+2
+418
+0
+20
+0
+26
+1
+0
+0
+1
+432
+1
+150
+10
+0
+156
+22
+1
+446
+6
+1
+8
+241
+173
+0
+0
+0
+0
+0
+0
+0
+0
+291
+0
+391
+0
+6*‹'F‘KJN/	
+
+XI;š?^*
+—G˜Q\€•Y!aZN`OWhmqWJq“*–QR
+E|ƒ@KNy‹S“<z)šŸ£8‚$©qj¯.xgpµ}”MÝ—˜‹ZÉ»’Î—®AñÇ3µ¶
+©Nç¯N²Kï·÷ä<åsþƒËD‰¬ÒÖA“
+Ûß2“
+æ0¡é
+€‘8Ì1‡ˆ
+i0 EXUMultiply
+i1 EXUMemory
+i2 ExceptEXU<0>
+i3 ExceptIDU<2>
+i4 DataDep
+i5 ExceptEXU<1>
+i6 nFlushPipe
+i7 ExceptIDU<3>
+i8 ExceptEXU<2>
+i9 nReset
+i10 ExceptEXU<3>
+i11 ExceptIDU<0>
+i12 nMAUNotReady
+i13 nIFUNotReady
+i14 ExceptIDU<1>
+l0 MultiplyReg<4>
+l1 _n2ef
+l2 shutting_down
+l3 _n2e9
+l4 _n2f1
+l5 R_StepIDU
+l6 R_ExceptIDU<1>
+l7 R_ExceptEXU<2>
+l8 _n2f3
+l9 R_StepMAU
+l10 _n2fb
+l11 _n2f5
+l12 MultiplyRegtemp<1>
+l13 MultiplyRegtemp<4>
+l14 I_WWorkWB$ps
+l15 I_ExceptEXU<2>
+l16 MultiplyReg<2>
+l17 I_ExceptIDU<1>
+l18 _n2f7
+l19 I_nIFUNotReady
+l20 R_ExceptIDU<2>
+l21 _n2f9
+l22 R_ExceptEXU<0>
+l23 I_SStepWB$ps
+l24 R_ExceptEXU<3>
+l25 I_SStepEXU$ps
+l26 _n2db
+l27 I_SStepMAU$ps
+l28 I_WWorkIDU$ps
+l29 R_WorkIFU
+l30 MultiplyRegtemp<2>
+l31 I_EXUMemory
+l32 _n2dd
+l33 I_ExceptEXU<1>
+l34 MultiplyReg<0>
+l35 I_ExceptIDU<3>
+l36 I_nFlushPipe
+l37 R_EXUMultiply
+l38 I_WWorkIFU$ps
+l39 R_WorkEXU
+l40 MultiplyReg<3>
+l41 _n2df
+l42 I_ExceptIDU<0>
+l43 R_ExceptIDU<0>
+l44 _n2d9
+l45 _n2e1
+l46 R_ExceptEXU<1>
+l47 I_EXUMultiply
+l48 R_ExceptIDU<3>
+l49 I_SStepIDU$ps
+l50 I_nReset
+l51 I_WWorkMAU$ps
+l52 I_nMAUNotReady
+l53 _n2e3
+l54 R_WorkIDU
+l55 I_WWorkEXU$ps
+l56 _n2eb
+l57 R_StepEXU
+l58 _n2e5
+l59 MultiplyRegtemp<0>
+l60 I_DataDep
+l61 R_WorkMAU
+l62 MultiplyRegtemp<3>
+l63 I_ExceptEXU<3>
+l64 _n2ed
+l65 MultiplyReg<1>
+l66 I_ExceptEXU<0>
+l67 _n2e7
+l68 I_ExceptIDU<2>
+o0 I_EExceptEXU<2>
+o1 I_EExceptEXU<3>
+o2 WorkWB
+o3 WorkEXU
+o4 WorkIFU
+o5 StepWB
+o6 StepEXU
+o7 WorkMAU
+o8 StepMAU
+o9 WkMAU
+o10 I_EExceptEXU<0>
+o11 WorkIDU
+o12 I_EExceptEXU<1>
+o13 StepIDU
+c
+bliftoaig
+1.9
+pcuv.blif

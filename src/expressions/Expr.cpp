@@ -56,6 +56,9 @@ namespace Expr {
     this->man = man;
   }
 
+  Manager::View::~View() {
+  }
+
   Manager & Manager::View::manager() {
     return *man;
   }
@@ -109,7 +112,7 @@ namespace Expr {
     case F:
     case G:
     case X: {
-      if (arg == btrue() || arg == bfalse()) return arg;
+      //if (arg == btrue() || arg == bfalse()) return arg;
       Expr * e = new Expr();
       e->op = op;
       e->ext = false;

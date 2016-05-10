@@ -1,0 +1,13 @@
+aig 3 0 3 1 0
+6
+3 1
+4 1
+2
+l0 o
+l1 s
+l2 t
+o0 o
+c
+bliftoaig
+1.9
+tstrst.blif

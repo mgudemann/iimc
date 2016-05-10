@@ -16,6 +16,10 @@ mc_MC_sources = \
   src/mc/RchAttachment.cpp \
   src/mc/Fair.h \
   src/mc/Fair.cpp \
+  src/mc/IICTL.h \
+  src/mc/IICTL.cpp \
+  src/mc/FCBMC.h \
+  src/mc/FCBMC.cpp \
   src/mc/IIC.h
 
 iimc_SOURCES += $(mc_MC_sources)

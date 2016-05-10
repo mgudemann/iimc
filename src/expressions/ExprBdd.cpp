@@ -641,7 +641,7 @@ vector<ID> bddOrderOf(Manager::View& v, vector<ID>& roots)
   cout << endl;
 #endif
   // Create ranking function.
-  unsigned int maxHeight = height[roots[0]];
+  unsigned int maxHeight = roots.empty() ? 0 : height[roots[0]];
   unordered_map<ID, lexPair<unsigned int, unsigned int> > ranking;
   for (unordered_map<ID, unsigned int>::const_iterator i = count.begin();
        i !=  count.end(); ++i) {

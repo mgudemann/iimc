@@ -345,7 +345,8 @@ namespace {
 
 namespace BMC {
 
-  MC::ReturnValue check(Model & m, const BMCOptions & opts, vector<Transition> * cexTrace) {
+  MC::ReturnValue check(Model & m, const BMCOptions & opts, vector<Transition> * cexTrace,
+                        vector< vector<ID> > * proofCNF) {
     if (m.verbosity() > Options::Silent && !opts.silent)
       cout << "BMC: Checking up to " << *(opts.bound) << endl;
     int rseed = m.options()["rand"].as<int>();
@@ -374,6 +375,7 @@ namespace BMC {
       if (m.verbosity() > Options::Terse)
         cout << "BMC: The property holds trivially. (0)" << endl;
       rv.returnType = MC::Proof;
+      //Proof is just true!
       delete v;
       return rv;
     }
@@ -393,6 +395,13 @@ namespace BMC {
     CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
     vector< vector<ID> > cons_clauses = opts.useCOI ? cnfat->getCNF() : cnfat->getPlainCNF();
     m.constRelease(cnfat);
+
+    if(opts.constraints) {
+      for (unsigned i = 0; i < opts.constraints->size(); ++i) {
+        cons_clauses.insert(cons_clauses.end(), (*opts.constraints)[i].begin(),
+                                                (*opts.constraints)[i].end());
+      }
+    }
 
     if (m.verbosity() > Options::Informative)
       cout << "BMC: CNF size: " << cons_clauses.size() << endl;
@@ -423,12 +432,14 @@ namespace BMC {
       npi_cnf = *opts.iictl_clauses;
     }
     npi_cnf.insert(npi_cnf.end(), opts.bwd.begin(), opts.bwd.end());
+    /*
     if(opts.constraints) {
       for (unsigned i = 0; i < opts.constraints->size(); ++i) {
         npi_cnf.insert(npi_cnf.end(), (*opts.constraints)[i].begin(),
                                       (*opts.constraints)[i].end());
       }
     }
+    */
 
     // assert initial condition
     if (!opts.sim)
@@ -484,6 +495,71 @@ namespace BMC {
                 cout << "BMC: The property holds trivially. (1)" << endl;
               rv.returnType = MC::Proof;
               trivial = true;
+              if(proofCNF) {
+                if(opts.lo >= 1) {
+                  if(k == 1)
+                    proofCNF->push_back(SAT::Clause());
+                  else
+                    rv.returnType = MC::Unknown; //Leave it to IC3 to extract a proof
+                }
+                else {
+                  //The initial condition cube is an inductive invariant
+                  vector<ID> initialConditions = init;
+                  if(opts.proofProc == IC3::WEAKEN || opts.proofProc == IC3::SHRINK) {
+                    //Derive a weaker one that still implies the negation of the
+                    //target by extracting the unsat core from the query:
+                    //I & (target | c & T & c' & !I'), where c are the invariant
+                    //constraits
+                    SAT::Manager * satMan = m.newSATManager();
+                    SAT::Manager::View * satView = satMan->newView(s.view());
+
+                    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+                    ID target = eat->outputFns()[0];
+                    Clauses targetClauses;
+                    Expr::wilson(s.view(), target, targetClauses);
+                    ostringstream targetEnaName, otherEnaName;
+                    targetEnaName << "__tEna__";
+                    ID targetEna = s.view().newVar(targetEnaName.str());
+                    otherEnaName << "__otherEna__";
+                    ID otherEna = s.view().newVar(otherEnaName.str());
+                    for(Clauses::iterator it = targetClauses.begin();
+                        it != targetClauses.end(); ++it) {
+                      it->push_back(s.view().apply(Expr::Not, targetEna));
+                    }
+                    satView->add(targetClauses);
+                    Clauses otherClauses, tr = s.cnf(k-i, use_frontier);
+                    prime(s.view(), i-1, tr, otherClauses);
+                    vector<ID> negInitPrimed;
+                    for(vector<ID>::const_iterator it = initialConditions.begin();
+                        it != initialConditions.end(); ++it) {
+                      ID lit = s.view().apply(Expr::Not, *it);
+                      if(lit == s.view().btrue() || lit == s.view().bfalse())
+                        negInitPrimed.push_back(lit);
+                      else
+                        negInitPrimed.push_back(s.view().prime(lit));
+                    }
+                    otherClauses.push_back(negInitPrimed);
+                    for(Clauses::iterator it = otherClauses.begin();
+                        it != otherClauses.end(); ++it) {
+                      it->push_back(s.view().apply(Expr::Not, otherEna));
+                    }
+                    satView->add(otherClauses);
+                    //Add clause for the disjunction
+                    Clause disj;
+                    disj.push_back(targetEna);
+                    disj.push_back(otherEna);
+                    satView->add(disj);
+                    bool sat = satView->sat(&initialConditions, NULL, &initialConditions);
+                    assert(!sat);
+                    delete satView;
+                    delete satMan;
+                  }
+                  for(vector<ID>::const_iterator it = initialConditions.begin();
+                      it != initialConditions.end(); ++it) {
+                    proofCNF->push_back(Clause(1, *it));
+                  }
+                }
+              }
               break;
             }
             if (m.verbosity() > Options::Informative)
@@ -499,6 +575,7 @@ namespace BMC {
           if (!tv.value()) {
             if (m.verbosity() > Options::Terse)
               cout << "BMC: The property holds trivially. (2)" << endl;
+            assert(!proofCNF);
             rv.returnType = MC::Proof;
             break;
           }
@@ -565,6 +642,7 @@ namespace BMC {
                      << "is equivalent to false)" << endl;
               }
               rv.returnType = MC::Proof;
+              //Proof is empty in this case
               break;
             }
           }

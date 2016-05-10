@@ -89,6 +89,8 @@ public:
       if (e1->op == Var)
         return (e1->u.varName->compare(*(e2->u.varName)) == 0);
       if (e1->ext) {
+        if (e1->u.extendedArgs.n != e2->u.extendedArgs.n)
+          return false;
         for (int i = 0; i < e1->u.extendedArgs.n; ++i)
           if (e1->u.extendedArgs.args[i] != e2->u.extendedArgs.args[i])
             return false;
