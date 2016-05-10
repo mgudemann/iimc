@@ -42,6 +42,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BddTrAttachment.h"
 #include "Model.h"
 
+struct PeriodicSignalCard;
+typedef std::unordered_map<ID, PeriodicSignalCard> PeriodicCardMap;
+
 /**
  * A class to hold reachability infomation on a model.
  */
@@ -49,65 +52,22 @@ class RchAttachment : public Model::Attachment {
 public:
   RchAttachment(Model& model) : 
     Model::Attachment(model), _view(_model.newView()), _cex_lb(0),
-    _has_tv_info(false), _fw_steps_bdd(0), _bw_steps_bdd(0),
-    _fw_bdd_complete(false), _bw_bdd_complete(false) {
+    _has_tv_info(false), _periodicMap(0), _fw_steps_bdd(0), _bw_steps_bdd(0),
+    _fw_bdd_complete(false), _bw_bdd_complete(false), _persSatMan(0),
+    _persSatView(0), _persSatTrAdded(false), _persUpToDate(false) {
     ExprAttachment::Factory f;
     requires(Key::EXPR, &f);
   }
-  ~RchAttachment() { delete _view; }
+  ~RchAttachment();
   /** Copy constructor. */
-  RchAttachment(const RchAttachment& from) : 
-    Model::Attachment(from),
-    _fw_lb(from._fw_lb),
-    _fw_ub(from._fw_ub),
-    _bw_lb(from._bw_lb),
-    _bw_ub(from._bw_ub),
-    _cex_lb(from._cex_lb),
-    _has_tv_info(from._has_tv_info),
-    _stem_length(from._stem_length),
-    _loop_length(from._loop_length),
-    _stabilized(from._stabilized),
-    _widened(from._widened),
-    _fw_lb_bdd(from._fw_lb_bdd),
-    _bw_lb_bdd(from._bw_lb_bdd),
-    _fw_steps_bdd(from._fw_steps_bdd),
-    _bw_steps_bdd(from._bw_steps_bdd),
-    _fw_bdd_complete(from._fw_bdd_complete),
-    _bw_bdd_complete(from._bw_bdd_complete) {
-  }
-  RchAttachment& operator=(RchAttachment& rhs) {
-    if (&rhs != this) {
-      _model = rhs._model;
-      if (rhs._ts == 0)
-	_ts = 0;
-      else
-	_ts = Model::newTimestamp();
-      _fw_lb = rhs._fw_lb;
-      _fw_ub = rhs._fw_ub;
-      _bw_lb = rhs._bw_lb;
-      _bw_ub = rhs._bw_ub;
-      _cex_lb = rhs._cex_lb;
-      _has_tv_info = rhs._has_tv_info;
-      _stem_length = rhs._stem_length;
-      _loop_length = rhs._loop_length;
-      _stabilized = rhs._stabilized;
-      _widened = rhs._widened;
-      _fw_lb_bdd = rhs._fw_lb_bdd;
-      _bw_lb_bdd = rhs._bw_lb_bdd;
-      _fw_steps_bdd = rhs._fw_steps_bdd;
-      _bw_steps_bdd = rhs._bw_steps_bdd;
-      _fw_bdd_complete = rhs._fw_bdd_complete;
-      _bw_bdd_complete = rhs._bw_bdd_complete;
-    }
-    return *this;
-  }
+  RchAttachment(const RchAttachment& from, Model & model);
   /** Return the key of this type of attachment. */
   Key::Type key() const { return Key::RCH; }
   /** Convert to string. */
   std::string string(bool includeDetails = false) const;
   /** Initialize. */
   void build();
-  /** Return current lower bound on stated reachable from initial states. */
+  /** Return current lower bound on states reachable from initial states. */
   ID forwardLowerBound() const { return _fw_lb; }
   void setForwardLowerBound(ID newFwLb) { _fw_lb = newFwLb; }
   ID updateForwardLowerBound(ID newFwLb) {
@@ -132,7 +92,8 @@ public:
   bool exactForward() { return _fw_lb == _fw_ub; }
   bool exactBackward() { return _bw_lb == _bw_ub; }
   unsigned int cexLowerBound() const { return _cex_lb; }
-  unsigned int updateCexLowerBound(unsigned int newLb);
+  unsigned int updateCexLowerBound(unsigned int newLb, std::string who);
+  void setCexLowerBound(unsigned int newLb);
 
   /** From ternary simulation. */
   bool hasTvInfo() const { return _has_tv_info; }
@@ -140,8 +101,29 @@ public:
   unsigned int loopLength() const { return _loop_length; }
   unsigned int stabilized() const { return _stabilized; }
   bool widened() const { return _widened; }
-  void setTvInfo(unsigned int stem, unsigned int loop,
-                 unsigned int stable, bool widened);
+  PeriodicCardMap const * periodicMap() const { return _periodicMap; }
+  void setTvInfo(unsigned int stem, unsigned int loop, unsigned int stable,
+                 bool widened, PeriodicCardMap * pMap);
+  void addSatisfiedFairnessConstraint(ID fc) {
+    _satisfiedFairness.insert(fc);
+  }
+  template<typename Iterator>
+  void addSatisfiedFairnessConstraints(Iterator begin, Iterator end) {
+    _satisfiedFairness.insert(begin, end);
+  }
+  bool isSatisfiedFairnessConstraint(ID fc) const {
+    std::unordered_set<ID>::const_iterator it = _satisfiedFairness.find(fc);
+    return it != _satisfiedFairness.end();
+  }
+  std::unordered_set<ID> const & satisfiedFairnessConstraints() const {
+    return _satisfiedFairness;
+  }
+  void eraseSatisfiedFairnessConstraint(ID fc) {
+    _satisfiedFairness.erase(fc);
+  }
+  void clearSatisfiedFairnessConstraint() {
+    _satisfiedFairness.clear();
+  }
 
   /** Accessors for BDD-based bounds. */
   BDD forwardBddLowerBound() const { return _fw_lb_bdd; }
@@ -187,6 +169,71 @@ public:
   void setForwardRings(std::vector<BDD> const & rings) { _forward_rings = rings; }
   void setBackwardRings(std::vector<BDD> const & rings) { _backward_rings = rings; }
 
+  const std::unordered_map< ID, std::pair<bool, bool> > & persistentSignals() const { return _persSignals; }
+
+  /**
+   * Removes from the persistent signal map those latches that have been
+   * dropped by optimizations.
+   */
+  void filterDroppedPersistentSignals();
+
+  /**
+   * Removes from the periodic signal map those latched that have been
+   * dropped by optimizations.
+   */
+  void filterDroppedPeriodicSignals();
+  
+  /**
+   * Returns true if persistent signals have been derived and no new
+   * information has been derived since then that can cause the discovery of
+   * new persistent signals
+   */
+  bool persistentSignalsUpToDate() const { return _persUpToDate; }
+
+  /**
+   * Set the up-to-date flag
+   */
+  void setPersistentSignalsUpToDate() { _persUpToDate = true; }
+
+  /**
+   * Returns true if signal is known to be persistent
+   */
+  bool isPersistent(ID signal) const;
+
+  /**
+   * Returns true if signal is known to be eventually true
+   */
+  bool isEventuallyTrue(ID signal) const;
+
+  /**
+   * The persistent signals SAT view.
+   */
+  SAT::Manager::View * persistentSatView();
+
+  /**
+   * Returns true if transition relation has been added to persistent signals
+   * SAT database.
+   */
+  bool persistentSatTrAdded() { return _persSatTrAdded; }
+
+  /**
+   * Indicate that the transition relation has been added to the SAT database
+   */
+  void setPersistentSatTrAdded() { _persSatTrAdded = true; }
+
+  /**
+   * Add a signal to the list of persistent signals
+   * Returns true if language is empty
+   */
+  bool addPersistentSignal(ID signal, bool eventuallyTrue = false,
+      bool contradictsFair = false);
+
+  /**
+   * Add reachability information to persistent signals SAT database
+   * Returns false if reach is equivalent to false
+   */
+  bool addReach(std::vector< std::vector<ID> > & reach);
+
   class Factory : public Model::AttachmentFactory {
   public:
     virtual RchAttachment * operator()(Model & model) {
@@ -210,13 +257,15 @@ public:
    * Converts a BDD into a CNF formula;
    */
   void bddToCnf(const BDD b, std::vector< std::vector<ID> >& v) const;
+
 protected:
-  RchAttachment* clone() const { return new RchAttachment(*this); }
+  RchAttachment* clone(Model & model) const { return new RchAttachment(*this, model); }
 private:
   ID updateBound(ID disjunct, ID bound, Expr::Op op);
   bool disjointFromBdd(std::vector<ID> const & cube, const BDD& bound, std::vector<ID>* prime) const;
   bool disjointFromBddExpand(std::vector<ID> const & lb, std::vector<ID> const & ub,
                              const BDD& bound, std::vector<ID>* expansion) const;
+  void createPersistentSignalsSatInstance();
 
   Expr::Manager::View *_view;
   // Bounds on reachable states.
@@ -233,7 +282,10 @@ private:
   unsigned int _stem_length;
   unsigned int _loop_length;
   unsigned int _stabilized;
+  std::unordered_set<ID> _satisfiedFairness;
   bool _widened;
+
+  PeriodicCardMap * _periodicMap;
   // Lower bounds.
   BDD _fw_lb_bdd;
   BDD _bw_lb_bdd;
@@ -248,6 +300,21 @@ private:
   void setKUpperBound(unsigned int, const std::vector< std::vector<ID> > &, std::vector< std::vector< std::vector<ID> > > &);
   std::vector< std::vector< std::vector<ID> > > _k_fw_ub;
   std::vector< std::vector< std::vector<ID> > > _k_bw_ub;
+
+  // Persistent signals. First bool is true if the signal p is eventually
+  // asserted on every computation (FG p) and is false if not or unknown
+  // FG (p <-> X p). Second bool is true if at least one fairness constraint is
+  // zero if p is true. In this case, no fair cycles exist in p-regions. If the
+  // first bool is also true, the language is empty (property holds)
+  std::unordered_map< ID, std::pair<bool, bool> > _persSignals;
+
+  // SAT manager and view for deriving persistent signals
+  SAT::Manager * _persSatMan;
+  SAT::Manager::View * _persSatView;
+  bool _persSatTrAdded;
+
+  bool _persUpToDate;
+
 };
 
 #endif // _RchAttachment_

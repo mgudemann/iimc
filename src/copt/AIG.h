@@ -85,6 +85,8 @@ inline bool isNot(NodeRef ref) {
 #include <cassert>
 #include <vector>
 
+class AIGAttachment;
+
 namespace Opt
 {
 
@@ -124,7 +126,7 @@ public:
   void merge(NodeIndex index, NodeRef with, bool updateFanouts = true);
   void resetMerged();
 
-  void update(Model& model);
+  void update(AIGAttachment * aat);
 
   unsigned& numInputs() { return _numInputs; }
   const unsigned& numInputs() const { return _numInputs; }

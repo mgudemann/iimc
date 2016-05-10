@@ -43,7 +43,7 @@ using namespace std;
 
 // TODO: make less conservative?
 
-void COI::build(Expr::Manager::View & v, ExprAttachment * const eat,
+void COI::build(Expr::Manager::View & v, ExprAttachment const * const eat,
                 vector<ID> props, bool internal, Options::Verbosity vrb) {
 
   if (vrb > Options::Terse)
@@ -101,9 +101,9 @@ void COI::build(Expr::Manager::View & v, ExprAttachment * const eat,
 
 
 void COIAction::exec() {
-  COIAttachment * const cat = (COIAttachment *) model().constAttachment(Key::COI);
-  SeqAttachment * seqat = (SeqAttachment *) model().attachment(Key::SEQ);
-  ExprAttachment * const eat = (ExprAttachment *) model().attachment(Key::EXPR);
+  COIAttachment const * const cat = (COIAttachment const *) model().constAttachment(Key::COI);
+  auto seat = model().attachment<SeqAttachment>(Key::SEQ);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
 
   vector<ID> latches, nsfs;
   COI::range coirng = cat->coi().cCOI();
@@ -119,25 +119,19 @@ void COIAction::exec() {
     }
     else  {
       changed = true;
-      seqat->optimized.insert(unordered_map<ID, ID>::value_type(*it, *it));
+      seat->optimized.insert(unordered_map<ID, ID>::value_type(*it, *it));
     }
 
   model().constRelease(cat);
   model().constRelease(eat);
 
   if (changed) {
-    ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
-    if(seqat->stateVars.empty()) {
-      seqat->stateVars = eat->stateVars();
-      seqat->nextStateFns = eat->nextStateFns();
-    }
+    auto eat = model().attachment<ExprAttachment>(Key::EXPR);
     eat->clearNextStateFns();
     eat->setNextStateFns(latches, nsfs);
 
     Expr::Manager::View * ev = model().newView();
     vector<ID> init(eat->initialConditions());
-    if(seqat->initialConditions.empty())
-      seqat->initialConditions = init;
     eat->clearInitialConditions();
     for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
       set<ID> vars, inter;
@@ -162,8 +156,6 @@ void COIAction::exec() {
     set<ID> vars;
     Expr::variables(*ev, nsfs, vars);
     vector<ID> inputs(eat->inputs());
-    if(seqat->inputs.empty())
-      seqat->inputs = inputs;
     eat->clearInputs();
     for (vector<ID>::const_iterator it = inputs.begin(); it != inputs.end(); ++it)
       if (vars.find(*it) != vars.end())
@@ -174,7 +166,7 @@ void COIAction::exec() {
     model().release(eat);
     delete ev;
 
-    COIAttachment * cat = (COIAttachment *) model().attachment(Key::COI);
+    auto cat = model().attachment<COIAttachment>(Key::COI);
     cat->updateTimestamp();
     model().release(cat);
   }
@@ -182,7 +174,7 @@ void COIAction::exec() {
     if (model().verbosity() > Options::Silent)
       cout << "COI: Final # latches = " << initLatches << endl;
   }
-  model().release(seqat);
+  model().release(seat);
 }
 
 void COIAttachment::build() {
@@ -190,7 +182,7 @@ void COIAttachment::build() {
     cout << "COIAttachment: building" << endl;
 
   // If we read CTL properties, the attachment is modified.
-  ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   Expr::Manager::View * v = model().newView();
 
   vector<ID> props;

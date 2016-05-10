@@ -33,6 +33,8 @@ POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
 #include "RchAttachment.h"
+#include "SeqAttachment.h"
+#include "Simplifier.h"
 
 using namespace std;
 
@@ -51,8 +53,35 @@ void RchAttachment::build()
 
 } // RchAttachment::build
 
+RchAttachment::~RchAttachment() {
+  delete _view; 
+  if (_periodicMap) delete _periodicMap;
+  if (_persSatView) delete _persSatView;
+  if (_persSatMan) delete _persSatMan;
+}
+RchAttachment::RchAttachment(const RchAttachment& from, Model & model) : 
+  Model::Attachment(from, model),
+  _view(model.newView()),
+  _fw_lb(from._fw_lb),
+  _fw_ub(from._fw_ub),
+  _bw_lb(from._bw_lb),
+  _bw_ub(from._bw_ub),
+  _cex_lb(from._cex_lb),
+  _has_tv_info(from._has_tv_info),
+  _stem_length(from._stem_length),
+  _loop_length(from._loop_length),
+  _stabilized(from._stabilized),
+  _widened(from._widened),
+  _periodicMap(from._has_tv_info ? new PeriodicCardMap(*(from._periodicMap)) : 0),
+  _fw_steps_bdd(0),
+  _bw_steps_bdd(0),
+  _fw_bdd_complete(false),
+  _bw_bdd_complete(false),
+  _persSatMan(0), _persSatView(0), _persSatTrAdded(false),
+  _persUpToDate(false)
+{}
 
-std::string RchAttachment::string(bool includeDetails) const
+std::string RchAttachment::string(bool) const
 {
   std::ostringstream ret;
   ret << "RCH (Timestamp = " << _ts 
@@ -74,19 +103,50 @@ ID RchAttachment::updateBound(ID update, ID bound, Expr::Op op)
 } // RchAttachment::updateBound
 
 
-unsigned int RchAttachment::updateCexLowerBound(unsigned int newLb) {
-  return (_cex_lb = max(_cex_lb, newLb));
-
+unsigned int RchAttachment::updateCexLowerBound(unsigned int newLb, std::string who) {
+  if (newLb > _cex_lb) {
+    _cex_lb = newLb;
+    if (model().options().count("cex_aiger")) {
+      ostringstream oss;
+      //_cex_lb = n means no counterexamples with n states which is equivalent
+      //to bound n - 1 in the competition semantics
+      //Need to take into account the unrolling, if any, which is stored
+      //in SeqAttachment.
+      int unrollings = 1;
+      SeqAttachment const * const seat = (SeqAttachment const *) model().constAttachment(Key::SEQ);
+      if (seat)
+        unrollings = seat->unrollings;
+      model().constRelease(seat);
+      oss << "u" << unrollings * _cex_lb - 1;
+      if (model().verbosity() > Options::Silent) {
+        oss << ' ' << who;
+      }
+      oss << endl;
+      cout << oss.str() << flush;
+    }
+  }
+  return _cex_lb;
 } // RchAttachment::updateCexLowerBound
 
 
+void RchAttachment::setCexLowerBound(unsigned int newLb){
+  // _cex_lb is the lower bound of the current model, possibly after processing
+  // modify the cex bound to be set if the semantics change (i.e., phase unrolling)
+  // everywhere else should use updateCexLowerBound()
+  _cex_lb = newLb;
+}
+
+
 void RchAttachment::setTvInfo(unsigned int stem, unsigned int loop,
-                              unsigned int stable, bool widened) {
+                              unsigned int stable, bool widened,
+                              PeriodicCardMap * pMap) {
+  delete _periodicMap;
   _has_tv_info = true;
   _stem_length = stem;
   _loop_length = loop;
   _stabilized = stable;
   _widened = widened;
+  _periodicMap = pMap;
 }
 
 
@@ -111,7 +171,7 @@ void RchAttachment::setBackwardBddLowerBound(BDD newBwLb) {
 BDD RchAttachment::literalVectorToBdd(
   vector<ID> const & cube) const
 {
-  BddAttachment const *bat = 
+  BddAttachment const * const bat = 
     (BddAttachment const *) _model.constAttachment(Key::BDD);
   assert(bat != 0 && bat->hasBdds());
   int n = cube.size();
@@ -164,7 +224,7 @@ void RchAttachment::bddToLiteralVector(
   vector<ID>& v) const
 {
   v.clear();
-  BddAttachment const *bat = 
+  BddAttachment const * const bat = 
     (BddAttachment const *) _model.constAttachment(Key::BDD);
   assert(bat != 0 && bat->hasBdds());
   DdManager *mgr = b.manager();
@@ -189,7 +249,7 @@ void RchAttachment::bddToCnf(
   vector< vector<ID> >& v) const
 {
   v.clear();  // leak?
-  BddAttachment const *bat = 
+  BddAttachment const * const bat = 
     (BddAttachment const *) _model.constAttachment(Key::BDD);
   DdManager *mgr = b.manager();
   DdNode *node = b.getNode();
@@ -314,6 +374,125 @@ bool RchAttachment::disjointFromBwBddExpand(
 
 } // RchAttachment::disjointFromBwBddExpand
 
+
+void RchAttachment::filterDroppedPersistentSignals()
+{
+  SeqAttachment const * const seat =
+    (SeqAttachment const *) model().constAttachment(Key::SEQ);
+  unordered_map<ID, ID> const & missingLatches = seat->optimized;
+  for (unordered_map< ID, std::pair<bool, bool> >::iterator pit =
+         _persSignals.begin(); pit != _persSignals.end();) {
+    ID signal = pit->first;
+    ID var = _view->op(signal) == Expr::Not ? _view->apply(Expr::Not, signal) :
+                                              signal;
+    assert(_view->op(var) == Expr::Var);
+    unordered_map<ID, ID>::const_iterator dit = missingLatches.find(var);
+    if (dit != missingLatches.end()) {
+      // This latch was dropped: remove it from the persistent signal map.
+      pit = _persSignals.erase(pit);
+    }
+    else {
+      ++pit;
+    }
+  }
+  model().constRelease(seat);
+} // RchAttachment::filterDroppedPersistentSignals
+
+
+void RchAttachment::filterDroppedPeriodicSignals()
+{
+  SeqAttachment const * const seat =
+    (SeqAttachment const *) model().constAttachment(Key::SEQ);
+  unordered_map<ID, ID> const & missingLatches = seat->optimized;
+  for (PeriodicCardMap::iterator pit = _periodicMap->begin();
+       pit != _periodicMap->end();) {
+    ID signal = pit->first;
+    ID var = _view->op(signal) == Expr::Not ? _view->apply(Expr::Not, signal) :
+                                              signal;
+    assert(_view->op(var) == Expr::Var);
+    unordered_map<ID, ID>::const_iterator dit = missingLatches.find(var);
+    if (dit != missingLatches.end()) {
+      // This latch was dropped: remove it from the persistent signal map.
+      pit = _periodicMap->erase(pit);
+    }
+    else {
+      ++pit;
+    }
+  }
+  model().constRelease(seat);
+
+} // RchAttachment::filterDroppedPeriodicSignals
+
+
+bool RchAttachment::isPersistent(ID signal) const
+{
+  return _persSignals.find(signal) != _persSignals.end();
+}
+
+
+bool RchAttachment::isEventuallyTrue(ID signal) const
+{
+  unordered_map< ID, std::pair<bool, bool> >::const_iterator pit = _persSignals.find(signal);
+  if (pit == _persSignals.end())
+    return false;
+  std::pair<bool, bool> const flags = pit->second;
+  return flags.first;
+}
+
+
+SAT::Manager::View * RchAttachment::persistentSatView()
+{
+  if (!_persSatView)
+    createPersistentSignalsSatInstance();
+  return _persSatView;
+}
+
+bool RchAttachment::addPersistentSignal(ID signal,
+  bool eventuallyTrue,
+  bool contradictsFair)
+{
+  if (!_persSatView)
+    createPersistentSignalsSatInstance();
+  _persUpToDate = false;
+  _persSignals[signal] = make_pair(eventuallyTrue, contradictsFair);
+  if (eventuallyTrue && contradictsFair)
+    return true;
+  SAT::Clause cls1, cls2;
+  if (eventuallyTrue) {
+    cls1.push_back(signal);
+    cls2.push_back(Expr::primeFormula(*_view, signal));
+  }
+  else if (contradictsFair) {
+    cls1.push_back(_view->apply(Expr::Not, signal));
+    cls2.push_back((Expr::primeFormula(*_view, _view->apply(Expr::Not, signal))));
+  }
+  else {
+    //signal <-> signal'
+    cls1.push_back(_view->apply(Expr::Not, signal));
+    cls1.push_back(Expr::primeFormula(*_view, signal));
+    cls2.push_back(signal);
+    cls2.push_back(Expr::primeFormula(*_view, _view->apply(Expr::Not, signal)));
+  }
+  _persSatView->add(cls1);
+  _persSatView->add(cls2);
+  return false;
+}
+
+bool RchAttachment::addReach(vector< vector<ID> > & reach)
+{
+  if (!_persSatView)
+    createPersistentSignalsSatInstance();
+  _persUpToDate = false;
+  try {
+    _persSatView->add(reach);
+  }
+  catch (SAT::Trivial tv) {
+    assert(!tv.value());
+    return false;
+  }
+  return true;
+}
+
 bool RchAttachment::kUpperBound(unsigned int k, 
                                 vector< vector<ID> > & rv,
                                 const vector< vector< vector<ID> > > & _ub) const 
@@ -343,4 +522,11 @@ void RchAttachment::setKForwardUpperBound(unsigned int k, const vector< vector<I
 }
 void RchAttachment::setKBackwardUpperBound(unsigned int k, const vector< vector<ID> > & ub) {
   setKUpperBound(k, ub, _k_bw_ub);
+}
+
+void RchAttachment::createPersistentSignalsSatInstance()
+{
+  assert(!_persSatMan);
+  _persSatMan = model().newSATManager();
+  _persSatView = _persSatMan->newView(*_view);
 }

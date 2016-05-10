@@ -1,0 +1,18 @@
+aig 13 0 4 1 9 0 0 1
+3
+15
+23
+27
+9
+1
+9
+	
+l0 cnt<0>
+l1 cnt<1>
+l2 cnt<2>
+l3 e
+o0 fair
+c
+bliftoaig
+1.9
+sliceNnew.blif

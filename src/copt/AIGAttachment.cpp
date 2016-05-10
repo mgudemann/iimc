@@ -41,25 +41,12 @@ AIGAttachment::AIGAttachment(Model &model) : Model::Attachment(model)
   requires(Key::EXPR, &f);
 }
 
-AIGAttachment::AIGAttachment(const AIGAttachment &from) :
-  Model::Attachment(from),
+AIGAttachment::AIGAttachment(const AIGAttachment &from, Model & model) :
+  Model::Attachment(from, model),
   aig(from.aig),
   ref2id(from.ref2id),
   id2ref(from.id2ref)
 {
-}
-
-AIGAttachment& AIGAttachment::operator=(AIGAttachment &rhs)
-{
-  if (&rhs != this) {
-    _model = rhs._model;
-    if (rhs._ts == 0) _ts = 0;
-    else _ts = Model::newTimestamp();
-    aig = rhs.aig;
-    ref2id = rhs.ref2id;
-    id2ref = rhs.id2ref;
-  }
-  return *this;
 }
 
 std::string AIGAttachment::string(bool includeDetails) const
@@ -86,7 +73,7 @@ void AIGAttachment::build()
 }
 
 ID AIGAttachment::IDOf(Opt::NodeRef ref, Expr::Manager::View &v,
-    Opt::IDRefMap& newId2ref, Opt::RefIDMap& newRef2id)
+    Opt::IDRefMap& newId2ref, Opt::RefIDMap& newRef2id) const
 {
   using namespace Opt;
 
@@ -129,7 +116,7 @@ void AIGAttachment::AIG2Expr()
 {
   using namespace Opt;
 
-  ExprAttachment *eat = (ExprAttachment *)_model.attachment(Key::EXPR);
+  auto eat = _model.attachment<ExprAttachment>(Key::EXPR);
   Expr::Manager::View *v = _model.newView();
 
   const std::vector<NodeRef>& nextStateFns = aig.nextStateFnRefs();
@@ -305,7 +292,7 @@ void AIGAttachment::buildAIG(Model &model)
   ref2id.insert(RefIDMap::value_type(0, v->bfalse()));
   ref2id.insert(RefIDMap::value_type(1, v->btrue()));
 
-  ExprAttachment * const eat = (ExprAttachment *)model.constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *)model.constAttachment(Key::EXPR);
 
   const std::vector<ID>& inputs = eat->inputs();
   //Add all inputs to the AIG
@@ -398,7 +385,7 @@ void AIGAttachment::AIGOutputs(std::vector<Opt::NodeRef>& out) const
 {
   using namespace Opt;
 
-  ExprAttachment * const eat = (ExprAttachment *)_model.constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *)_model.constAttachment(Key::EXPR);
 
 #if 0
   for(IDRefMap::const_iterator i = id2ref.begin(); i != id2ref.end(); ++i) {

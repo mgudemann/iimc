@@ -135,6 +135,8 @@
                 <li> Cudd_EnableOrderingMonitoring()
                 <li> Cudd_DisableOrderingMonitoring()
                 <li> Cudd_OrderingMonitoring()
+                <li> Cudd_SetApplicationHook()
+                <li> Cudd_ReadApplicationHook()
 		<li> Cudd_ReadErrorCode()
 		<li> Cudd_ClearErrorCode()
 		<li> Cudd_ReadStdout()
@@ -230,7 +232,7 @@
 /*---------------------------------------------------------------------------*/
 
 #ifndef lint
-static char rcsid[] DD_UNUSED = "$Id: cuddAPI.c,v 1.64 2012/02/05 01:07:18 fabio Exp $";
+static char rcsid[] DD_UNUSED = "$Id: cuddAPI.c,v 1.66 2015/01/03 18:27:12 fabio Exp $";
 #endif
 
 /*---------------------------------------------------------------------------*/
@@ -911,6 +913,51 @@ Cudd_TimeLimited(
     return unique->timeLimit != ~0UL;
 
 } /* end of Cudd_TimeLimited */
+
+
+/**Function********************************************************************
+
+  Synopsis    [Installs a termination callback.]
+
+  Description [Registers a callback function that is called from time
+  to time to decide whether computation should be abandoned.]
+
+  SideEffects [None]
+
+  SeeAlso     [Cudd_UnregisterTerminationCallback]
+
+******************************************************************************/
+void
+Cudd_RegisterTerminationCallback(
+  DdManager *unique,
+  DD_THFP callback,
+  void * callback_arg)
+{
+    unique->terminationCallback = callback;
+    unique->tcbArg = callback_arg;
+
+} /* end of Cudd_RegisterTerminationCallback */
+
+
+/**Function********************************************************************
+
+  Synopsis    [Unregisters a termination callback.]
+
+  Description [Unregisters a termination handler.]
+
+  SideEffects [None]
+
+  SeeAlso     [Cudd_RegisterTerminationCallback]
+
+******************************************************************************/
+void
+Cudd_UnregisterTerminationCallback(
+  DdManager *unique)
+{
+    unique->terminationCallback = NULL;
+    unique->tcbArg = NULL;
+
+}  /* end of Cudd_UnregisterTerminationCallback */
 
 
 /**Function********************************************************************
@@ -4070,6 +4117,47 @@ Cudd_OrderingMonitoring(
     return(Cudd_IsInHook(dd, Cudd_PrintGroupedOrder, CUDD_PRE_REORDERING_HOOK));
 
 } /* end of Cudd_OrderingMonitoring */
+
+
+/**Function********************************************************************
+
+  Synopsis    [Sets the application hook.]
+
+  Description [Sets the application hook.]
+
+  SideEffects [None]
+
+  SeeAlso     [Cudd_ReadApplicationHook]
+
+******************************************************************************/
+void
+Cudd_SetApplicationHook(
+  DdManager *dd,
+  void * value)
+{
+    dd->hooks = value;  
+
+} /* end of Cudd_SetApplicationHook */
+
+
+/**Function********************************************************************
+
+  Synopsis    [Reads the application hook.]
+
+  Description [Reads the application hook.]
+
+  SideEffects [None]
+
+  SeeAlso     [Cudd_SetApplicationHook]
+
+******************************************************************************/
+void *
+Cudd_ReadApplicationHook(
+  DdManager *dd)
+{
+    return(dd->hooks);  
+
+} /* end of Cudd_ReadApplicationHook */
 
 
 /**Function********************************************************************

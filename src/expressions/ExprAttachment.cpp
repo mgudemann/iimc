@@ -41,8 +41,8 @@ POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 
 /** Copy constructor. */
-ExprAttachment::ExprAttachment(const ExprAttachment& from) : 
-  Model::Attachment(from),
+ExprAttachment::ExprAttachment(const ExprAttachment& from, Model & model) : 
+  Model::Attachment(from, model),
   _inputs(from._inputs),
   _aut_state_vars(from._aut_state_vars),
   _state_vars(from._state_vars),
@@ -64,50 +64,27 @@ ExprAttachment::ExprAttachment(const ExprAttachment& from) :
   _bad_var_to_fn(from._bad_var_to_fn),
   _constraint_var_to_fn(from._constraint_var_to_fn),
   _justice_var_to_fn_set(from._justice_var_to_fn_set),
-  _fairness_var_to_fn(from._fairness_var_to_fn) {}
-
-ExprAttachment& ExprAttachment::operator=(ExprAttachment& rhs) {
-  if (&rhs != this) {
-    _model = rhs._model;
-    if (rhs._ts == 0)
-      _ts = 0;
-    else
-      _ts = Model::newTimestamp();
-    _inputs = rhs._inputs;
-    _aut_state_vars = rhs._aut_state_vars;
-    _state_vars = rhs._state_vars;
-    _next_state_fns = rhs._next_state_fns;
-    _outputs = rhs._outputs;
-    _output_fns = rhs._output_fns;
-    _initial_cond = rhs._initial_cond;
-    _constraints = rhs._constraints;
-    _constraint_fns = rhs._constraint_fns;
-    _bad = rhs._bad;
-    _bad_fns = rhs._bad_fns;
-    _fairness = rhs._fairness;
-    _fairness_fns = rhs._fairness_fns;
-    _justice = rhs._justice;
-    _justice_fn_sets = rhs._justice_fn_sets;
-    _input_var_to_fn = rhs._input_var_to_fn;
-    _state_var_to_fn = rhs._state_var_to_fn;
-    _output_var_to_fn = rhs._output_var_to_fn;
-    _bad_var_to_fn = rhs._bad_var_to_fn;
-    _constraint_var_to_fn = rhs._constraint_var_to_fn;
-    _justice_var_to_fn_set = rhs._justice_var_to_fn_set;
-    _fairness_var_to_fn = rhs._fairness_var_to_fn;
-  }
-  return *this;
-}
+  _fairness_var_to_fn(from._fairness_var_to_fn),
+  _automata(from._automata),
+  _invariants(from._invariants),
+  _original_inputs(from._original_inputs),
+  _original_state_vars(from._original_state_vars),
+  _original_next_state_fns(from._original_next_state_fns),
+  _original_initial_cond(from._original_initial_cond) {}
 
 void ExprAttachment::build() {
   if (model().verbosity() > Options::Silent)
     cout << "ExprAttachment: building ";
-  AIGAttachment * const aat = (AIGAttachment *) model().constAttachment(Key::AIG);
-  if (aat != 0 && !aat->empty()) {
+  AIGAttachment const * const aat = (AIGAttachment const *) model().constAttachment(Key::AIG);
+  bool fromAIG = aat != 0 && !aat->empty();
+  model().constRelease(aat);
+  if (fromAIG) {
     if (model().verbosity() > Options::Silent)
       cout << "from AIG" << endl;
     // do something snazzy, namely, call AIG2Expr
-    aat->AIG2Expr();
+    auto aaat = model().attachment<AIGAttachment>(Key::AIG);
+    aaat->AIG2Expr(); // AIG2Expr requires read/write access to the AIG attachment
+    model().release(aaat);
   }
   else {
     if (model().verbosity() > Options::Silent)
@@ -116,7 +93,6 @@ void ExprAttachment::build() {
     std::string inputFile = options()["input-file"].as<std::string>();
     Parser::parseAIGER(inputFile, model());
   }
-  if (aat != 0) model().constRelease(aat);
 }
 
 void ExprAttachment::addOrUpdate(const ID vid, const ID fid, mod_vec& vvec, mod_vec& fvec, mod_map& var_to_fn)
@@ -351,6 +327,25 @@ void ExprAttachment::clearAutomata() {
   _automata.clear();
 }
 
+void ExprAttachment::addInvariant(const ID fnId) {
+  _invariants.push_back(fnId);
+}
+
+void ExprAttachment::addInvariants(const vector<ID>& fnVec) {
+  _invariants.insert(_invariants.end(), fnVec.begin(), fnVec.end());
+}
+
+void ExprAttachment::clearInvariants() {
+  _invariants.clear();
+}
+
+void ExprAttachment::saveInitialModelInfo(void) {
+  _original_inputs = _inputs;
+  _original_state_vars = _state_vars;
+  _original_next_state_fns = _next_state_fns;
+  _original_initial_cond = _initial_cond;
+}
+
 ID ExprAttachment::nextStateFnOf(const ID varId) const
 {
   const_m_iter iter = _state_var_to_fn.find(varId);
@@ -545,7 +540,7 @@ void  ExprAttachment::global(Expr::Manager::View *v)
 }
 
 
-std::string ExprAttachment::string(bool includeDetails) const
+std::string ExprAttachment::string(bool) const
 {
   Expr::Manager::View *v = _model.newView();
 
@@ -1025,7 +1020,7 @@ public:
   ExprInfoFolder(Expr::Manager::View &v, unordered_map<ID, pair<int, int> > &length,
       unordered_map<ID, int> &fanout)
     : Expr::Manager::View::Folder(v), _length(length), _fanout(fanout) {}
-  virtual ID fold(ID id, int n, const ID * const args)
+  virtual ID fold(ID id, int, const ID * const args)
   {
     switch (view().op(id)) {
       case Expr::True:

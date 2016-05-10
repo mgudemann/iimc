@@ -1,8 +1,10 @@
 util_Util_sources = \
   src/util/UtilSystem.cpp \
+  src/util/Random.cpp \
   src/util/Util.h \
   src/util/Error.h \
-  src/util/BitTricks.h
+  src/util/BitTricks.h \
+  src/util/Random.h
 
 iimc_SOURCES += $(util_Util_sources)
 AM_CPPFLAGS += -I$(srcdir)/src/util

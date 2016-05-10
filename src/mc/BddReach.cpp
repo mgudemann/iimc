@@ -58,7 +58,7 @@ void BddBwReachAction::exec() {
  */
 void BddFwReachAction::doFwReachability(Model& model) {
   // Setup.
-  BddTrAttachment const * tat = 
+  BddTrAttachment const * const tat = 
     (BddTrAttachment const *) model.constAttachment(Key::BDD_TR);
   if (tat->hasBdds() == false) {
     model.constRelease(tat);
@@ -72,32 +72,33 @@ void BddFwReachAction::doFwReachability(Model& model) {
   if (verbosity == Options::Logorrheic) bddVerbosity = 2;
   else if (verbosity > Options::Terse) bddVerbosity = 1;
   size_t xvSize = tat->currentStateVars().size();
+  Model::Mode mode = model.defaultMode();
 
   // Set up initial condition.
   BDD init(tat->initialCondition());
-  RchAttachment const *rat = 
+  RchAttachment const * const rat = 
     (RchAttachment const *) model.constAttachment(Key::RCH);
   BDD fwLb = rat->forwardBddLowerBound();
   if (fwLb)
     init |= fwLb;
+  model.constRelease(rat);
 
   vector<BDD> invariants(tat->invariants());
-  BDD bwLb = rat->backwardBddLowerBound();
-  if (bwLb) {
-    for (vector<BDD>::iterator it = invariants.begin();
-         it != invariants.end(); ++it) {
-      *it |= bwLb;
-    }
-  }
-  model.constRelease(rat);
+  vector<BDD> outputs(tat->outputFunctions());
+  assert(invariants.size() == outputs.size());
 
   bool keepGoing = model.options().count("bdd_trav");
   bool extractCex = model.options().count("print_cex");
-  if (!keepGoing && invariants[0].IsZero()) {  // AIGER/iimc-specific
+  if (mode == Model::mIC3 && !keepGoing && invariants[0].IsZero()) {  // AIGER/iimc-specific
     // Trivial case of passing property.
     if (verbosity > Options::Terse)
       cout << "Empty set of bad states" << endl;
-    ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+    if (verbosity > Options::Silent) {
+      ostringstream oss;
+      oss << "Conclusion found by BDDfw." << endl;
+      cout << oss.str();
+    }
+    auto pat = model.attachment<ProofAttachment>(Key::PROOF);
     assert(pat != 0);
     pat->setConclusion(0);
     model.release(pat);
@@ -115,6 +116,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
   int step = 0;
   int nfrontiers = 0;
   vector<BDD> frontiers;
+  vector<Transition> cex;
   try {
     // Do forward reachability analysis.
     if (verbosity != Options::Silent)
@@ -126,20 +128,30 @@ void BddFwReachAction::doFwReachability(Model& model) {
       if (extractCex)
         frontiers.push_back(frontier);
       // Check invariants.
-      if (!counterex) {
-        for (vector<BDD>::const_iterator it = invariants.begin();
-             it != invariants.end(); ++it) {
+      if (mode == Model::mIC3 && !counterex) {
+        for (vector<BDD>::size_type i = 0; i < invariants.size(); ++i) {
           // AIGER outputs signal failure when asserted.
-          if (! (frontier <= !(*it))) {
+          if (! (frontier <= !(invariants[i]))) {
             counterex = true;
-            if (verbosity > Options::Terse) {
-              cout << "Failure for output";
-              it->print(xvSize,bddVerbosity);
+            if (verbosity > Options::Silent) {
+              cout << "Failure after " << step << " steps";
+              if (verbosity == Options::Terse)
+                cout << endl;
+              else
+                cout << " for output";
+              invariants[i].print(xvSize,bddVerbosity);
             }
             if (extractCex) {
-              printFwCex(tat, frontiers, *it, verbosity);
+              printCex(tat, frontiers, outputs[i], cex, verbosity);
             }
           }
+        }
+        if (!counterex) {
+          // We still haven't gotten a counterexample.  Hence we have
+          // a new lower bound on its length.
+          auto rat = model.attachment<RchAttachment>(Key::RCH);
+          rat->updateCexLowerBound(step+1, string("BDDfw"));
+          model.release(rat);
         }
       }
       step++;
@@ -157,7 +169,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
       if (keepGoing && !reached.IsOne()) {
         BDD unreached = !reached;
         BDD uprime = unreached.LargestCube().MakePrime(unreached);
-        RchAttachment const *rat = 
+        RchAttachment const * const rat = 
           (RchAttachment const *) model.constAttachment(Key::RCH);
         vector<ID> cube;
         rat->bddToLiteralVector(uprime,cube);
@@ -174,7 +186,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
       }
     }
     if (model.options().count("bdd_save_fw_reach")) {
-      RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
+      auto rat = model.attachment<RchAttachment>(Key::RCH);
       assert(rat != 0);
       rat->setForwardBddLowerBound(reached);
       rat->setBddForwardComplete(true);
@@ -183,25 +195,33 @@ void BddFwReachAction::doFwReachability(Model& model) {
       model.release(rat);
     } else {
       if (!keepGoing) {
-        ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+        if (verbosity > Options::Silent)
+          cout << "Conclusion found by BDDfw." << endl;
+        auto pat = model.attachment<ProofAttachment>(Key::PROOF);
         assert(pat != 0);
+        if (counterex && extractCex) {
+          pat->setCex(cex);
+        }
         pat->setConclusion(counterex ? 1 : 0);
         model.release(pat);
       }
     }
-  } catch (Timeout& e) {
+  } catch (Timeout const & e) {
     if (verbosity > Options::Silent)
       cout << e.what() << endl;
 
-    // AIGER-specific!  Relies on single-cube initial state.
-
-    /* Reset BDD manager.  For the time being, we let this operation
-     * run to completion.  It seems to be fast anyway and does not
-     * require reordering (which at this point is disabled). */
+    // Reset BDD manager.
     bddManager().ClearErrorCode();
     bddManager().UnsetTimeLimit();
     bddManager().ResetStartTime();
-    if (nfrontiers > 0) {
+
+#if 0
+    // AIGER-specific!  Relies on single-cube initial state.
+
+    /* For the time being, we let this operation
+     * run to completion.  It seems to be fast anyway and does not
+     * require reordering (which at this point is disabled). */
+    if (mode == Model::mIC3 && nfrontiers > 0) {
       RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
       assert(rat != 0);
       // If the initial states form a cube, find a prime of reached that
@@ -222,7 +242,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
           allPrimes.print(xvSize,bddVerbosity);
         }
         // Save result as expression in the RchAttachment.
-        BddAttachment const *bat = 
+        BddAttachment const * const bat = 
           (BddAttachment const *) model.constAttachment(Key::BDD);
         assert(bat != 0);
         Expr::Manager::View *v = model.newView();
@@ -235,7 +255,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
           cout << "Init is not a cube.  No enlargement attempted." << endl;
       }
       rat->setForwardStepsBdd(step);
-      rat->updateCexLowerBound(step);
+      rat->updateCexLowerBound(step, string("BDDfw"));
       if (verbosity > Options::Terse) {
         cout << "No counterexample shorter than " 
              << rat->cexLowerBound() << endl;
@@ -258,6 +278,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
       rat->setBackwardBddLowerBound(invariants[0]); // AIGER-specific
       model.release(rat);
     }
+#endif
   }
   if (model.options().count("bdd_info")) {
     bddManager().info();
@@ -276,7 +297,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
  */
 void BddBwReachAction::doBwReachability(Model& model) {
   // Setup.
-  BddTrAttachment const * tat = 
+  BddTrAttachment const * const tat = 
     (BddTrAttachment const *) model.constAttachment(Key::BDD_TR);
   if (tat->hasBdds() == false) {
     model.constRelease(tat);
@@ -290,16 +311,19 @@ void BddBwReachAction::doBwReachability(Model& model) {
   if (verbosity == Options::Logorrheic) bddVerbosity = 2;
   else if (verbosity > Options::Terse) bddVerbosity = 1;
   size_t xvSize = tat->currentStateVars().size();
+  Model::Mode mode = model.defaultMode();
 
   // Set up initial condition.
   BDD init(tat->initialCondition());
-  RchAttachment const *rat = 
+  RchAttachment const * const rat = 
     (RchAttachment const *) model.constAttachment(Key::RCH);
   BDD fwLb = rat->forwardBddLowerBound();
   if (fwLb)
     init |= fwLb;
 
   vector<BDD> invariants(tat->invariants());
+  vector<BDD> outputs(tat->outputFunctions());
+  assert(invariants.size() == outputs.size());
   if (invariants.size() != 1) {
     cerr << "Warning: Backward analysis only works for 1 invariant" << endl;
     cerr << "Only the first of the " << invariants.size()
@@ -314,11 +338,13 @@ void BddBwReachAction::doBwReachability(Model& model) {
 
   bool keepGoing = model.options().count("bdd_trav");
   bool extractCex = model.options().count("print_cex");
-  if (!keepGoing && target.IsOne()) {  // AIGER-specific
+  if (mode == Model::mIC3 && !keepGoing && target.IsOne()) {  // AIGER-specific
     // Trivial case of failing property.
     if (verbosity > Options::Terse)
       cout << "All states are bad" << endl;
-    ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+    if (verbosity > Options::Silent)
+      cout << "Conclusion found by BDDbw." << endl;
+    auto pat = model.attachment<ProofAttachment>(Key::PROOF);
     assert(pat != 0);
     pat->setConclusion(1);
     model.release(pat);
@@ -328,14 +354,15 @@ void BddBwReachAction::doBwReachability(Model& model) {
   bool minFrontier = model.options().count("bdd_mf");
   BDD reached = target;
   bool counterex = false;
-  // Variable step gives the reachability step currently underway.  A
-  // step is completed when the states in the frontier have been
+  // Variable step gives the reachability step currently underway.
+  // A step is completed when the states in the frontier have been
   // checked against the initial states.  So, if step is n at some
-  // point, then there is no target state at distance less than n from
-  // the initial states.
+  // point, then there is no target state at distance less than n
+  // from the initial states.
   int step = 0;
   int nfrontiers = 0;
   vector<BDD> frontiers;
+  vector<Transition> cex;
   try {
     // Do backward reachability analysis.
     if (verbosity != Options::Silent)
@@ -347,12 +374,22 @@ void BddBwReachAction::doBwReachability(Model& model) {
       if (extractCex)
         frontiers.push_back(frontier);
       // Check invariants.
-      if (!counterex) {
+      if (mode == Model::mIC3 && !counterex) {
         if (!(frontier <= !init)) {
           counterex = true;
           if (verbosity > Options::Terse) {
             cout << "Counterexample" << endl;
           }
+          if (extractCex) {
+            printCex(tat, frontiers, init, outputs[0], cex, verbosity);
+          }
+        }
+        if (!counterex) {
+          // We still haven't gotten a counterexample.  Hence we have
+          // a new lower bound on its length.
+          auto rat = model.attachment<RchAttachment>(Key::RCH);
+          rat->updateCexLowerBound(step+1, string("BDDbw"));
+          model.release(rat);
         }
       }
       step++;
@@ -369,7 +406,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
       reached.print(xvSize,bddVerbosity);
     }
     if (model.options().count("bdd_save_bw_reach")) {
-      RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
+      auto rat = model.attachment<RchAttachment>(Key::RCH);
       assert(rat != 0);
       rat->setBackwardBddLowerBound(reached);
       rat->setBddBackwardComplete(true);
@@ -378,13 +415,18 @@ void BddBwReachAction::doBwReachability(Model& model) {
       model.release(rat);
     } else {
       if (!keepGoing) {
-        ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+        if (verbosity > Options::Silent)
+          cout << "Conclusion found by BDDbw." << endl;
+        auto pat = model.attachment<ProofAttachment>(Key::PROOF);
         assert(pat != 0);
+        if (counterex && extractCex) {
+          pat->setCex(cex);
+        }
         pat->setConclusion(counterex ? 1 : 0);
         model.release(pat);
       }
     }
-  } catch (Timeout& e) {
+  } catch (Timeout const & e) {
     if (verbosity > Options::Silent)
       cout << e.what() << endl;
 
@@ -397,7 +439,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
     bddManager().UnsetTimeLimit();
     bddManager().ResetStartTime();
     if (nfrontiers > 0) {
-      RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
+      auto rat = model.attachment<RchAttachment>(Key::RCH);
       assert(rat != 0);
       // If target is a cube, find a prime of reached that contains
       // the target states.
@@ -412,7 +454,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
           largePrime.print(xvSize,bddVerbosity);
         }
         // Save result as expression in the RchAttachment.
-        BddAttachment const *bat =
+        BddAttachment const * const bat =
           (BddAttachment const *) model.constAttachment(Key::BDD);
         assert(bat != 0);
         Expr::Manager::View *v = model.newView();
@@ -425,7 +467,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
           cout << "Target is not a cube.  No enlargement attempted." << endl;
       }
       rat->setBackwardStepsBdd(step);
-      rat->updateCexLowerBound(step);
+      rat->updateCexLowerBound(step, string("BDDbw"));
       if (verbosity > Options::Terse) {
         cout << "No counterexample shorter than " 
              << rat->cexLowerBound() << endl;
@@ -451,37 +493,115 @@ void BddBwReachAction::doBwReachability(Model& model) {
          << ((double) bddManager().ReadElapsedTime()/1000.0)
          << " s" << endl;
   }
-  if (model.options().count("bdd_info")) {
-    bddManager().info();
-    cout << "CPU time since BDD manager reset = " 
-         << ((double) bddManager().ReadElapsedTime()/1000.0)
-         << " s" << endl;
-  }
   bddManager().UpdateTimeLimit();
   model.constRelease(tat);
 
 } // BddBwReachAction::doBwReachability
 
 
-/** Very rudimentary counterexample printing function.
- *  Not yet ready for prime time. */
-void BddFwReachAction::printFwCex(
+void BddFwReachAction::printCex(
   BddTrAttachment const * tat,
   vector<BDD> const & frontiers,
   BDD badStates,
+  vector<Transition> & cex,
   Options::Verbosity verbosity)
 {
+  // Prepare quantification cubes to separate inputs from state variables.
+  BDD scube = model().bddManager().bddOne();
+  vector<BDD> svars = tat->currentStateVars();
+  for (vector<BDD>::const_iterator it = svars.begin();
+       it != svars.end(); ++it) {
+    scube &= *it;
+  }
+  BDD icube = model().bddManager().bddOne();
+  vector<BDD> ivars = tat->inputVars();
+  for (vector<BDD>::const_iterator it = ivars.begin();
+       it != ivars.end(); ++it) {
+    icube &= *it;
+  }
+  //vector<BDD> vars(svars);
+  //vars.insert(vars.end(), ivars.begin(), ivars.end());
+
+  size_t length = frontiers.size();
   if (verbosity > Options::Informative)
-    cout << "Counterexample of length " << frontiers.size() << endl;
-  size_t xvSize = tat->currentStateVars().size();
+    cout << "Counterexample of length " << length << endl;
+  cex.resize(length);
+  RchAttachment const * const rat = 
+    (RchAttachment const *) model().constAttachment(Key::RCH);
+  //size_t xvSize = svars.size()  + ivars.size();
   BDD traceStates = badStates;
+  size_t i = length; // we need to reverse the order of the vectors
   for (vector<BDD>::const_reverse_iterator it = frontiers.rbegin();
        it != frontiers.rend(); ++it) {
     BDD interStates = traceStates.Intersect(*it);
-    interStates.print(xvSize, 2);
-    // This throws away the input values.
-    traceStates = tat->preimg(interStates);
+    interStates = interStates.LargestCube();
+    //interStates = interStates.PickOneMinterm(vars);
+    //interStates.print(xvSize, 2);  // diagnostic print
+    BDD stateBdd = interStates.ExistAbstract(icube);
+    vector<ID> state;
+    rat->bddToLiteralVector(stateBdd, state);
+    BDD inputBdd = interStates.ExistAbstract(scube);
+    vector<ID> input;
+    rat->bddToLiteralVector(inputBdd, input);
+    --i;
+    cex[i] = Transition(state,input);
+    traceStates = tat->preimg(stateBdd, true);
   }
+  model().constRelease(rat);
+  
+} // BddFwReachAction::printCex
+
+
+void BddBwReachAction::printCex(
+  BddTrAttachment const * tat,
+  vector<BDD> const & frontiers,
+  BDD initStates,
+  BDD badStates,
+  vector<Transition> & cex,
+  Options::Verbosity verbosity)
+{
+  // Prepare quantification cubes to separate inputs from state variables.
+  BDD scube = model().bddManager().bddOne();
+  vector<BDD> svars = tat->currentStateVars();
+  for (vector<BDD>::const_iterator it = svars.begin();
+       it != svars.end(); ++it) {
+    scube &= *it;
+  }
+  BDD icube = model().bddManager().bddOne();
+  vector<BDD> ivars = tat->inputVars();
+  for (vector<BDD>::const_iterator it = ivars.begin();
+       it != ivars.end(); ++it) {
+    icube &= *it;
+  }
+
+  size_t length = frontiers.size();
   if (verbosity > Options::Informative)
-    cout << "End of counterexample" << endl;
-}
+    cout << "Counterexample of length " << length << endl;
+
+  RchAttachment const * const rat = 
+    (RchAttachment const *) model().constAttachment(Key::RCH);
+  //size_t xvSize = svars.size()  + ivars.size();
+  BDD interStates = initStates & frontiers.back();
+  interStates = interStates.LargestCube();
+  for (vector<BDD>::const_reverse_iterator it = frontiers.rbegin();
+       it != frontiers.rend();) {
+    //cout << "is"; interStates.print(xvSize, 2);  // diagnostic print
+    BDD stateBdd = interStates.ExistAbstract(icube);
+    vector<ID> state;
+    rat->bddToLiteralVector(stateBdd, state);
+    if (++it != frontiers.rend()) {
+      BDD traceStates = tat->img(stateBdd, true);
+      //cout << "ts"; traceStates.print(xvSize, 2);  // diagnostic print
+      interStates = traceStates.Intersect(*it);
+    } else {
+      interStates = stateBdd.Intersect(badStates);
+    }
+    interStates = interStates.LargestCube();
+    BDD inputBdd = interStates.ExistAbstract(scube);
+    vector<ID> input;
+    rat->bddToLiteralVector(inputBdd, input);
+    cex.push_back(Transition(state, input));
+  }
+  model().constRelease(rat);
+
+} // BddBwReachAction::printCex

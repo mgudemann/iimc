@@ -72,10 +72,11 @@ public:
 
   void doFwReachability(Model & model);
 private:
-  void printFwCex(BddTrAttachment const *tat,
-                  std::vector<BDD> const & frontiers,
-                  BDD badStates,
-                  Options::Verbosity verbosity);
+  void printCex(BddTrAttachment const *tat,
+                std::vector<BDD> const & frontiers,
+                BDD badStates,
+                std::vector<Transition> & cex,
+                Options::Verbosity verbosity);
   static ActionRegistrar action;
 };
 
@@ -90,6 +91,12 @@ public:
 
   void doBwReachability(Model & model);
 private:
+  void printCex(BddTrAttachment const *tat,
+                std::vector<BDD> const & frontiers,
+                BDD initStates,
+                BDD badStates,
+                std::vector<Transition> & cex,
+                Options::Verbosity verbosity);
   static ActionRegistrar action;
 };
 

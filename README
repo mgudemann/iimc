@@ -1,20 +1,24 @@
-This is release 1.3.2 of IImc, an Incremental Inductive model checker. IImc
+This is release 2.0 of IImc, an Incremental Inductive model checker. IImc
 features novel formal engines such as IC3[1,2], FAIR[3], and IICTL[4].
 
 IImc is developed by MC@CU, the model checking group at the University of
 Colorado at Boulder. IImc's authors are Aaron Bradley, Arlen Cox,
 Michael Dooley, Zyad Hassan, Fabio Somenzi, and Yan Zhang.
 
+This file describes how to build IImc and then provides a quick
+introduction to its use.
+
+-------------------------------------------------------------------------------
 To build IImc, you will need
 
-  * GNU C++ (g++) version 4.4.5 or later (to support the -std=c++0x option)
-  * Alternatively, IImc can be compiled with clang++ 3.0 or higher
+  * GNU C++ (g++) version 4.8.2 or higher
+  * Alternatively, IImc can be compiled with clang++ 3.4 or higher
   * GNU's make utility
   * The boost library (at the very least, the "Boost Program Options",
     "Boost Random", and "Boost Regex" libraries)
   * GNU Flex
   * GNU Bison version 2.4.1 or higher
-  * zlib (needed by minisat)
+  * zlib (including the header file zlib.h)
 
 IImc can be built with or without zchaff.  For details, please refer to
 LICENSE.zchaff.
@@ -46,12 +50,12 @@ The most recent version of the boost libraries:
 2. Move to where you would like to build IImc and unpack the distribution:
 
     $ cd /home/iimc                           # for example
-    $ tar xvzf /tmp/iimc-1.3.2.tar.gz
+    $ tar xvzf /tmp/iimc-2.0.tar.gz
 
-3. Move into the iimc-1.3 directory and run configure, which will determine
+3. Move into the iimc-2.0 directory and run configure, which will determine
    some system-specific parameters and create the Makefile
 
-    $ cd iimc-1.3.2
+    $ cd iimc-2.0
     $ ./configure
 
    You may want to pass --enable-silent-rules to configure.
@@ -69,7 +73,7 @@ The most recent version of the boost libraries:
     $ make check
 
 -------------------------------------------------------------------------------
-* Building IImc on OS X (a.k.a. YMMV)
+* Building IImc on OS X
 
 To build IImc on Apple's OS X you need to have the boost libraries
 installed.  This is what worked for us:
@@ -85,20 +89,23 @@ installed.  This is what worked for us:
 
 You may need to add "address-model=64" to the b2 invocation.
 
-You also need to have a recent version of bison (IImc requires 2.4.1
+You also need to have a recent version of bison (IImc requires 3.0.2
 or higher):
 
 1. Download from www.gnu.org/software/bison a recent version. (E.g.,
-   2.7.  Xcode currently ships bison 2.3, which is too old.)
+   3.0.2.  Xcode currently ships bison 2.3, which is too old.)
 
-2. Untar, configure, make, make install
+2. Untar, configure, make, make install.
 
 By default, the new bison will be installed in /usr/local and will not
-overwrite what is already on your system.
+overwrite what is already on your system.  You may also get bison via
+macports, in which case it should be installed in /opt/local.
 
 Installation of IImc now takes the following steps:
 
-1. Configure IImc using ./configure CXXFLAGS="-stdlib=libc++ -g -O3" YACC="/usr/local/bin/bison -y"
+1. Configure IImc using 
+
+  ./configure CC=clang CXX=clang++ CXXFLAGS="-stdlib=libc++ -g -O3" CPPFLAGS=-Dthread_local="__thread" YACC="/usr/local/bin/bison -y"
 
 2. make
 
@@ -122,7 +129,7 @@ Installation of IImc now takes the following steps:
   format, the property can be selected using the --pi option, i.e.,
 
   iimc --pi 3 <aiger-file> 
-  
+
   will select the property with index 3 in the AIGER file. Similarly, for a CTL
   file with multiple properties, the --pi option can be used to select the
   desired property.
@@ -133,9 +140,10 @@ Installation of IImc now takes the following steps:
   the result is unknown.
 
   IImc normally runs in the silent mode in which nothing is printed out except
-  for the final result as indicated in the previous paragraph. To turn up the
-  verbosity, the -v option can be used, where -v 4 prints lots of debugging
-  information, and -v 0 is the silent mode.
+  for the final result as indicated in the previous paragraph and the so-called
+  u-lines that report lower bounds on the length of a counterexample, if indeed
+  there exists one. To turn up the verbosity, the -v option can be used, where
+  -v 4 prints lots of debugging information, and -v 0 is the silent mode.
 
 -------------------------------------------------------------------------------
 * Specifying CTL properties for IImc
@@ -190,11 +198,7 @@ Installation of IImc now takes the following steps:
   i. Reverse IC3:                ic3r
   j. Localization reduction IC3: ic3lr
   k. IICTL:                      iictl
-
-  Invoking IImc without any tactics invokes the default "check" tactic, which
-  runs the appropriate formal engine depending on the property type (Fair for a
-  justice property, IICTL for a CTL property, and a sequence of engines for a
-  safety property).
+  l. k-Liveness for fair cycles: klive
 
   The list of circuit simplification engines currently available in IImc with
   the corresponding tactic name follows.
@@ -214,10 +218,26 @@ Installation of IImc now takes the following steps:
   l. Preprocessing (applies coi, absint, tvsim, satsweep,
                     bddsweep, se, and stuck):             pp
 
-  For each tactic, there are usually multiple options available (e.g., timeout,
-  parameters, etc.). Supplying options can be done using
-  --<option-name> <option-value-if-available>, 
-  which can be written anywhere in the command-line arguments. For example:
+  Invoking IImc without any tactics invokes the default "standard"
+  tactic, which sets suitable options, and then runs preprocessing
+  followed by the appropriate combination of formal engines depending
+  on the property type (IICTL for a CTL property, and a sequence of
+  engines for a safety or justice property).  The "standard" tactic
+  prints a counterexample for a failing safety proprty and also prints
+  u-lines, which give lower bounds on the length of a counterexample
+  if one exists.
+
+  If you want to choose a different combination of preprocessing
+  tactics, but still apply the default combination of proof engines,
+  choose tactic "check".
+
+  For each tactic, there are usually multiple options available (e.g.,
+  timeout, parameters, etc.). Supplying options can be done using
+
+    --<option-name> <option-value-if-available>, 
+
+  which can be written anywhere in the command-line arguments. For
+  example:
 
     -t ic3 --ic3_timeout 10
 
@@ -232,6 +252,12 @@ Installation of IImc now takes the following steps:
   or use the long form
    
     ./iimc --help
+
+  IImc 2.0 multi-threaded execution is based on a portfolio approach.
+  Combinations of proof engines are supported by special tactics:
+  fork, join, begin, end.  While these tactics are exposed by the
+  interface, only a few of the syntactically meaningful combinations
+  are supported and they are not meant for general use.
 
 -------------------------------------------------------------------------------
 * Example Sessions
@@ -255,21 +281,35 @@ Installation of IImc now takes the following steps:
 
    which produces:
 
-    Input File is examples/aig/smult8aflat.aig
-    COI: Initial # latches = 21
-    COI: Final # latches = 5
-    BMC: Checking up to 1000
-    1
+   Input File is examples/aig/smult8aflat.aig
+   ExprAttachment: building from file
+   SeqAttachment: building
+   COIAttachment: building
+   COI: Initial # latches = 21
+   COI: Final # latches = 5
+   AIGAttachment: Building AIG for model examples/aig/smult8aflat.aig
+   StuckAt: Found 0 stuck-at latches
+   SequentialEquivalence: Initial # latches = 5
+   SequentialEquivalence: Final # latches = 5
+   Sequential equivalence completed in 0 s
+   COI: Initial # latches = 5
+   COI: Final # latches = 5
+   Building proof attachment for model examples/aig/smult8aflat.aig
+   RchAttachment: building
+   CNFAttachment: building CNF using Tseitin translation
+   BMC: Checking up to 8191
+   Conclusion found by BMC.
+   1
 
-   where IC3 did not get to run because BMC already found the property to be
-   SAT.
+   where IC3 did not get to run because BMC already found the property
+   to be SAT.
 
 3. To run cut sweeping followed by SAT sweeping followed by BDD forward
    reachability with verbosity level of 2 on the sfeistelp1 example, do
 
     ./iimc -v2 -t cutsweep -t satsweep -t bdd_fw_reach examples/aig/sfeistelp1.aig
  
-   which produces:
+   which produces something like:
 
    Input File is examples/aig/sfeistelp1.aig
    # ./optimized/iimc -v2 -t cutsweep -t satsweep -t bdd_fw_reach
@@ -286,15 +326,13 @@ Installation of IImc now takes the following steps:
    Cut Sweeping: 0.03s spent in sweeping
    Cut Sweeping: new AIG has 5186 nodes
    SAT Sweeping: Number of AIG nodes = 5186
-   SAT Sweeping: Running with a timeout of 10 seconds + 0 seconds of relayed
-   time
+   SAT Sweeping: Running with a timeout of 10 seconds + 0 seconds of relayed time
    SAT Sweeping: Merged a total of 31 nodes.
    SAT Sweeping: New AIG has 5079 nodes
    SAT Sweeping: 0.07s spent in sweeping
    SAT Sweeping: Percentage Reduction = 2.06%
    SAT Sweeping: Number of SAT checks = 70 (39 SAT/31 UNSAT/0 Timed Out)
-   SAT Sweeping: Number of ignored candidate equivalences due to SAT solver
-   timeout = 0
+   SAT Sweeping: Number of ignored candidate equivalences due to SAT solver timeout = 0
    ExprAttachment: building from AIG
    CombAttachment: building
    Building BDDs for model main
@@ -385,6 +423,29 @@ Installation of IImc now takes the following steps:
    EU UB: UNSAT 0 seconds
    Checking LB initiation:
    0
+
+5. Multi-threaded execution may be required by not specifying any
+   tactic, as in:
+
+    ./iimc examples/aig/gcd16flat.aig
+
+   which produces the following output:
+
+   u1
+   1
+   c witness
+   b0
+   00000000000000000000000000000000000000000000000000
+   1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   000000000000000010000000000000001
+   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   .
+   c end witness
+
+   which shows the counteexample in AIGER format as well a u-line.
+   Specify a higher verbosity level to observe more details of the
+   execution.  (For instance, to know how many threads were spawned
+   and which engine found the conclusion.)
 
 -------------------------------------------------------------------------------
 

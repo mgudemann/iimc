@@ -48,6 +48,10 @@ public:
   DecodeAction(Model & model) : Model::Action(model) {
     ExprAttachment::Factory expFactory;
     requires(Key::EXPR, &expFactory);
+    SeqAttachment::Factory seqFactory;
+    requires(Key::SEQ, &seqFactory);
+    RchAttachment::Factory rchFactory;
+    requires(Key::RCH, &rchFactory);
   }
 
   void exec(void);

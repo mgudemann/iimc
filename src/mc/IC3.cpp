@@ -42,9 +42,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 #include "SAT.h"
 #include "Sim.h"
-#include "SimUtil.h"
 #include "ThreeValuedSimulation.h"
 #include "Util.h"
+#include "Random.h"
 
 #include <algorithm>
 #include <deque>
@@ -61,13 +61,13 @@ POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 
 namespace {
-  
+
   using namespace IC3;
 
   class Stats {
   public:
     Stats() : level(0), cubeSizeBef(0), cubeSizeIBM(0),
-              cubeSizeBrute(0), numLiftCubes(0), ibmLiftTime(0), 
+              cubeSizeBrute(0), numLiftCubes(0), ibmLiftTime(0),
               bruteLiftTime(0), numBruteIter(0),
               numMicCalls(0), numUpCalls(0), numDownCalls(0),
               clauseSizeBef(0), clauseSizeAft(0), micTime(0),
@@ -82,7 +82,7 @@ namespace {
       levInd.push_back(0);
       numGenCalls.push_back(0);
       maxDlvl.push_back(1);
-      startTime = Util::get_user_cpu_time();
+      startTime = Util::get_thread_cpu_time();
       startSatCalls = SAT::Manager::satCount();
       startSatTime = SAT::Manager::satTime();
     }
@@ -91,7 +91,7 @@ namespace {
       const string ic3 = "IC3: ";
       cout << endl;
       cout << "============================ IC3 Statistics ============================" << endl;
-      int64_t elapsedTime = Util::get_user_cpu_time() - startTime;
+      int64_t elapsedTime = Util::get_thread_cpu_time() - startTime;
       int64_t satTime = SAT::Manager::satTime() - startSatTime;
       cout << ic3 << "Total time = " << elapsedTime / 1000000.0 << "s"
            << " (SAT time = " << satTime / 1000000.0 << "s = "
@@ -223,7 +223,14 @@ namespace {
   };
 
   typedef vector< set<ID> > Partition;
- 
+
+  class IC3Timeout {
+  public:
+    IC3Timeout(const string _msg) : msg(_msg) {}
+    IC3Timeout(const string _msg, CubeSet & _indCubes) : msg(_msg), indCubes(_indCubes) {}
+    std::string msg;
+    CubeSet indCubes;
+  };
   class CEX {
   public:
     CEX() {};
@@ -249,8 +256,8 @@ namespace {
     SharedState(Model & _m, IC3::IC3Options & _opts, vector<CubeSet> * _cubes = NULL,
                 vector<LevClauses> * _propClauses = NULL) :
       m(_m), opts(_opts), nThreads(1), reverse(false),
-      simpleInit(true), bddInit(true), bddTarget(true), 
-      TESteps(0), rat(NULL), up_threshold(25), 
+      simpleInit(true), bddInit(true), bddTarget(true),
+      TESteps(0), rat(NULL), up_threshold(25),
       init(NULL), cons(NULL), icons(NULL), lift(NULL), fae(NULL),
       stem(NULL), stem_plus(NULL), ev(NULL)
     {
@@ -334,17 +341,21 @@ namespace {
 
   class State {
   public:
-    State(SharedState & sst) : 
-      ss(sst), m(sst.m), opts(sst.opts), _ev(sst.ev ? sst.ev : sst.m.newView()), ev(*_ev), cubes(sst.cubes), infCubes(sst.infCubes), propClauses(sst.propClauses), id(0), 
+    State(SharedState & sst) :
+      ss(sst), m(sst.m), opts(sst.opts), _ev(sst.ev ? sst.ev : sst.m.newView()), ev(*_ev), cubes(sst.cubes), infCubes(sst.infCubes), propClauses(sst.propClauses), id(0),
       init(NULL), cons(NULL), icons(NULL), lift(NULL), fae(NULL),  faeLits(sst.faeLits)
     {
+      if (!ss.ev) _ev->begin_local();
       init = sst.init ? sst.init->newView(ev, opts.backend) : NULL;
       cons = sst.cons->newView(ev, opts.backend);
       if (opts.timeout > 0)
         cons->timeout(opts.timeout);
     }
     ~State() {
-      if (!ss.ev) delete _ev;
+      if (!ss.ev) {
+        _ev->end_local();
+        delete _ev;
+      }
       if (init) delete init;
       delete cons;
       if (lift) delete lift;
@@ -386,17 +397,20 @@ namespace {
 
   class ProofPostProcState {
   public:
-    ProofPostProcState(Model & _m, IC3Options & _opts) : m(_m), opts(_opts) {
-      ev = m.newView();
+    ProofPostProcState(Model & _m, IC3Options & _opts, Expr::Manager::View * v) : m(_m), opts(_opts), owner(true) {
+      if (v)
+        owner = false;
+      ev = v ? v : m.newView();
       constraints = NULL;
     }
-    ProofPostProcState(Model & _m, vector<ID> & _gprop, 
+    ProofPostProcState(Model & _m, vector<ID> & _gprop,
         vector<SAT::Clauses> * _constraints, IC3Options & _opts) : m(_m), gprop(_gprop),
         constraints(_constraints), opts(_opts) {
       ev = m.newView();
     }
     ~ProofPostProcState() {
-      delete ev;
+      if (owner)
+        delete ev;
     }
 
     Model & m;
@@ -413,6 +427,7 @@ namespace {
     vector< vector<ID> > negPropPrimedCNF;
     ID npi;
     IC3Options opts;
+    bool owner;
   };
 
   void _printVector(Expr::Manager::View & ev, const vector<ID> & c) {
@@ -464,7 +479,7 @@ namespace {
         if (_lvl > lvl) lvl = _lvl;
       }
       void add(ID id, NodeIndex n) {
-        next.insert(NextMap::value_type(id, n)); 
+        next.insert(NextMap::value_type(id, n));
       }
       NodeIndex get(ID id) const {
         NextMap::const_iterator it = next.find(id);
@@ -489,8 +504,8 @@ namespace {
       return _add(it+1, end, next);
     }
 
-    bool _subsumed(vector<ID>::const_iterator it, vector<ID>::const_iterator end, 
-                   vector<NodeIndex> & tokens, int & scnt, int k) 
+    bool _subsumed(vector<ID>::const_iterator it, vector<ID>::const_iterator end,
+                   vector<NodeIndex> & tokens, int & scnt, int k)
     {
       if (it == end) return false;
       vector<NodeIndex>::size_type curr_end = tokens.size();
@@ -525,7 +540,7 @@ namespace {
   class SimRefine : public Sim::StateFunctor64 {
   public:
     SimRefine(State & st) : st(st) {
-      ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+      ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
       latches = eat->stateVars();
       for (unsigned int i = 0; i < latches.size(); ++i)
         latchOrder.insert(OMap::value_type(latches[i], i));
@@ -544,7 +559,7 @@ namespace {
         parts.push_back(lpart);
       }
     }
-    virtual bool operator()(vector<uint64_t>::const_iterator stateBegin, vector<uint64_t>::const_iterator stateEnd) {
+    virtual bool operator()(vector<uint64_t>::const_iterator stateBegin, vector<uint64_t>::const_iterator) {
       LPartition newParts;
       for (LPartition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
         PMap pmap;
@@ -619,11 +634,6 @@ namespace {
     }
   }
 
-  void complement(Expr::Manager::View & ev, const vector<ID> & in, vector<ID> & out) {
-    for (vector<ID>::const_iterator it = in.begin(); it != in.end(); it++)
-      out.push_back(ev.apply(Expr::Not, *it));
-  }
-
   void primeVector(Expr::Manager::View & ev, const vector<ID> & in, vector<ID> & out) {
     for(vector<ID>::const_iterator it = in.begin(); it != in.end(); ++it) {
       out.push_back(ev.prime(*it));
@@ -638,16 +648,16 @@ namespace {
 
 
   typedef unordered_map<ID, unsigned int> VMap;
-  void randomVars(SharedState & ss, Expr::Manager::View & ev, 
+  void randomVars(SharedState & ss, Expr::Manager::View & ev,
                   const vector<ID> & latches, const vector<ID> & fns)
   {
     if (ss.opts.abstract > 0 && ss.opts.abstract < 3) return;
 
     class cnt_folder : public Expr::Manager::View::Folder {
     public:
-      cnt_folder(Expr::Manager::View & v, VMap & vmap) : 
+      cnt_folder(Expr::Manager::View & v, VMap & vmap) :
         Expr::Manager::View::Folder(v), vmap(vmap) {}
-      virtual ID fold(ID id, int n, const ID * const args) {
+      virtual ID fold(ID id, int, const ID * const) {
         if (view().op(id) == Expr::Var) {
           VMap::iterator it = vmap.find(id);
           if (it == vmap.end()) {
@@ -696,7 +706,7 @@ namespace {
 #if 0
     set<ID> tcvars, cvars;
     if (ss.opts.constraints)
-      for (unsigned i = 0; i < ss.opts.constraints->size(); ++i)      
+      for (unsigned i = 0; i < ss.opts.constraints->size(); ++i)
         for (SAT::Clauses::const_iterator j = (*ss.opts.constraints)[i].begin();
              j != (*ss.opts.constraints)[i].end(); ++j)
           for (vector<ID>::const_iterator jj = j->begin(); jj != j->end(); ++jj) {
@@ -704,7 +714,7 @@ namespace {
             v = ev.primeTo(v, 0);
             tcvars.insert(v);
           }
-    ExprAttachment const * eat = (ExprAttachment *) ss.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) ss.m.constAttachment(Key::EXPR);
     vector<ID> cfns(eat->constraintFns());
     ss.m.constRelease(eat);
     Expr::variables(ev, cfns, tcvars);
@@ -728,7 +738,7 @@ namespace {
   }
 
   void fsisInitSAT(State & st) {
-    COIAttachment const * cat = (COIAttachment *) st.m.constAttachment(Key::COI);
+    COIAttachment const * const cat = (COIAttachment const *) st.m.constAttachment(Key::COI);
     st.ss.coi = cat->coi();
     st.m.constRelease(cat);
 
@@ -740,11 +750,11 @@ namespace {
     vector< vector<ID> > constraints;
     if (st.ss.opts.constraints)
       for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i)
-        cons_clauses.insert(cons_clauses.end(), 
-                            (*st.ss.opts.constraints)[i].begin(), 
+        cons_clauses.insert(cons_clauses.end(),
+                            (*st.ss.opts.constraints)[i].begin(),
                             (*st.ss.opts.constraints)[i].end());
 
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     vector<ID> latches(eat->stateVars());
     vector<ID> fns(eat->nextStateFnOf(latches));
 
@@ -767,7 +777,7 @@ namespace {
     randomVars(st.ss, st.ev, latches, fns);
 
     // assumes initial condition is a cube
-    RchAttachment const * rat = (RchAttachment *) st.m.constAttachment(Key::RCH);
+    RchAttachment const * const rat = (RchAttachment const *) st.m.constAttachment(Key::RCH);
     vector<ID> init = eat->initialConditions();
     if (st.ss.simpleInit) {
       ID iexp = rat->forwardLowerBound();
@@ -781,44 +791,16 @@ namespace {
         st.ss.initially.insert(*it);
     }
 
-    // look for lower bound from bdd_reach
-    bool use_flb = !st.ss.opts.bmcsz && st.ss.bddInit && rat->backwardStepsBdd() > 1;
-    ID initf;
-    if (use_flb) {
-      const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      initf = exprOf(rat->forwardBddLowerBound(), st.ev, bat->order());
-      st.m.constRelease(bat);
-#if 1
-      vector<ID> disj;
-      Expr::disjuncts(st.ev, st.ev.apply(Expr::Not, initf), disj);
-      use_flb = false;
-      for (vector<ID>::const_iterator it = disj.begin(); it != disj.end(); ++it)
-        if (st.ev.op(*it) != Expr::Var && st.ev.op(st.ev.apply(Expr::Not, *it)) != Expr::Var) {
-          use_flb = true;
-          break;
-        }
-#endif
-    }
-    if (use_flb || (!eat->constraintFns().empty() && !st.ss.opts.bmcsz)) {
+    if (!eat->constraintFns().empty() && !st.ss.opts.bmcsz) {
       st.ss.simpleInit = false;
-      if (use_flb) {
-        st.ss.rat = rat;
-        st.ss.bddInit = true;
-      }
-      else {
-        st.m.constRelease(rat);
-        st.ss.bddInit = false;
-      }
+      st.m.constRelease(rat);
+      st.ss.bddInit = false;
 
       SAT::Clauses init_clauses;
-      if (use_flb) 
-        Expr::tseitin(st.ev, initf, init_clauses);
-      else {
-        for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
-          vector<ID> cls;
-          cls.push_back(*it);
-          init_clauses.push_back(cls);
-        }
+      for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
+        vector<ID> cls;
+        cls.push_back(*it);
+        init_clauses.push_back(cls);
       }
       SAT::Clauses icons_clauses(cons_clauses);
       icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
@@ -874,17 +856,8 @@ namespace {
 
     vector< vector<ID> > error_clauses;
     ID npi;
-    if (st.ss.bddTarget && rat->backwardStepsBdd() > 1) {
-      st.ss.TESteps = rat->backwardStepsBdd() - 1;
-      const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      npi = exprOf(rat->backwardBddLowerBound(), st.ev, bat->order());
-      st.m.constRelease(bat);
-      Expr::tseitin(st.ev, st.ev.apply(Expr::Not, npi), cons_clauses);
-    }
-    else {
-      st.ss.bddTarget = false;
-      npi = eat->outputFnOf(eat->outputs()[0]);
-    }
+    st.ss.bddTarget = false;
+    npi = eat->outputFnOf(eat->outputs()[0]);
     if (npi == st.ev.bfalse()) throw Safe();
     if (npi == st.ev.btrue()) throw CEX();
     Expr::tseitin(st.ev, Expr::primeFormula(st.ev, npi), error_clauses);
@@ -910,7 +883,7 @@ namespace {
   }
 
   void initSAT(State & st) {
-    COIAttachment const * cat = (COIAttachment *) st.m.constAttachment(Key::COI);
+    COIAttachment const * const cat = (COIAttachment const *) st.m.constAttachment(Key::COI);
     st.ss.coi = cat->coi();
     st.m.constRelease(cat);
 
@@ -926,7 +899,7 @@ namespace {
     if (st.opts.abstract >= 2)
       cons_clauses = st.ss.abs_tr;
     else
-      cons_clauses = cnfat->getCNF();
+      cons_clauses = cnfat->getCNF(&st.ev);
 
     if (st.ss.opts.intNodes) {
       SAT::Clauses temp = cnfat->getPlainCNF();
@@ -936,33 +909,33 @@ namespace {
       }
       cons_clauses.insert(cons_clauses.end(), temp.begin(), temp.end());
     }
- 
-    // for internal nodes replace DAG IDs with SAT IDs 
-    Expr::IDMap satIdOfId = cnfat->satIdOfId; 
+
+    // for internal nodes replace DAG IDs with SAT IDs
+    Expr::IDMap satIdOfId = cnfat->satIdOfId;
     if (st.ss.opts.intNodes){
       vector<ID> * kCOI = st.ss.coi.kCOIplusInt();
       for (vector<ID>::iterator it = kCOI->begin(); it != kCOI->end(); ++it) {
-	if (satIdOfId.find(*it) == satIdOfId.end())
-	  assert(st.ev.op(*it) == Expr::Var);
-	else{
-	  *it = satIdOfId[*it];
-	}
+        if (satIdOfId.find(*it) == satIdOfId.end())
+          assert(st.ev.op(*it) == Expr::Var);
+        else{
+          *it = satIdOfId[*it];
+        }
       }
     }
-    
+
     // include user-provided constraints
     vector< vector<ID> > constraints;
     if (st.ss.opts.constraints)
       for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i) {
-        cons_clauses.insert(cons_clauses.end(), 
-                            (*st.ss.opts.constraints)[i].begin(), 
+        cons_clauses.insert(cons_clauses.end(),
+                            (*st.ss.opts.constraints)[i].begin(),
                             (*st.ss.opts.constraints)[i].end());
-        constraints.insert(constraints.end(), 
+        constraints.insert(constraints.end(),
                            (*st.ss.opts.constraints)[i].begin(),
                            (*st.ss.opts.constraints)[i].end());
       }
 
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     vector<ID> latches(eat->stateVars());
     vector<ID> fns(eat->nextStateFnOf(latches));
 
@@ -985,7 +958,7 @@ namespace {
     randomVars(st.ss, st.ev, latches, fns);
 
     // assumes initial condition is a cube
-    RchAttachment const * rat = (RchAttachment *) st.m.constAttachment(Key::RCH);
+    RchAttachment const * const rat = (RchAttachment const *) st.m.constAttachment(Key::RCH);
     vector<ID> init = eat->initialConditions();
     if (st.ss.simpleInit) {
       ID iexp = rat->forwardLowerBound();
@@ -999,24 +972,6 @@ namespace {
         st.ss.initially.insert(*it);
     }
 
-    // look for lower bound from bdd_reach
-    bool use_flb = !st.ss.opts.bmcsz && st.ss.bddInit && rat->backwardStepsBdd() > 1;
-    ID initf = st.ev.btrue();
-    if (use_flb) {
-      const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      initf = exprOf(rat->forwardBddLowerBound(), st.ev, bat->order());
-      st.m.constRelease(bat);
-#if 1
-      vector<ID> disj;
-      Expr::disjuncts(st.ev, st.ev.apply(Expr::Not, initf), disj);
-      use_flb = false;
-      for (vector<ID>::const_iterator it = disj.begin(); it != disj.end(); ++it)
-        if (st.ev.op(*it) != Expr::Var && st.ev.op(st.ev.apply(Expr::Not, *it)) != Expr::Var) {
-          use_flb = true;
-          break;
-        }
-#endif
-    }
     vector<ID> nonImpliedConstraints;
     if (!eat->constraintFns().empty() && !st.ss.opts.bmcsz) {
       //Build a map from latch to initial value
@@ -1024,7 +979,7 @@ namespace {
       for (vector<ID>::const_iterator it = init.begin(); it != init.end();
            ++it) {
         ID latch = var(st, *it);
-        initial.insert(Expr::IDMap::value_type(latch, latch == *it ? 
+        initial.insert(Expr::IDMap::value_type(latch, latch == *it ?
                                                st.ev.btrue() : st.ev.bfalse()));
       }
       SAT::Manager * sman = st.m.newSATManager();
@@ -1040,7 +995,7 @@ namespace {
         try {
           sview->add(clauses);
         }
-        catch (SAT::Trivial tr) {
+        catch (SAT::Trivial const & tr) {
           assert(!tr.value());
           delete sview;
           continue;
@@ -1069,32 +1024,22 @@ namespace {
       st.ss.icons->add(*(st.ss.stem));
       st.ss.icons->add(*(st.ss.stem_plus));
     }
-    else if (st.ss.opts.intNodes || use_flb || !nonImpliedConstraints.empty()) {
+    else if (st.ss.opts.intNodes || !nonImpliedConstraints.empty()) {
       if (st.m.verbosity() > Options::Informative)
         cout << "IC3: using SAT queries for initiation checks" << endl;
       st.ss.simpleInit = false;
-      if (use_flb) {
-        st.ss.rat = rat;
-        st.ss.bddInit = true;
-      }
-      else {
-        st.m.constRelease(rat);
-        st.ss.bddInit = false;
-      }
+      st.m.constRelease(rat);
+      st.ss.bddInit = false;
 
       SAT::Clauses init_clauses;
-      if (use_flb) 
-        Expr::tseitin(st.ev, initf, init_clauses);
-      else {
-        for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
-          vector<ID> cls;
-          cls.push_back(*it);
-          init_clauses.push_back(cls);
-        }
+      for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
+        vector<ID> cls;
+        cls.push_back(*it);
+        init_clauses.push_back(cls);
       }
       SAT::Clauses icons_clauses(cons_clauses);
       icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
-      for (vector<ID>::const_iterator it = nonImpliedConstraints.begin(); 
+      for (vector<ID>::const_iterator it = nonImpliedConstraints.begin();
            it != nonImpliedConstraints.end(); ++it)
         Expr::tseitin(st.ev, *it, init_clauses);
 
@@ -1161,23 +1106,14 @@ namespace {
 
     vector< vector<ID> > error_clauses;
     ID npi;
-    if (st.ss.bddTarget && rat->backwardStepsBdd() > 1) {
-      st.ss.TESteps = rat->backwardStepsBdd() - 1;
-      const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      npi = exprOf(rat->backwardBddLowerBound(), st.ev, bat->order());
-      st.m.constRelease(bat);
-      Expr::tseitin(st.ev, st.ev.apply(Expr::Not, npi), cons_clauses);
-    }
-    else {
-      st.ss.bddTarget = false;
-      if (st.opts.abstract >= 2)
-        npi = st.ss.abs_er;
-      else
-        npi = eat->outputFnOf(eat->outputs()[0]);
-      vector<ID> cube;
-      Expr::conjuncts(st.ev, npi, cube);
-      npi = st.ev.apply(Expr::And, cube);
-    }
+    st.ss.bddTarget = false;
+    if (st.opts.abstract >= 2)
+      npi = st.ss.abs_er;
+    else
+      npi = eat->outputFnOf(eat->outputs()[0]);
+    vector<ID> cube;
+    Expr::conjuncts(st.ev, npi, cube);
+    npi = st.ev.apply(Expr::And, cube);
     if (npi == st.ev.bfalse()) throw Safe();
     if (npi == st.ev.btrue()) throw CEX();
     if(!st.ss.opts.iictl) {
@@ -1314,11 +1250,11 @@ namespace {
     st.ss.simpleInit = false;
     st.ss.opts.lift = false;
 
-    COIAttachment const * cat = (COIAttachment *) st.m.constAttachment(Key::COI);
+    COIAttachment const * const cat = (COIAttachment const *) st.m.constAttachment(Key::COI);
     st.ss.coi = cat->coi();
     st.m.constRelease(cat);
 
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     vector<ID> latches(eat->stateVars());
     vector<ID> fns(eat->nextStateFnOf(latches));
 
@@ -1344,9 +1280,49 @@ namespace {
     Expr::tseitin(st.ev, initf, initf_cnf);
 
     // get CNF encoding for transition relation
-    CNFAttachment * cnfat = (CNFAttachment *) st.m.constAttachment(Key::CNF);
+    CNFAttachment const * const cnfat = (CNFAttachment const *) st.m.constAttachment(Key::CNF);
     vector< vector<ID> > cons_clauses = cnfat->getPlainCNF();
     st.m.constRelease(cnfat);
+
+    //The following code inverts the transition relation without having to
+    //regenerate the CNF and simplify it
+    // construct transition relation
+    vector<ID> tr;
+    for (unsigned i = 0; i < eat->stateVars().size(); ++i)
+      tr.push_back(st.ev.apply(Expr::Equiv,
+            st.ev.prime(eat->stateVars()[i]),
+            eat->nextStateFns()[i]));
+
+    for(vector<ID>::const_iterator it = eat->constraintFns().begin();
+        it != eat->constraintFns().end(); ++it) {
+      if(*it != st.ev.btrue()) { //Ignore trivial constraints
+        tr.push_back(*it);
+        tr.push_back(Expr::primeFormula(st.ev, *it));
+      }
+    }
+
+    Expr::IDMap switchPrimes;
+    for (vector<ID>::const_iterator it = eat->stateVars().begin(); it != eat->stateVars().end(); ++it) {
+      switchPrimes.insert(Expr::IDMap::value_type(*it, st.ev.prime(*it)));
+      switchPrimes.insert(Expr::IDMap::value_type(st.ev.prime(*it), *it));
+    }
+    for (vector<ID>::const_iterator it = eat->inputs().begin(); it != eat->inputs().end(); ++it) {
+      switchPrimes.insert(Expr::IDMap::value_type(*it, st.ev.prime(*it)));
+      switchPrimes.insert(Expr::IDMap::value_type(st.ev.prime(*it), *it));
+    }
+    Expr::IDMap fwdToRev;
+    Expr::varSub(st.ev, switchPrimes, tr, &fwdToRev);
+    //Create a map from tseitin reps of fwd IDs to tseitin reps of reverse IDs.
+    //This must conform with the rep function in ExprUtil.cpp
+    Expr::IDMap fwdRepToRevRep;
+    for (Expr::IDMap::const_iterator it = fwdToRev.begin(); it != fwdToRev.end(); ++it) {
+      ostringstream fwdBuf, revBuf;
+      fwdBuf << "r" << it->first;
+      revBuf << "r" << it->second;
+      ID fwdRep = st.ev.newVar(fwdBuf.str());
+      ID revRep = st.ev.newVar(revBuf.str());
+      fwdRepToRevRep.insert(Expr::IDMap::value_type(fwdRep, revRep));
+    }
 
     // switch primed and unprimed vars
     set<ID> tpv(latches.begin(), latches.end());
@@ -1358,6 +1334,11 @@ namespace {
           *lit = *lit == v ? st.ev.prime(v) : st.ev.apply(Expr::Not, st.ev.prime(v));
         else if (st.ev.nprimes(v))
           *lit = *lit == v ? st.ev.unprime(v) : st.ev.apply(Expr::Not, st.ev.unprime(v));
+        else {
+          Expr::IDMap::const_iterator it = fwdRepToRevRep.find(v);
+          if (it != fwdRepToRevRep.end())
+            *lit = *lit == v ? it->second : st.ev.apply(Expr::Not, it->second);
+        }
       }
 
     //ID x = Expr::primeFormula(st.ev, st.ev.apply(Expr::Not, initf));
@@ -1389,14 +1370,14 @@ namespace {
       error_clauses.push_back(cls);
     }
     vector<ID> pi;
-    complement(st.ev, init, pi);
+    Expr::complement(st.ev, init, pi);
     cons_clauses.push_back(pi);
 
     // include user-provided constraints
     if (st.ss.opts.constraints)
       for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i)
-        cons_clauses.insert(cons_clauses.end(), 
-                            (*st.ss.opts.constraints)[i].begin(), 
+        cons_clauses.insert(cons_clauses.end(),
+                            (*st.ss.opts.constraints)[i].begin(),
                             (*st.ss.opts.constraints)[i].end());
 
     st.cons->manager().add(cons_clauses);
@@ -1438,7 +1419,7 @@ namespace {
 
   void prepareAssignSpecial(State & st, SAT::Assignment & asgn) {
     //Add inputs to asgn
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     const vector<ID> & inputs = eat->inputs();
     for(vector<ID>::const_iterator it = inputs.begin(); it != inputs.end(); ++it) {
       asgn.insert(SAT::Assignment::value_type(*it, SAT::Unknown));
@@ -1457,7 +1438,7 @@ namespace {
                      bool primedInputs = false, bool internal = false) {
     if(inputs || primedInputs) {
       //Add inputs to asgn
-      ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+      ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
       for(vector<ID>::const_iterator it = eat->inputs().begin(); it != eat->inputs().end(); ++it) {
         if(inputs)
           asgn.insert(SAT::Assignment::value_type(*it, SAT::Unknown));
@@ -1481,9 +1462,9 @@ namespace {
   }
 
   void preparePrimedAssign(State & st, SAT::Assignment & asgn, int dlvl = -1, bool internal=false) {
-    COI::range latchRange = 
-      dlvl >= 0 && !st.ss.opts.cycle 
-      ? st.ss.coi.kCOI(dlvl + st.ss.TESteps, internal) 
+    COI::range latchRange =
+      dlvl >= 0 && !st.ss.opts.cycle
+      ? st.ss.coi.kCOI(dlvl + st.ss.TESteps, internal)
       : st.ss.coi.cCOI(internal);
     for (vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it)
       asgn.insert(SAT::Assignment::value_type(st.ev.prime(*it), SAT::Unknown));
@@ -1491,8 +1472,8 @@ namespace {
 
   void randomizeVector(vector<ID> & c) {
     for (unsigned int i = 0; i < 7 * c.size(); ++i) {
-      int j = rand() % c.size();
-      int k = rand() % c.size();
+      int j = Random::rand() % c.size();
+      int k = Random::rand() % c.size();
       ID t = c[j];
       c[j] = c[k];
       c[k] = t;
@@ -1500,7 +1481,7 @@ namespace {
   }
 
   void fullAssignOf(State & st, SAT::Assignment & asgn, vector<ID> & cube, vector<ID> & inputCube) {
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
       if (it->second != SAT::Unknown) {
         if(eat->isInput(it->first)) {
@@ -1510,8 +1491,8 @@ namespace {
         }
         else {
           assert(eat->isStateVar(it->first));
-          cube.push_back(it->second == SAT::False ? 
-                         st.ev.apply(Expr::Not, it->first) : 
+          cube.push_back(it->second == SAT::False ?
+                         st.ev.apply(Expr::Not, it->first) :
                          it->first);
         }
       }
@@ -1519,8 +1500,8 @@ namespace {
     st.m.constRelease(eat);
   }
 
-  void fullAssignWithPrimedInputsOf(State & st, SAT::Assignment & asgn, vector<ID> & state, vector<ID> & inputs, vector<ID> & nsInputs) {
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+  void fullAssignWithPrimedBothOf(State & st, SAT::Assignment & asgn, vector<ID> & state, vector<ID> & inputs, vector<ID> & nState, vector<ID> & nsInputs) {
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
       assert(st.ev.nprimes(it->first) <= 1);
       if (it->second != SAT::Unknown) {
@@ -1531,16 +1512,51 @@ namespace {
                              it->first);
           }
           else {
-            state.push_back(it->second == SAT::False ? 
-                            st.ev.apply(Expr::Not, it->first) : 
+            state.push_back(it->second == SAT::False ?
+                            st.ev.apply(Expr::Not, it->first) :
+                            it->first);
+          }
+        }
+        else {
+          ID id = st.ev.unprime(it->first);
+          if (eat->isInput(id)) {
+            nsInputs.push_back(it->second == SAT::False ?
+                               st.ev.apply(Expr::Not, id) :
+                               id);
+          }
+          else {
+            nState.push_back(it->second == SAT::False ?
+                            st.ev.apply(Expr::Not, id) :
+                            id);
+          }
+        }
+      }
+    }
+    st.m.constRelease(eat);
+  }
+
+  void fullAssignWithPrimedInputsOf(State & st, SAT::Assignment & asgn, vector<ID> & state, vector<ID> & inputs, vector<ID> & nsInputs) {
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
+    for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
+      assert(st.ev.nprimes(it->first) <= 1);
+      if (it->second != SAT::Unknown) {
+        if (st.ev.nprimes(it->first) == 0) {
+          if(eat->isInput(it->first)) {
+            inputs.push_back(it->second == SAT::False ?
+                             st.ev.apply(Expr::Not, it->first) :
+                             it->first);
+          }
+          else {
+            state.push_back(it->second == SAT::False ?
+                            st.ev.apply(Expr::Not, it->first) :
                             it->first);
           }
         }
         else {
           ID id = st.ev.unprime(it->first);
           assert(eat->isInput(id));
-          nsInputs.push_back(it->second == SAT::False ? 
-                             st.ev.apply(Expr::Not, id) : 
+          nsInputs.push_back(it->second == SAT::False ?
+                             st.ev.apply(Expr::Not, id) :
                              id);
         }
       }
@@ -1549,7 +1565,7 @@ namespace {
   }
 
   void fullAssignWithPrimedOf(State & st, SAT::Assignment & asgn, vector<ID> & cube, vector<ID> & inputCube, vector<ID> & nsCube) {
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
       assert(st.ev.nprimes(it->first) <= 1);
       if (it->second != SAT::Unknown) {
@@ -1560,14 +1576,14 @@ namespace {
                                 it->first);
           }
           else {
-            cube.push_back(it->second == SAT::False ? 
-                           st.ev.apply(Expr::Not, it->first) : 
+            cube.push_back(it->second == SAT::False ?
+                           st.ev.apply(Expr::Not, it->first) :
                            it->first);
           }
         }
         else {
-          nsCube.push_back(it->second == SAT::False ? 
-                         st.ev.apply(Expr::Not, st.ev.unprime(it->first)) : 
+          nsCube.push_back(it->second == SAT::False ?
+                         st.ev.apply(Expr::Not, st.ev.unprime(it->first)) :
                          st.ev.unprime(it->first));
         }
       }
@@ -1576,7 +1592,7 @@ namespace {
   }
 
   void specAssignOf(State & st, SAT::Assignment & asgn, vector<ID> & cube1, vector<ID> & inputCube1, vector<ID> & cube2, vector<ID> & inputCube2) {
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
       assert(st.ev.nprimes(it->first) <= 1);
       if (it->second != SAT::Unknown) {
@@ -1587,8 +1603,8 @@ namespace {
                                  it->first);
           }
           else {
-            cube2.push_back(it->second == SAT::False ? 
-                            st.ev.apply(Expr::Not, it->first) : 
+            cube2.push_back(it->second == SAT::False ?
+                            st.ev.apply(Expr::Not, it->first) :
                             it->first);
           }
         }
@@ -1601,8 +1617,8 @@ namespace {
                                  id);
           }
           else {
-            cube1.push_back(it->second == SAT::False ? 
-                            st.ev.apply(Expr::Not, id) : 
+            cube1.push_back(it->second == SAT::False ?
+                            st.ev.apply(Expr::Not, id) :
                             id);
           }
         }
@@ -1614,8 +1630,8 @@ namespace {
   void assignOf(Expr::Manager::View & ev, SAT::Assignment & asgn, vector<ID> & cube) {
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
       if (it->second != SAT::Unknown)
-        cube.push_back(it->second == SAT::False ? 
-                       ev.apply(Expr::Not, it->first) : 
+        cube.push_back(it->second == SAT::False ?
+                       ev.apply(Expr::Not, it->first) :
                        it->first);
      }
   }
@@ -1640,7 +1656,7 @@ namespace {
   void addCubeToManager(State & st, int k, const vector<ID> & cube, bool quiet = false) {
     // 1. convert to clause
     vector<ID> cls;
-    complement(st.ev, cube, cls);
+    Expr::complement(st.ev, cube, cls);
 
     if (!quiet && st.m.verbosity() > Options::Verbose) {
       if(k == INT_MAX)
@@ -1676,7 +1692,7 @@ namespace {
   void addCube(State & st, int k, vector<ID> & cube) {
     if (addCubeToCubes(st, k, cube))
       addCubeToManager(st, k, cube);
-    else 
+    else
       st.ss.stats.repeats++;
   }
 
@@ -1735,7 +1751,7 @@ namespace {
     }
   }
 
-  void prime_implicate_init(State & st, const vector<ID> & keep, vector<ID> & rest) 
+  void prime_implicate_init(State & st, const vector<ID> & keep, vector<ID> & rest)
   {
     assert (st.init);
     vector<ID> assumps(keep);
@@ -1814,17 +1830,37 @@ namespace {
     }
   }
 
-  bool consecution(State & st, int k, vector<ID> & cube, 
+  void propagateClausesSpecial(State & st, int k, CubeSet & indCubes);
+
+  bool consecution(State & st, int k, vector<ID> & cube,
                    SAT::Assignment * asgn = NULL, bool rcore = true,
                    bool full_init = false, SAT::Assignment * lifted = NULL,
-                   SAT::GID * incremental = NULL) 
+                   SAT::GID * incremental = NULL)
   {
     if (st.ss.opts.timeout > 0) {
-      int64_t sofar = Util::get_user_cpu_time() - st.ss.stime;
+      int64_t sofar = Util::get_thread_cpu_time() - st.ss.stime;
       if (sofar / 1000000 >= st.ss.opts.timeout) {
+        ostringstream oss;
+        oss << "IC3" << (st.ss.reverse ? "r" : "") << ": timeout";
         if (st.m.verbosity() > Options::Terse)
-          cout << "IC3" << (st.ss.reverse ? "r" : "") << ": timeout" << endl;
-        throw Timeout("IC3 timeout");
+          cout << oss.str() << endl;
+        if (st.ss.opts.propagate) {
+          int timeout = st.opts.timeout;
+          st.opts.timeout = -1;
+          st.cons->timeout();
+          CubeSet indCubes;
+          propagateClausesSpecial(st, st.cubes.size() - 2, indCubes);
+          st.opts.timeout = timeout;
+          throw IC3Timeout(oss.str(), indCubes);
+        }
+        throw IC3Timeout(oss.str());
+      }
+    }
+    if (st.ss.opts.action) {
+      if (st.ss.opts.action->futureReady()) {
+        ostringstream oss;
+        oss << "IC3" << (st.ss.reverse ? "r" : "") << ": terminated";
+        throw Termination(oss.str());
       }
     }
 
@@ -1848,10 +1884,10 @@ namespace {
         prepareCons(st, k, assumps);
         tgid = cons->newGID();
         try {
-          complement(st.ev, cube, cls);
+          Expr::complement(st.ev, cube, cls);
           cons->add(cls, tgid);
         }
-        catch (SAT::Trivial tr) {
+        catch (SAT::Trivial const & tr) {
           assert (!tr.value());
           cons->remove(tgid);
           return true;
@@ -1871,7 +1907,7 @@ namespace {
       }
     }
 
-    bool rv = cons->sat(&assumps, asgn, rcore ? &cassumps : NULL, tgid, 
+    bool rv = cons->sat(&assumps, asgn, rcore ? &cassumps : NULL, tgid,
                         full_init, lifted);
     if (tgid != SAT::NULL_GID && (!rv || !incremental))
       cons->remove(tgid);
@@ -1881,11 +1917,11 @@ namespace {
     else {
       if (rcore) {
         vector<ID> copy(cube);
-        // reduce the cube by the unsat core  
+        // reduce the cube by the unsat core
         cube.clear();
         sort(cassumps.begin(), cassumps.end());
         for (vector<ID>::iterator it = copy.begin(); it != copy.end(); it++)
-          if (binary_search(cassumps.begin(), cassumps.end(), 
+          if (binary_search(cassumps.begin(), cassumps.end(),
                             Expr::primeFormula(st.ev, *it)))
             cube.push_back(*it);
         if (!initiation(st, cube)) {
@@ -1922,6 +1958,7 @@ namespace {
     }
   }
 
+#if 0
   void reduceCube(State & st, vector<ID> & cube) {
     if (!st.ss.rvars.empty()) {
       vector<ID> copy(cube);
@@ -1937,9 +1974,10 @@ namespace {
       if (st.icons && !consecution(st, 0, cube, NULL, false)) cube = copy;
     }
   }
+#endif
 
   bool join(State & st, const set<ID> & keep, vector<ID> & cube,
-            const SAT::Assignment & asgn) 
+            const SAT::Assignment & asgn)
   {
     vector<ID> rcube;
     for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++) {
@@ -1967,7 +2005,7 @@ namespace {
     SAT::Assignment asgn;
     //TODO: could use the distance from the frontier instead of -1
     if (handleCtgs)
-      prepareAssign(st, asgn, -1); 
+      prepareAssign(st, asgn, -1);
     else {
       for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++)
         asgn.insert(SAT::Assignment::value_type(var(st, *it), SAT::Unknown));
@@ -2025,11 +2063,11 @@ namespace {
     }
   }
 
-  void prime_implicate(State & st, int k, const vector<ID> & nlits, 
-                       const vector<ID> & keep, vector<ID> & rest) 
+  void prime_implicate(State & st, int k, const vector<ID> & nlits,
+                       const vector<ID> & keep, vector<ID> & rest)
   {
     vector<ID> cls, assumps;
-    complement(st.ev, nlits, cls);
+    Expr::complement(st.ev, nlits, cls);
     SAT::Manager::View * cons;
 
     if (k == 0 && st.icons)
@@ -2072,7 +2110,7 @@ namespace {
         sort(cassumps.begin(), cassumps.end());
         vector<ID> nrest;
         for (vector<ID>::iterator it = rest.begin(); it != rest.end(); it++)
-          if (binary_search(cassumps.begin(), cassumps.end(), 
+          if (binary_search(cassumps.begin(), cassumps.end(),
                             Expr::primeFormula(st.ev, *it)))
             nrest.push_back(*it);
         rest = nrest;
@@ -2144,7 +2182,7 @@ namespace {
     for (vector<ID>::const_iterator it = cube.begin(); it != cube.end(); ++it) {
       unordered_map<ID, unsigned int>::iterator lit = st.litCnt.find(*it);
       if (lit == st.litCnt.end()) {
-        pair<unordered_map<ID, unsigned int>::iterator, bool> rv = 
+        pair<unordered_map<ID, unsigned int>::iterator, bool> rv =
           st.litCnt.insert(unordered_map<ID, unsigned int>::value_type(*it, 0));
         lit = rv.first;
       }
@@ -2235,8 +2273,8 @@ namespace {
   void randomizeLex(vector<unsigned int> & c) {
     if (c.size() > 1)
       for (unsigned int i = 0; i < 7 * c.size(); ++i) {
-        int j = rand() % c.size();
-        int k = rand() % c.size();
+        int j = Random::rand() % c.size();
+        int k = Random::rand() % c.size();
         ID t = c[j];
         c[j] = c[k];
         c[k] = t;
@@ -2338,7 +2376,7 @@ namespace {
         if(st.icons && st.opts.bmcsz)
           prepareAssignSpecial(st, asgn);
         else
-          prepareAssign(st, asgn, -1, true);
+          prepareAssign(st, asgn, -1, true, false, st.ss.reverse);
       }
       while (_lo <= _hi) {
         resetAssignment(asgn);
@@ -2365,9 +2403,16 @@ namespace {
             addTransitionToCexTrace(st, state1, inputs1);
           }
           else {
-            vector<ID> state, inputs;
-            fullAssignOf(st, asgn, state, inputs);
-            addTransitionToCexTrace(st, state, inputs);
+            vector<ID> state, inputs, nsInputs;
+            if (st.ss.reverse) {
+              fullAssignWithPrimedInputsOf(st, asgn, state, inputs, nsInputs);
+              addTransitionToCexTrace(st, state, nsInputs);
+              addTransitionToCexTrace(st, vector<ID>(), inputs);
+            }
+            else {
+              fullAssignOf(st, asgn, state, inputs);
+              addTransitionToCexTrace(st, state, inputs);
+            }
           }
         }
         return 0;
@@ -2410,15 +2455,15 @@ namespace {
 
     // definitely inductive
     ++st.ss.stats.clauseSizeBef += cube.size();
-    int64_t start = Util::get_user_cpu_time();
+    int64_t start = Util::get_thread_cpu_time();
     mic(st, k, cube);
-    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    st.ss.stats.micTime += (Util::get_thread_cpu_time() - start);
     ++st.ss.stats.clauseSizeAft += cube.size();
     addCube(st, k+1, cube);
     return k+1;
   }
 
-  int lconsecution(State & st, int lo, int hi, vector<ID> & cube, 
+  int lconsecution(State & st, int lo, int hi, vector<ID> & cube,
                    vector<SAT::Assignment> & asgns, int offset = 0)
   {
     SAT::GID gid = SAT::NULL_GID;
@@ -2442,7 +2487,7 @@ namespace {
     return k;
   }
 
-  int new_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  int new_generalize(State & st, int lo, int hi, vector<ID> & cube, bool)
   {
     vector<SAT::Assignment> asgns;
     int k = lconsecution(st, lo, hi, cube, asgns);
@@ -2462,15 +2507,15 @@ namespace {
 
     // definitely inductive
     ++st.ss.stats.clauseSizeBef += cube.size();
-    int64_t start = Util::get_user_cpu_time();
+    int64_t start = Util::get_thread_cpu_time();
     mic(st, k, cube);
-    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    st.ss.stats.micTime += (Util::get_thread_cpu_time() - start);
     ++st.ss.stats.clauseSizeAft += cube.size();
     addCube(st, k+1, cube);
-    return k+1;    
+    return k+1;
   }
 
-  int pri_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  int pri_generalize(State & st, int lo, int hi, vector<ID> & cube, bool)
   {
     vector<SAT::Assignment> asgns;
     vector<ID> core(cube);
@@ -2514,15 +2559,15 @@ namespace {
 
     // definitely inductive
     ++st.ss.stats.clauseSizeBef += cube.size();
-    int64_t start = Util::get_user_cpu_time();
+    int64_t start = Util::get_thread_cpu_time();
     mic(st, k, cube);
-    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    st.ss.stats.micTime += (Util::get_thread_cpu_time() - start);
     ++st.ss.stats.clauseSizeAft += cube.size();
     addCube(st, k+1, cube);
-    return k+1;    
+    return k+1;
   }
 
-  int rch_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) {
+  int rch_generalize(State & st, int lo, int hi, vector<ID> & cube, bool) {
 
     int k = lo;
 
@@ -2541,9 +2586,9 @@ namespace {
 
     ++st.ss.stats.numClauses.back();
     ++st.ss.stats.clauseSizeBef += cube.size();
-    int64_t start = Util::get_user_cpu_time();
+    int64_t start = Util::get_thread_cpu_time();
     mic(st, k, cube);
-    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    st.ss.stats.micTime += (Util::get_thread_cpu_time() - start);
 
     if (st.opts.pushLast) {
       // use down to push forward as far as possible
@@ -2565,7 +2610,7 @@ namespace {
   }
 
 
-  int generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  int generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue)
   {
     if (!pursue && st.opts.gen != 3) {
       // if it's inductive at lo+1, this cube has probably already been
@@ -2667,8 +2712,8 @@ namespace {
   }
 
 
-  void propagateEquivalences(State & st, int k, Partition & parts, 
-                             CubeSet & next, SubsumptionUniverse & su) 
+  void propagateEquivalences(State & st, int k, Partition & parts,
+                             CubeSet & next, SubsumptionUniverse & su)
   {
     SzOrd szord;
     sort(parts.begin(), parts.end(), szord);
@@ -2677,9 +2722,6 @@ namespace {
 
     while (!q.empty()) {
       set<ID> part = q.front();
-
-      if (!st.ss.ev)
-        st.ev.begin_local();
 
       SAT::Assignment asgn;
       SAT::Manager::View * cons;
@@ -2732,7 +2774,7 @@ namespace {
       else {
         cons->add(ivs, tgid);
         bool rv = cons->sat(&assumps, &asgn, 0, tgid);
-        if (rv) 
+        if (rv)
           refine(st, q, asgn, k >= 0);
         else {
           parts.push_back(q.front());
@@ -2741,8 +2783,6 @@ namespace {
       }
       cons->remove(tgid);
 
-      if (!st.ss.ev)
-        st.ev.end_local();
     }
 
     if (st.m.verbosity() > Options::Informative && parts.size() > 0) {
@@ -2792,7 +2832,7 @@ namespace {
     return true;
   }
 
-  void unsatCoreLift(State & st, int k, vector<ID> & cube, vector<ID> & inputs,
+  void unsatCoreLift(State & st, int, vector<ID> & cube, vector<ID> & inputs,
                      vector<ID> & nsInputs, bool silent = false) {
     vector<ID> assumps;
     assumps.push_back(st.ev.apply(Expr::Not, st.ss.actNegTp));
@@ -2805,7 +2845,7 @@ namespace {
     bool sat = st.lift->sat(&assumps, NULL, &assumps);
     assert(!sat);
     cube.clear();
-    ExprAttachment const * eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for(vector<ID>::const_iterator it = assumps.begin(); it != assumps.end(); ++it) {
       if(eat->isStateVar(*it) || eat->isStateVar(st.ev.apply(Expr::Not, *it))) {
         cube.push_back(*it);
@@ -2816,9 +2856,9 @@ namespace {
     st.m.constRelease(eat);
   }
 
-  void minUnsatCoreLift(State & st, int k, vector<ID> & cube, vector<ID> & inputs,
+  void minUnsatCoreLift(State & st, int, vector<ID> & cube, vector<ID> & inputs,
                      vector<ID> & nsInputs, bool silent = false) {
-    ExprAttachment const * eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     vector<ID> assumps;
     sort(cube.begin(), cube.end());
     for(unsigned i = 0; i < cube.size(); ++i) {
@@ -2855,7 +2895,7 @@ namespace {
 
   void liftAdd(State & st, vector<ID> & cube, bool addUnprimed = true) {
     vector<ID> cls, prCls;
-    complement(st.ev, cube, cls);
+    Expr::complement(st.ev, cube, cls);
     primeVector(st.ev, cls, prCls);
     if(addUnprimed)
       st.lift->add(cls);
@@ -2877,7 +2917,7 @@ namespace {
     st.faeLits.push_back(act);
   }
 
-  void forAllExists(State & st, int k, vector<ID> & cube, vector<ID> & inputs, vector<ID> & nsInputs) {
+  void forAllExists(State & st, int k, vector<ID> & cube, vector<ID> &, vector<ID> &) {
 
     SAT::Assignment asgn;
     prepareAssign(st, asgn, -1);
@@ -2946,17 +2986,17 @@ namespace {
   void liftPropCti(State & st, int k, vector<ID> & cube, vector<ID> & inputs, vector<ID> & nsInputs) {
     //liftAdd(st, cube, false);
 
-    int64_t start = Util::get_user_cpu_time();
+    int64_t start = Util::get_thread_cpu_time();
     unsatCoreLift(st, k, cube, inputs, nsInputs);
-    st.ss.stats.ibmLiftTime += (Util::get_user_cpu_time() - start);
+    st.ss.stats.ibmLiftTime += (Util::get_thread_cpu_time() - start);
     st.ss.stats.cubeSizeIBM += cube.size();
     //liftAdd(st, cube, false);
 
     if(st.opts.lift_aggr > 0) {
       //Do brute-force
-      int64_t start = Util::get_user_cpu_time();
+      int64_t start = Util::get_thread_cpu_time();
       minUnsatCoreLift(st, k, cube, inputs, nsInputs);
-      st.ss.stats.bruteLiftTime += (Util::get_user_cpu_time() - start);
+      st.ss.stats.bruteLiftTime += (Util::get_thread_cpu_time() - start);
       st.ss.stats.cubeSizeBrute += cube.size();
 
       liftAdd(st, cube);
@@ -2970,7 +3010,7 @@ namespace {
     }
   }
 
-  void propagateClauses(State & st, int k, bool trivial, bool shortCircuit, 
+  void propagateClauses(State & st, int k, bool trivial, bool shortCircuit,
                         bool possible = true) {
 
     if (st.m.verbosity() > Options::Informative) cout << "propagateClauses " << endl;
@@ -2982,7 +3022,7 @@ namespace {
     for(int i = 1; i <= k+1; ++i) {
       st.ss.stats.clauseDistBef.back().push_back(st.cubes[i].size());
     }
-    
+
     //Reduce infCubes
     bool reduced = true;
     while (reduced) {
@@ -3062,7 +3102,7 @@ namespace {
             st.cubes[i+1].insert(*it);
             addCubeToManager(st, i+1, *it, true);
           }
-          ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+          ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
           ID npi = eat->outputFnOf(eat->outputs()[0]);
           st.m.constRelease(eat);
           vector<ID> cube, cls;
@@ -3075,8 +3115,12 @@ namespace {
               break;
             }
           if (iscube) {
+            //disable CTGs
+            int ctgs = st.opts.ctgs;
+            st.opts.ctgs = 0;
             mic(st, i+1, cube, true);
-            complement(st.ev, cube, cls);
+            st.opts.ctgs = ctgs;
+            Expr::complement(st.ev, cube, cls);
             if (st.opts.incremental)
               st.opts.timeout = timeout;
             throw Safe(st.cubes[i+1], cls);
@@ -3115,12 +3159,31 @@ namespace {
       if (st.opts.incremental) {
         // ok to timeout here
         if (st.ss.opts.timeout > 0) {
-          int64_t sofar = Util::get_user_cpu_time() - st.ss.stime;
+          int64_t sofar = Util::get_thread_cpu_time() - st.ss.stime;
           if (sofar / 1000000 >= st.ss.opts.timeout) {
+            ostringstream oss;
+            oss << "IC3" << (st.ss.reverse ? "r" : "")
+                << ": timeout (during propagation)";
             if (st.m.verbosity() > Options::Terse)
-              cout << "IC3" << (st.ss.reverse ? "r" : "") 
-                   << ": timeout (during propagation)" << endl;
-            throw Timeout("IC3 timeout");
+              cout << oss.str() << endl;
+            if (st.ss.opts.propagate) {
+              int timeout = st.opts.timeout;
+              st.opts.timeout = -1;
+              st.cons->timeout();
+              CubeSet indCubes;
+              propagateClausesSpecial(st, st.cubes.size() - 2, indCubes);
+              st.opts.timeout = timeout;
+              throw IC3Timeout(oss.str(), indCubes);
+            }
+            throw IC3Timeout(oss.str());
+          }
+        }
+        if (st.ss.opts.action) {
+          if (st.ss.opts.action->futureReady()) {
+            ostringstream oss;
+            oss << "IC3" << (st.ss.reverse ? "r" : "")
+                << ": terminated (during propagation)";
+            throw Termination(oss.str());
           }
         }
       }
@@ -3174,7 +3237,7 @@ namespace {
     try {
       propagateClauses(st, k, false, false, false);
     }
-    catch(Safe safe) {
+    catch(Safe const & safe) {
       assert(false);
     }
 
@@ -3183,7 +3246,7 @@ namespace {
     delete sst.cons;
     sst.cons = st.m.newSATManager();
 
-    CNFAttachment * cnfat = (CNFAttachment *) st.m.constAttachment(Key::CNF);
+    CNFAttachment const * const cnfat = (CNFAttachment const *) st.m.constAttachment(Key::CNF);
     vector< vector<ID> > cons_clauses = cnfat->getPlainCNF();
     st.m.constRelease(cnfat);
     if(st.ss.opts.constraints) {
@@ -3194,9 +3257,9 @@ namespace {
     }
 
     if(st.ss.reverse) {
-      ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+      ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
       vector<ID> latches(eat->stateVars());
- 
+
       // switch primed and unprimed vars
       set<ID> tpv(latches.begin(), latches.end());
       set_union(tpv.begin(), tpv.end(), eat->inputs().begin(), eat->inputs().end(), inserter(tpv, tpv.end()));
@@ -3239,7 +3302,7 @@ namespace {
         }
         SAT::Clauses icons_clauses(cons_clauses);
         icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
-        ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+        ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
         for (vector<ID>::const_iterator it = eat->constraintFns().begin(); it != eat->constraintFns().end(); ++it)
           Expr::tseitin(st.ev, *it, init_clauses);
         st.m.constRelease(eat);
@@ -3330,7 +3393,7 @@ namespace {
     assumps.insert(assumps.end(), curState.begin(), curState.end());
     assumps.insert(assumps.end(), inputs.begin(), inputs.end());
     vector<ID> notTargetPr;
-    complement(st.ev, target, notTargetPr);
+    Expr::complement(st.ev, target, notTargetPr);
     primeFormulas(st.ev, notTargetPr);
     notTargetPr.push_back(st.ev.apply(Expr::Not, st.ss.actNegTp));
     SAT::GID gid = st.lift->newGID();
@@ -3339,7 +3402,7 @@ namespace {
     st.lift->remove(gid);
     assert(!sat);
     curState.clear();
-    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
     for (vector<ID>::const_iterator it = assumps.begin(); it != assumps.end(); ++it) {
       if (eat->isStateVar(*it) || eat->isStateVar(st.ev.apply(Expr::Not, *it))) {
         curState.push_back(*it);
@@ -3349,7 +3412,7 @@ namespace {
   }
 
   struct ToPush {
-    ToPush(int k, int dlvl, vector<ID> cube, vector<ID> gen, int idx = 0) : 
+    ToPush(int k, int dlvl, vector<ID> cube, vector<ID> gen, int idx = 0) :
       k(k), dlvl(dlvl), cube(cube), lastGen(gen), nodeIdx(idx)  {}
     int k;
     int dlvl;
@@ -3377,8 +3440,8 @@ namespace {
 
   typedef set<ToPush, ToPushComp> PushSet;
 
-  void pushGeneralization(State & st, int toK, PushSet & toPush, 
-                          vector<Node> & skeleton) 
+  void pushGeneralization(State & st, int toK, PushSet & toPush,
+                          vector<Node> & skeleton)
   {
     while (!toPush.empty()) {
       PushSet::iterator tp = toPush.begin();
@@ -3386,10 +3449,11 @@ namespace {
 
       SAT::Assignment asgn;
         prepareAssign(st, asgn, tp->dlvl+1,
-              st.ss.opts.printCex || st.ss.opts.lift, false, false, st.ss.opts.intNodes);
+              (st.ss.opts.printCex && !st.ss.reverse) || st.ss.opts.lift,
+              false, st.ss.opts.printCex && st.ss.reverse, st.ss.opts.intNodes);
 
       bool cons = false;
-      int n;
+      int n = 0; // arbitrary initialization to prevent warning
       if (st.ss.opts.leapfrog) {
         st.ss.stats.numConsPW++;
         vector<ID> lastGen(tp->lastGen);
@@ -3416,9 +3480,12 @@ namespace {
         toPush.erase(tp);
       }
       else {
-        vector<ID> pred, inputs;
+        vector<ID> pred, inputs, dummy;
         if(st.ss.opts.printCex || st.ss.opts.lift) {
-          fullAssignOf(st, asgn, pred, inputs);
+          if (st.ss.reverse)
+            fullAssignWithPrimedInputsOf(st, asgn, pred, dummy, inputs);
+          else
+            fullAssignOf(st, asgn, pred, inputs);
           if (st.ss.opts.lift)
             liftClsCti(st, pred, inputs, cube);
         }
@@ -3455,7 +3522,7 @@ namespace {
             Transition init = st.cex.back();
             popBackTransition(st);
             Transition init2;
-            if(st.icons && st.opts.bmcsz) {
+            if((st.icons && st.opts.bmcsz) || st.ss.reverse) {
               init2 = st.cex.back();
               popBackTransition(st);
             }
@@ -3464,7 +3531,7 @@ namespace {
               addTransitionToCexTrace(st, rit->state, rit->inputs);
             }
             //Add back initial transition(s)
-            if(st.icons && st.opts.bmcsz)
+            if((st.icons && st.opts.bmcsz) || st.ss.reverse)
               st.cex.push_back(init2);
             st.cex.push_back(init);
           }
@@ -3511,30 +3578,28 @@ namespace {
       prepareError(st, k, assumps);
       SAT::Assignment asgn;
       prepareAssign(st, asgn, 1, st.ss.opts.printCex || st.ss.opts.lift,
-                    false, st.ss.opts.lift, st.ss.opts.intNodes);
+                    st.ss.opts.printCex, st.ss.opts.printCex || st.ss.opts.lift, st.ss.opts.intNodes);
 
       bool rv = st.cons->sat(&assumps, &asgn, NULL, SAT::NULL_GID, true);
       ++st.ss.stats.numPropQueries.back();
       if (rv) {
         vector<ID> asgnc, inputs;
-        if(st.ss.opts.printCex && !st.ss.opts.lift) {
-          //Separate asgn into current state, input, and next state
-          vector<ID> curState;
-          fullAssignOf(st, asgn, asgnc, inputs);
-          addTransitionToCexTrace(st, asgnc, inputs);
-        }
-        else if(st.ss.opts.lift) {
+        if(st.ss.opts.printCex || st.ss.opts.lift) {
           ++st.ss.stats.numLiftCubes;
           //Separate asgn into current state, input, and primed-input
-          vector<ID> nsInputs;
-          fullAssignWithPrimedInputsOf(st, asgn, asgnc, inputs, nsInputs);
+          vector<ID> nState, nsInputs;
+          fullAssignWithPrimedBothOf(st, asgn, asgnc, inputs, nState, nsInputs);
           st.ss.stats.cubeSizeBef += asgnc.size();
-          if(st.m.verbosity() > Options::Verbose)
-            cout << "Before lifting: " << asgnc.size() << endl;
-          //Lift asgnc
-          liftPropCti(st, k, asgnc, inputs, nsInputs);
-          if (st.opts.printCex)
+          if (st.opts.lift) {
+            if(st.m.verbosity() > Options::Verbose)
+              cout << "Before lifting: " << asgnc.size() << endl;
+            //Lift asgnc
+            liftPropCti(st, k, asgnc, inputs, nsInputs);
+          }
+          if (st.opts.printCex) {
+            addTransitionToCexTrace(st, nState, nsInputs);
             addTransitionToCexTrace(st, asgnc, inputs);
+          }
         }
         else {
           assignOf(st, asgn, asgnc);
@@ -3566,14 +3631,16 @@ namespace {
           recordLits(st, asgnc);
           pushGeneralization(st, k, toPush, skeleton);
         }
-        if(st.ss.opts.printCex)
+        if(st.ss.opts.printCex) {
           popBackTransition(st);
+          popBackTransition(st);
+        }
       }
       else {
         if (st.m.verbosity() > Options::Informative)
-          cout << "IC3: SAT Count: " << st.cons->manager().satCount() << " " 
-               << ((float) st.cons->manager().satTime() / 
-                   (float) Util::get_user_cpu_time())  
+          cout << "IC3: SAT Count: " << st.cons->manager().satCount() << " "
+               << ((float) st.cons->manager().satTime() /
+                   (float) Util::get_thread_cpu_time())
                << endl;
         return first;
       }
@@ -3594,12 +3661,15 @@ namespace {
       if (st.m.verbosity() > Options::Informative) cout << "Level " << k << endl;
       extend(st, k);
       bool trivial = strengthen(st, k);
+      auto rat = st.m.attachment<RchAttachment>(Key::RCH);
+      rat->updateCexLowerBound(k + 2, string(st.ss.reverse ? "IC3r" : "IC3"));
+      st.m.release(rat);
       propagateClauses(st, k, trivial, shortCircuit);
       renewSAT(st);
     }
   }
 
-  bool verifyProof(Model & m, vector< vector<ID> > & proof, vector<SAT::Clauses> * constraints, IC3Options & opts, vector<ID> * gprop = NULL) {
+  bool verifyProof(Model & m, vector< vector<ID> > & proof, vector<SAT::Clauses> * constraints, IC3Options & opts, vector<ID> * gprop = NULL, Expr::Manager::View * v = NULL) {
     if (!opts.verify) return true;
 
     if (m.verbosity() == Options::Silent) return true;
@@ -3607,16 +3677,16 @@ namespace {
     if(m.verbosity() > Options::Informative) {
       cout << "IC3: Verifying proof" << endl;
     }
-   
+
     SAT::Manager * propertyMgr = m.newSATManager();
     SAT::Manager * proofMgr = m.newSATManager();
-    Expr::Manager::View * ev = m.newView();
+    Expr::Manager::View * ev = v ? v : m.newView();
 
-    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
     ID npi;
     if (gprop && !gprop->empty()) {
       vector<ID> cube;
-      complement(*ev, *gprop, cube);
+      Expr::complement(*ev, *gprop, cube);
       npi = ev->apply(Expr::And, cube);
     }
     else
@@ -3663,6 +3733,7 @@ namespace {
 
     {
       SharedState sst(m, opts);
+      sst.ev = ev;
       State _st(sst);
       initSAT(_st);
       if (sst.simpleInit) {
@@ -3676,7 +3747,7 @@ namespace {
           initMgr->add(negProof);
           init_sat = initView->sat();
         }
-        catch (SAT::Trivial tr) {
+        catch (SAT::Trivial const & tr) {
           assert (!tr.value());
           init_sat = false;
         }
@@ -3688,7 +3759,7 @@ namespace {
           _st.ss.init->add(negProof);
           init_sat = _st.init->sat();
         }
-        catch (SAT::Trivial tr) {
+        catch (SAT::Trivial const & tr) {
           assert (!tr.value());
           init_sat = false;
         }
@@ -3703,7 +3774,7 @@ namespace {
       propertyMgr->add(negPropertyPrimed);
       prop_sat = propertyView->sat();
     }
-    catch (SAT::Trivial tr) {
+    catch (SAT::Trivial const & tr) {
       assert (!tr.value());
       prop_sat = false;
     }
@@ -3716,8 +3787,8 @@ namespace {
       proofMgr->add(proof);
       proofMgr->add(negProofPrimed);
       proof_sat = proofView->sat();
-    } 
-    catch (SAT::Trivial tr) {
+    }
+    catch (SAT::Trivial const & tr) {
       assert (!tr.value());
       proof_sat = false;
     }
@@ -3729,21 +3800,22 @@ namespace {
       cout << "Proof inductive? " << (proof_sat? "No" : "Yes") << endl;
     }
 
-    delete ev;
+    if (!v)
+      delete ev;
     delete propertyMgr;
     delete proofMgr;
 
     return !(init_sat || prop_sat || proof_sat);
   }
 
-  void minimalCore(SAT::Manager::View * sv, const vector<ID> & assumps, 
-                   vector<ID> core) 
+  void minimalCore(SAT::Manager::View * sv, const vector<ID> & assumps,
+                   vector<ID> core)
   {
     for (unsigned int j = 0; j < core.size();) {
       vector<ID> ccore;
-      if (j > 0) 
+      if (j > 0)
         ccore.insert(ccore.end(), core.begin(), core.begin()+j-1);
-      if (j < core.size()-1) 
+      if (j < core.size()-1)
         ccore.insert(ccore.end(), core.begin()+j+1, core.end());
       vector<ID> _assumps(assumps);
       _assumps.insert(_assumps.end(), ccore.begin(), ccore.end());
@@ -3785,18 +3857,19 @@ namespace {
     }
   }
 
-  void oaCheck(SharedState & sst, bool shortCircuit) {
-    sst.stime = Util::get_user_cpu_time();
+  void oaCheck(SharedState & sst) {
+    sst.stime = Util::get_thread_cpu_time();
 
     sst.opts.printCex = true;
     bool optsprop = sst.opts.propagate;
     sst.opts.propagate = false;
+    sst.opts.lift = false;
 
     Expr::Manager::View * ev = sst.m.newView();
     ev->begin_local();
     sst.ev = ev;
 
-    ExprAttachment const * eat = (ExprAttachment *) sst.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) sst.m.constAttachment(Key::EXPR);
     vector<ID> inputs(eat->inputs());
     ID npi = eat->outputFnOf(eat->outputs())[0];
     vector<ID> init(eat->initialConditions());
@@ -3824,7 +3897,7 @@ namespace {
     else if (pat && !pat->concrete.empty()) {
       // from the pattern dictionary
       if (sst.opts.abs_prunehi >= 0
-          && pat->cnt < sst.opts.abs_prunehi 
+          && pat->cnt < sst.opts.abs_prunehi
           && (int) pat->concrete.size() > sst.opts.abs_prunelo)
         pat->concrete.erase(pat->concrete.begin());
       for (vector< set<ID> >::const_iterator i = pat->concrete.begin();
@@ -3836,7 +3909,7 @@ namespace {
       // new pattern, so form a fresh initial set
       if (!sst.opts.iictl)
         Expr::variables(*ev, npi, vs);
-      set_difference(vs.begin(), vs.end(), si.begin(), si.end(), 
+      set_difference(vs.begin(), vs.end(), si.begin(), si.end(),
                      inserter(concrete, concrete.end()));
       for (unsigned int i = 0; i < latches.size(); ++i)
         if (fns[i] == ev->btrue() || fns[i] == ev->bfalse())
@@ -3859,8 +3932,8 @@ namespace {
         ID act = ev->newVar(buf.str());
         acts.push_back(act);
         act2latch.insert(Expr::IDMap::value_type(act, latches[i]));
-        tr.push_back(ev->apply(Expr::Or, 
-                               ev->apply(Expr::Not, act), 
+        tr.push_back(ev->apply(Expr::Or,
+                               ev->apply(Expr::Not, act),
                                ev->apply(Expr::Equiv, ev->prime(latches[i]), fns[i])));
       }
       else
@@ -3891,7 +3964,7 @@ namespace {
     CNF::simplify(sst.m, cnf, _fulltr, extinputs, latches, fns, true, ev);
     if (sst.opts.constraints)
       for (unsigned i = 0; i < sst.opts.constraints->size(); ++i)
-        _fulltr.insert(_fulltr.end(), 
+        _fulltr.insert(_fulltr.end(),
                        (*sst.opts.constraints)[i].begin(),
                        (*sst.opts.constraints)[i].end());
     // _fulltr is the plain TR, fulltr has the property as well
@@ -3909,7 +3982,7 @@ namespace {
     if (sst.opts.bmcsz) {
       // step back one timestep
       initClss.insert(initClss.end(), _fulltr.begin(), _fulltr.end());
-      for (vector< vector<ID> >::iterator it = initClss.begin(); 
+      for (vector< vector<ID> >::iterator it = initClss.begin();
            it != initClss.end(); ++it)
         for (vector<ID>::iterator l = it->begin(); l != it->end(); ++l)
           if (sacts.find(*l) == sacts.end())
@@ -3927,6 +4000,15 @@ namespace {
     vector<ID> remActs(acts);
     int longestCex = 0;
     while (true) {
+      if (sst.opts.action) {
+        if (sst.opts.action->futureReady()) {
+          ev->end_local();
+          delete ev;
+          ostringstream oss;
+          oss << "IC3lr: terminated";
+          throw Termination(oss.str());
+        }
+      }
       if(sst.m.verbosity() > Options::Informative)
         cout << "Abstract: concrete: " << concrete.size() << endl;
 
@@ -3983,16 +4065,16 @@ namespace {
       bool ic3 = false;
       try {
         if (sst.opts.timeout > 0) {
-          int64_t sofar = Util::get_user_cpu_time() - sst.stime;
+          int64_t sofar = Util::get_thread_cpu_time() - sst.stime;
           if (sofar / 1000000 >= sst.opts.timeout) {
             if (sst.m.verbosity() > Options::Terse)
               cout << "IC3: timeout" << endl;
-            throw Timeout("IC3 timeout");
+            throw IC3Timeout("IC3 timeout");
           }
         }
 
-        if (longestCex <= sst.opts.abs_bmc 
-            && sst.opts.abs_bmctimeout <= Util::get_user_cpu_time() - sst.stime) {
+        if (longestCex <= sst.opts.abs_bmc
+            && sst.opts.abs_bmctimeout <= Util::get_thread_cpu_time() - sst.stime) {
           MC::AlternateModel am;
           am.init = init;
           am.inputs = sinputs;
@@ -4015,6 +4097,7 @@ namespace {
           bopts.timeout = sst.opts.abs_bmctimeout;
           bopts.useCOI = false;  // WHY?
           bopts.constraints = sst.opts.constraints;
+          bopts.action = sst.opts.action;
           bopts.ev = ev;
           vector<Transition> cexTrace;
           MC::ReturnValue rv = BMC::check(sst.m, bopts, &cexTrace);
@@ -4026,7 +4109,7 @@ namespace {
               rev.push_back(*i);
             throw CEX(rev);
           }
-          else 
+          else
             longestCex = sst.opts.abs_bmc+1;
         }
         ic3 = true;
@@ -4034,7 +4117,7 @@ namespace {
         _check(sst, false, true);
         assert (false);
       }
-      catch (CEX cex) {
+      catch (CEX & cex) {
         // try to concretize
         SAT::Clauses _fulltr(fulltr);
         SAT::Manager * consMgr = sst.m.newSATManager();
@@ -4102,7 +4185,7 @@ namespace {
           --k; // last level
           vector<Transition> ct(k + (sst.opts.bmcsz ? 2 : 1));
           set<ID> sinputs(inputs.begin(), inputs.end());
-          for (SAT::Assignment::const_iterator i = asgn.begin(); 
+          for (SAT::Assignment::const_iterator i = asgn.begin();
                i != asgn.end(); ++i) {
             int numPrimes = ev->nprimes(i->first);
             ID id = ev->unprime(i->first, numPrimes);
@@ -4127,7 +4210,7 @@ namespace {
               SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
               cons->timeout(sst.opts.timeout);
               cons->add(initClss);
-              for (vector<Transition>::const_reverse_iterator 
+              for (vector<Transition>::const_reverse_iterator
                      i = cex.cexTrace.rbegin()+j;
                    i+1 != cex.cexTrace.rend(); ++i, ++k) {
                 if (i+2 == cex.cexTrace.rend()) {
@@ -4140,7 +4223,7 @@ namespace {
                 }
                 if (k > 0) {
                   cons->add(_fulltr);
-                  for (SAT::Clauses::iterator j = _fulltr.begin(); 
+                  for (SAT::Clauses::iterator j = _fulltr.begin();
                        j != _fulltr.end(); ++j) {
                     for (vector<ID>::iterator l = j->begin(); l != j->end(); ++l)
                       if (sacts.find(*l) == sacts.end())
@@ -4157,7 +4240,7 @@ namespace {
               assert (!rv);
               cout << "AFTER (cex BMC): " << assumps.size() << endl;
               set<ID> nc;
-              for (vector<ID>::const_iterator i = assumps.begin(); 
+              for (vector<ID>::const_iterator i = assumps.begin();
                    i != assumps.end(); ++i)
                 nc.insert(act2latch[*i]);
               updatePattern(sst, nc);
@@ -4178,7 +4261,7 @@ namespace {
                 for (CubeSet::const_iterator i = sst.cubes[k].begin();
                      i != sst.cubes[k].end(); ++i) {
                   vector<ID> cls;
-                  complement(*ev, *i, cls);
+                  Expr::complement(*ev, *i, cls);
                   cons->add(cls);
                 }
                 if (k+1 == sst.cubes.size() || sst.cubes[k+1].empty()) continue;
@@ -4210,7 +4293,7 @@ namespace {
               cout << "BEFORE (cex IC3): " << acts.size()-remActs.size() << endl;
               cout << "AFTER (cex IC3): " << keep.size() << endl;
               set<ID> nc;
-              for (vector<ID>::const_iterator i = keep.begin(); 
+              for (vector<ID>::const_iterator i = keep.begin();
                    i != keep.end(); ++i)
                 nc.insert(act2latch[*i]);
               updatePattern(sst, nc);
@@ -4263,7 +4346,7 @@ namespace {
               for (; !sst.cubes[k].empty(); ++k) {
                 bool pconv = k+1 == sst.cubes.size() || sst.cubes[k+1].empty();
                 if(sst.m.verbosity() > Options::Informative)
-                  cout << k << " " << sst.cubes[k].size() 
+                  cout << k << " " << sst.cubes[k].size()
                        << (pconv ? "*" : "") << endl;
                 if (k+1 == sst.cubes.size())
                   sst.cubes.push_back(CubeSet());
@@ -4272,7 +4355,7 @@ namespace {
                   for (CubeSet::const_iterator i = sst.cubes[kk].begin();
                        i != sst.cubes[kk].end(); ++i) {
                     vector<ID> cls;
-                    complement(*ev, *i, cls);
+                    Expr::complement(*ev, *i, cls);
                     cons->add(cls, gid);
                   }
                 bool dropped = false;
@@ -4323,13 +4406,21 @@ namespace {
               remActs.erase(j);
             else
               ++j;
+#ifdef NOTCOMP
           assert (concrete.size() > sz);
+#else
+          if (concrete.size() <= sz) {
+            //Something went wrong. Abort IC3lr but not the entire process to
+            //give a chance to the other engines.
+            throw IC3Timeout("");
+          }
+#endif
 
           delete cons;
           delete consMgr;
         }
       }
-      catch (Safe safe) {
+      catch (Safe & safe) {
         // it's a proof
         if (acts.size() > remActs.size() && (sst.opts.iictl || sst.opts.fair)) {
           SAT::Manager * consMgr = sst.m.newSATManager();
@@ -4342,7 +4433,7 @@ namespace {
           for (CubeSet::const_iterator i = cubes.begin(); i != cubes.end(); ++i) {
             vector<ID> cube(*i), cls;
             disj.push_back(ev->apply(Expr::And, cube));
-            complement(*ev, cube, cls);
+            Expr::complement(*ev, cube, cls);
             p.push_back(cls);
           }
           cons->add(p);
@@ -4373,7 +4464,7 @@ namespace {
         if (pat) pat->resume.clear();
         throw safe;
       }
-      catch (Timeout to) {
+      catch (IC3Timeout const & to) {
         // save the current concrete set
         if (pat) {
           pat->resume.clear();
@@ -4388,12 +4479,12 @@ namespace {
     }
   }
 
-  void uaCheck(SharedState & sst, bool shortCircuit = true) {
-    sst.stime = Util::get_user_cpu_time();
+  void uaCheck(SharedState & sst) {
+    sst.stime = Util::get_thread_cpu_time();
 
     Expr::Manager::View * ev = sst.m.newView();
 
-    ExprAttachment const * eat = (ExprAttachment *) sst.m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) sst.m.constAttachment(Key::EXPR);
     vector<ID> inputs(eat->inputs()), frozen(eat->inputs());
     ID npi = eat->outputFnOf(eat->outputs())[0];
     vector<ID> init(eat->initialConditions());
@@ -4442,7 +4533,7 @@ namespace {
       cassumps = assumps;
     }
     cons->remove(gid);
-    
+
     cout << "Abstraction: frozen after err: " << frozen.size() << endl;
 
     vector<SAT::Clauses> dummy;
@@ -4469,7 +4560,7 @@ namespace {
           if (ev->op(init[i]) == Expr::Var)
             sub.insert(ThreeValued::Map::value_type(init[i], ThreeValued::TVTrue));
           else
-            sub.insert(ThreeValued::Map::value_type(ev->apply(Expr::Not, init[i]), 
+            sub.insert(ThreeValued::Map::value_type(ev->apply(Expr::Not, init[i]),
                                                     ThreeValued::TVFalse));
         bool changed = true;
         while (changed) {
@@ -4493,8 +4584,8 @@ namespace {
         for (unsigned int i = 0; i < sfns.size(); ++i) {
           ThreeValued::TV v = sub[latches[i]];
           if (v != ThreeValued::TVX)
-            units.push_back(ev->apply(Expr::Equiv, latches[i], 
-                                      v == ThreeValued::TVTrue ? ev->btrue() 
+            units.push_back(ev->apply(Expr::Equiv, latches[i],
+                                      v == ThreeValued::TVTrue ? ev->btrue()
                                       : ev->bfalse()));
         }
         mkunits = !units.empty();
@@ -4603,14 +4694,14 @@ namespace {
         _check(sst, false, true);
         assert (false);
       }
-      catch (CEX cex) {
+      catch (CEX const & cex) {
         if (wasnull) sst.opts.constraints = NULL;
         delete ev;
         delete cons;
         delete consMgr;
         throw cex;
       }
-      catch (Safe safe) {
+      catch (Safe const & safe) {
         if (frozen.empty()) {
           if (wasnull) sst.opts.constraints = NULL;
           delete ev;
@@ -4677,7 +4768,7 @@ namespace {
           cout << "Abstract: critical units: " << units.size() << endl;
         }
 
-        cout << (prf.size() > 0 ? "*" : "") << "Abstraction: prf before: " 
+        cout << (prf.size() > 0 ? "*" : "") << "Abstraction: prf before: "
              << prf.size() << endl;
 
         set<ID> drop;
@@ -4710,7 +4801,7 @@ namespace {
 
         gid = cons->newGID();
         cons->add(prf, gid);
-        for (SAT::Clauses::iterator it = prf.begin(); 
+        for (SAT::Clauses::iterator it = prf.begin();
              it != prf.end() && (drop.empty() || !sst.opts.abs_onedrop);
              ++it) {
           while (drop.empty() || !sst.opts.abs_onedrop) {
@@ -4811,7 +4902,7 @@ namespace {
           cons->remove(gid);
         }
 
-        cout << (prf.size() > 0 ? "**" : "") << "Abstraction: prf after: " 
+        cout << (prf.size() > 0 ? "**" : "") << "Abstraction: prf after: "
              << prf.size() << endl;
 
         for (vector<ID>::iterator it = frozen.begin(); it != frozen.end();)
@@ -4846,14 +4937,14 @@ namespace {
 
   void check(SharedState & sst, bool shortCircuit = true) {
     if (sst.opts.abstract == 0) {
-      sst.stime = Util::get_user_cpu_time();
+      sst.stime = Util::get_thread_cpu_time();
       _check(sst, shortCircuit);
     }
     else if (sst.opts.abstract == 3) {
-      oaCheck(sst, shortCircuit);
+      oaCheck(sst);
     }
     else {
-      uaCheck(sst, shortCircuit);
+      uaCheck(sst);
     }
   }
 
@@ -4864,7 +4955,7 @@ namespace {
     if(st.gprop.empty()) {
       if(!st.opts.iictl) {
         st.transRel = cnfat->getCNF();
-        ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+        ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
         st.npi = Expr::primeFormula(*st.ev, eat->outputFns()[0]);
         Expr::tseitin(*st.ev, st.npi, st.negPropPrimedCNF);
       }
@@ -4886,19 +4977,19 @@ namespace {
       }
     }
     else {
-      //Property is generalized and is a clause 
+      //Property is generalized and is a clause
       st.transRel = cnfat->getPlainCNF();
       vector<ID> cube;
-      complement(*st.ev, st.gprop, cube);
+      Expr::complement(*st.ev, st.gprop, cube);
       Expr::primeFormulas(*st.ev, cube);
       st.npi = st.ev->apply(Expr::And, cube);
       st.negGPropertyPrimed.insert(st.negGPropertyPrimed.end(),
                                    cube.begin(), cube.end());
       st.propCube.insert(st.negGPropertyPrimed.begin(), st.negGPropertyPrimed.end());
     }
- 
+
     //Get COI latches
-    COIAttachment const * coiat = (COIAttachment *) st.m.constAttachment(Key::COI);
+    COIAttachment const * const coiat = (COIAttachment const *) st.m.constAttachment(Key::COI);
     st.coi = coiat->coi();
     st.m.constRelease(coiat);
 
@@ -4949,13 +5040,13 @@ namespace {
   void addProperty(Model & m, vector< vector<ID> > & proof) {
     Expr::Manager::View * ev = m.newView();
     //Get CNF for property
-    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
     ID npi = eat->outputFnOf(eat->outputs()[0]);
     m.constRelease(eat);
 
     vector<ID> cube, cls;
     Expr::conjuncts(*ev, npi, cube);
-    complement(*ev, cube, cls);
+    Expr::complement(*ev, cube, cls);
     proof.push_back(cls);
 
     delete ev;
@@ -4964,7 +5055,7 @@ namespace {
 
   bool deriveStrongerProof(ProofPostProcState & st, vector< vector<ID> > & proof,
       IC3::IC3Options & opts, bool forceMicProperty = false) {
-  
+
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Deriving a stronger proof: ";
       printProofSize(proof);
@@ -4972,14 +5063,14 @@ namespace {
         cout << "Property has " << st.gprop.size() << " literals" << endl;
       }
     }
-    int numLitsPre = 0; 
+    int numLitsPre = 0;
     for(vector< vector<ID> >::const_iterator it = proof.begin();
         it != proof.end(); ++it) {
       numLitsPre += it->size();
     }
     int propLitsPre = st.gprop.size();
 
-    int64_t startTime = Util::get_user_cpu_time();
+    int64_t startTime = Util::get_thread_cpu_time();
 
     bool old_cycle = opts.cycle;
     opts.eqprop = false;
@@ -4987,34 +5078,35 @@ namespace {
 
     //State of SAT manager after next block of statements: P ^ T ^ !P'
     SharedState sst(st.m, opts);
+    sst.ev = st.ev;
     State _st(sst);
     initSAT(_st);
     extend(_st, 0);
 
     vector<ID> cube;
     if(!st.gprop.empty()) {
-      complement(_st.ev, st.gprop, cube);
+      Expr::complement(_st.ev, st.gprop, cube);
       addCube(_st, 1, cube);
     }
     //State of SAT manager after next block of statements: F ^ P ^ T ^ !P'
     for (SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it) {
       vector<ID> cube;
-      complement(_st.ev, *it, cube);
+      Expr::complement(_st.ev, *it, cube);
       addCube(_st, 1, cube);
     }
 
     bool reduced = true;
-    bool timedout = true;
+    bool timedout = false;
     int timeout = st.m.options()["fair_pp_timeout"].as<int>();
     while(reduced) {
       reduced = false;
       SAT::Clauses nproof;
       for (SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it) {
         vector<ID> cube;
-        complement(_st.ev, *it, cube);
+        Expr::complement(_st.ev, *it, cube);
         if (!timedout && timeout > 0) {
-          int64_t elapsed = Util::get_user_cpu_time() - startTime;
-          if (elapsed > timeout)
+          int64_t elapsed = Util::get_thread_cpu_time() - startTime;
+          if (elapsed / 1000000 > timeout)
             timedout = true;
         }
         if (!timedout)
@@ -5022,7 +5114,7 @@ namespace {
         if (cube.size() < it->size()) {
           reduced = true;
           vector<ID> cls;
-          complement(_st.ev, cube, cls);
+          Expr::complement(_st.ev, cube, cls);
           nproof.push_back(cls);
           addCube(_st, 1, cube);
         }
@@ -5038,7 +5130,7 @@ namespace {
       CubeSet cubes;
       for(SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it) {
         vector<ID> cube;
-        complement(_st.ev, *it, cube);
+        Expr::complement(_st.ev, *it, cube);
         cubes.insert(cube);
       }
       SubsumptionUniverse su;
@@ -5047,7 +5139,7 @@ namespace {
       proof.clear();
       for(CubeSet::const_iterator it = cubes.begin(); it != cubes.end(); ++it) {
         vector<ID> cls;
-        complement(_st.ev, *it, cls);
+        Expr::complement(_st.ev, *it, cls);
         proof.push_back(cls);
       }
       if(st.m.verbosity() > Options::Verbose) {
@@ -5060,7 +5152,7 @@ namespace {
         if(cube.size() < st.gprop.size()) {
           reduced = true;
           st.gprop.clear();
-          complement(_st.ev, cube, st.gprop);
+          Expr::complement(_st.ev, cube, st.gprop);
           addCube(_st, 1, cube);
           st.npi = st.ev->btrue();
           st.negGPropertyPrimed.clear();
@@ -5076,7 +5168,7 @@ namespace {
 
     opts.cycle = old_cycle;
 
-    int64_t endTime = Util::get_user_cpu_time();
+    int64_t endTime = Util::get_thread_cpu_time();
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Stronger proof derived: ";
       printProofSize(proof);
@@ -5086,14 +5178,14 @@ namespace {
       cout << "Time elapsed (stronger) = " << (endTime - startTime) / 1000000.0 << "s" << endl;
     }
 
-    int numLitsPost = 0; 
+    int numLitsPost = 0;
     for(vector< vector<ID> >::const_iterator it = proof.begin();
         it != proof.end(); ++it) {
       numLitsPost += it->size();
     }
     int propLitsPost = st.gprop.size();
 
-    return (numLitsPost != numLitsPre || propLitsPost != propLitsPre); 
+    return (numLitsPost != numLitsPre || propLitsPost != propLitsPre);
 
 
   }
@@ -5105,10 +5197,10 @@ namespace {
     }
     int numClausesPre = proof.size();
 
-    int64_t startTime = Util::get_user_cpu_time();
+    int64_t startTime = Util::get_thread_cpu_time();
 
     SAT::Manager * satMgr = st.m.newSATManager();
-   
+
     //Add generalized property to SAT database
     if(!st.gprop.empty())
       satMgr->add(st.gprop);
@@ -5143,7 +5235,7 @@ namespace {
       ID nvar = ev->apply(Expr::Not, var);
       vector<ID> clause = proof[i];
       vector<ID> cube;
-      complement(*ev, clause, cube);
+      Expr::complement(*ev, clause, cube);
       primeFormulas(*ev, cube);
       cubes.push_back(unordered_set<ID>(cube.begin(), cube.end()));
       clause.push_back(nvar);
@@ -5190,7 +5282,7 @@ namespace {
     for(vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it) {
       asgn.insert(SAT::Assignment::value_type(ev->prime(*it), SAT::Unknown));
     }
- 
+
     set<unsigned> clauseVarsIndices;
     for(unsigned i = 0; i < clauseVars.size(); ++i) {
       clauseVarsIndices.insert(i);
@@ -5201,8 +5293,8 @@ namespace {
     int timeout = st.m.options()["fair_pp_timeout"].as<int>();
     while(!clauseVarsIndices.empty()) {
       if (timeout > 0) {
-        int64_t elapsed = Util::get_user_cpu_time() - startTime;
-        if (elapsed > timeout)
+        int64_t elapsed = Util::get_thread_cpu_time() - startTime;
+        if (elapsed / 1000000 > timeout)
           break;
       }
       //Disable a clause
@@ -5309,7 +5401,7 @@ namespace {
 
     proof = weakerProof;
 
-    int64_t endTime = Util::get_user_cpu_time();
+    int64_t endTime = Util::get_thread_cpu_time();
 
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Weaker proof derived: ";
@@ -5329,25 +5421,25 @@ namespace {
       printProofSize(proof);
     }
 
-    int64_t startTime = Util::get_user_cpu_time();
+    int64_t startTime = Util::get_thread_cpu_time();
 
     //Apply each of deriveStrongerProof and deriveWeakerProof once
     bool strengthened = deriveStrongerProof(st, proof, opts);
-    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
+    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop, st.ev));
     bool weakened = deriveWeakerProof(st, proof);
-    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
+    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop, st.ev));
 
     while(weakened && !proof.empty()) {
       strengthened = deriveStrongerProof(st, proof, opts, true);
-      assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
+      assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop, st.ev));
       weakened = false;
       if(strengthened && !proof.empty()) {
         weakened = deriveWeakerProof(st, proof);
-        assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
+        assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop, st.ev));
       }
     }
 
-    int64_t endTime = Util::get_user_cpu_time();
+    int64_t endTime = Util::get_thread_cpu_time();
 
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Smaller proof derived: ";
@@ -5378,16 +5470,25 @@ namespace {
     }
   }
 
-  bool fsisConsecution(State & st, vector<ID> & cube, 
+  bool fsisConsecution(State & st, vector<ID> & cube,
                    SAT::Assignment * asgn = NULL, bool rcore = true,
-                   bool full_init = false, SAT::Assignment * lifted = NULL) 
+                   bool full_init = false, SAT::Assignment * lifted = NULL)
   {
     if (st.ss.opts.timeout > 0) {
-      int64_t sofar = Util::get_user_cpu_time() - st.ss.stime;
+      int64_t sofar = Util::get_thread_cpu_time() - st.ss.stime;
       if (sofar / 1000000 >= st.ss.opts.timeout) {
+        ostringstream oss;
+        oss << "IC3" << (st.ss.reverse ? "r" : "") << ": timeout";
         if (st.m.verbosity() > Options::Terse)
-          cout << "IC3" << (st.ss.reverse ? "r" : "") << ": timeout" << endl;
-        throw Timeout("IC3 timeout");
+          cout << oss.str() << endl;
+        throw IC3Timeout(oss.str());
+      }
+    }
+    if (st.ss.opts.action) {
+      if (st.ss.opts.action->futureReady()) {
+        ostringstream oss;
+        oss << "IC3" << (st.ss.reverse ? "r" : "") << ": terminated";
+        throw Termination(oss.str());
       }
     }
 
@@ -5403,11 +5504,11 @@ namespace {
     else {
       if (rcore) {
         vector<ID> copy(cube);
-        // reduce the cube by the unsat core  
+        // reduce the cube by the unsat core
         cube.clear();
         sort(assumps.begin(), assumps.end());
         for (vector<ID>::iterator it = copy.begin(); it != copy.end(); it++)
-          if (binary_search(assumps.begin(), assumps.end(), 
+          if (binary_search(assumps.begin(), assumps.end(),
                             Expr::primeFormula(st.ev, *it)))
             cube.push_back(*it);
         if (!initiation(st, cube)) {
@@ -5464,7 +5565,7 @@ namespace {
 
   typedef set<ToEliminate, ToEliminateComp> EliminateSet;
 
-  bool recurCTI(State & st, EliminateSet & toEliminate, vector<Node> & skeleton) {
+  bool recurCTI(State & st, EliminateSet & toEliminate, vector<Node> &) {
     while (!toEliminate.empty()) {
       if(st.m.verbosity() > Options::Verbose) {
         cout << "Size of toEliminate: " << toEliminate.size() << endl;
@@ -5476,7 +5577,7 @@ namespace {
       SAT::Assignment lifted(asgn);
 #ifdef IBM_LIFTING
       SAT::Assignment coiAsgn = asgn;
-      prepareAssign(st, asgn, -1, true); 
+      prepareAssign(st, asgn, -1, true);
 #endif
       if (fsisConsecution(st, cube, &asgn, true, true, &lifted)) {
         mic(st, 1, cube);
@@ -5529,7 +5630,7 @@ namespace {
             st.cons->remove(gid);
             int origSize = pred.size();
             pred.clear();
-            ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+            ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
 #if 0
             //Find the boundary between inputs and state variables
             size_t index = numInputs < assumps.size() ? numInputs - 1 : assumps.size() - 1;
@@ -5648,7 +5749,7 @@ namespace {
             st.cons->remove(gid);
             int origSize = asgnc.size();
             asgnc.clear();
-            ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+            ExprAttachment const * const eat = (ExprAttachment const *) st.m.constAttachment(Key::EXPR);
 #if 0
             //Find the boundary between inputs and state variables
             size_t index = numInputs < assumps.size() ? numInputs - 1 : assumps.size() - 1;
@@ -5705,9 +5806,9 @@ namespace {
       }
       else {
         if (st.m.verbosity() > Options::Informative)
-          cout << "FSIS: SAT Count: " << st.cons->manager().satCount() << " " 
-               << ((float) st.cons->manager().satTime() / 
-                   (float) Util::get_user_cpu_time())  
+          cout << "FSIS: SAT Count: " << st.cons->manager().satCount() << " "
+               << ((float) st.cons->manager().satTime() /
+                   (float) Util::get_thread_cpu_time())
                << endl;
         return true;
       }
@@ -5718,7 +5819,7 @@ namespace {
   void fsisCheck(SharedState & sst) {
     State st(sst);
     fsisInitSAT(st);
-    sst.stime = Util::get_user_cpu_time();
+    sst.stime = Util::get_thread_cpu_time();
     extend(st, 0);
     bool succeeded = fsisStrengthen(st);
     if(succeeded)
@@ -5732,14 +5833,15 @@ namespace IC3 {
 
   MC::ReturnValue check(Model & m, IC3Options & opts,
                         vector<Transition> * cexTrace,
-                        vector< vector<ID> > * proofCNF, 
+                        vector< vector<ID> > * proofCNF,
                         vector<ID> * gprop,
                         vector<CubeSet> * cubes,
                         vector<LevClauses> * propClauses,
                         CubeSet * indCubes,
                         bool useRAT,
-                        bool * bmcProof) {
-    RchAttachment const * rat = (RchAttachment *) m.constAttachment(Key::RCH);
+                        bool * bmcProof,
+                        Expr::Manager::View * ev) {
+    RchAttachment const * const rat = (RchAttachment const *) m.constAttachment(Key::RCH);
     unsigned int clb = useRAT ? rat->cexLowerBound() : 0;
     if (opts.useRAT_stem && rat->hasTvInfo() && opts.stem == 0)
       opts.stem = rat->stemLength();
@@ -5759,11 +5861,12 @@ namespace IC3 {
       bopts.silent = opts.silent;
       bopts.proofProc = opts.proofProc;
       bopts.timeout = opts.timeout;
-      int64_t stime = Util::get_user_cpu_time();
-      rv = BMC::check(m, bopts, cexTrace, proofCNF, 
+      bopts.ev = ev;
+      int64_t stime = Util::get_thread_cpu_time();
+      rv = BMC::check(m, bopts, cexTrace, proofCNF,
                       opts.stem > 0 ? &unrolling1 : NULL,
                       opts.stem > 0 ? &unrolling2 : NULL);
-      int64_t bmcTime = (Util::get_user_cpu_time() - stime) / 1000000;
+      int64_t bmcTime = (Util::get_thread_cpu_time() - stime) / 1000000;
       if (opts.timeout > 0) {
         if (bmcTime >= opts.timeout && rv.returnType == MC::Unknown)
           return rv;
@@ -5784,16 +5887,24 @@ namespace IC3 {
     }
     if(bmcProof)
       *bmcProof = false;
-    if (m.verbosity() > Options::Silent && !opts.silent)
-      cout << "IC3: starting" << (opts.reverse ? " (reverse)" : "") << endl;
-    if (m.verbosity() > Options::Terse && !opts.silent)
-      cout << "IC3: Using " << opts.backend << " as backend" << endl;
-    int rseed = m.options()["rand"].as<int>();
+    if (m.verbosity() > Options::Silent && !opts.silent) {
+      ostringstream oss;
+      oss << "IC3: starting"
+          << (opts.reverse ? " (reverse)" : opts.abstract > 0 ? " (lr)" : "")
+          << endl;
+      cout << oss.str();
+    }
+    if (m.verbosity() > Options::Terse && !opts.silent) {
+      ostringstream oss;
+      oss << "IC3: Using " << opts.backend << " as backend" << endl;
+      cout << oss.str();
+    }
+    int rseed = opts.rseed;
     if(rseed != -1) {
-      srand(rseed);
-      Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(rseed));
+      Random::srand(rseed);
     }
     SharedState sstate(m, opts, cubes, propClauses);
+    sstate.ev = ev;
     if (opts.stem > 0) {
       sstate.stem = &unrolling1;
       sstate.stem_plus = &unrolling2;
@@ -5803,76 +5914,72 @@ namespace IC3 {
     try {
       check(sstate, !proofCNF);
     }
-    catch (CEX cex) {
+    catch (CEX const & cex) {
       rt.returnType = MC::CEX;
       if(cexTrace != NULL) {
         assert(!cex.cexTrace.empty());
         Expr::Manager::View * ev = m.newView();
         *cexTrace = cex.cexTrace;
-        reverse(cexTrace->begin(), cexTrace->end());
+        if (opts.reverse) {
+          //Shift the input vectors by one
+          for (unsigned i = 1; i < cexTrace->size() - 1; ++i) {
+            (*cexTrace)[i].inputs = (*cexTrace)[i+1].inputs;
+          }
+          cexTrace->pop_back();
+        }
+        else
+          reverse(cexTrace->begin(), cexTrace->end());
         for(vector<Transition>::iterator it = cexTrace->begin(); it != cexTrace->end(); ++it) {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
-        //Concretize
-        ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
-        Expr::IDMap cur;
-        const Transition & init = cexTrace->front();
-        for (vector<ID>::const_iterator it = init.state.begin(); it != init.state.end(); ++it) {
-          bool pos = ev->op(*it) == Expr::Not ? false : true;
-          ID var = pos ? *it : ev->apply(Expr::Not, *it);
-          cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
-        }
-        for (vector<ID>::const_iterator it = init.inputs.begin(); it != init.inputs.end(); ++it) {
-          bool pos = ev->op(*it) == Expr::Not ? false : true;
-          ID var = pos ? *it : ev->apply(Expr::Not, *it);
-          cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
-        }
-        for (vector<Transition>::iterator trIt = cexTrace->begin()+1; trIt != cexTrace->end(); ++trIt) {
-          vector<ID> next = eat->nextStateFns();
-          varSub(*ev, cur, next);
-          cur.clear();
-          trIt->state.clear();
-          for (unsigned i = 0; i < next.size(); ++i) {
-            assert(next[i] == ev->btrue() || next[i] == ev->bfalse());
-            ID stateVar = eat->stateVars()[i];
-            trIt->state.push_back(next[i] == ev->btrue() ? stateVar : ev->apply(Expr::Not, stateVar));
-            cur.insert(Expr::IDMap::value_type(stateVar, next[i]));
+        if (opts.verify_cex) {
+          //Concretize
+          ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
+          Expr::IDMap cur;
+          Transition & init = cexTrace->front();
+          //If COI is not run, the initial state in the counterexample might
+          //not contain all initial conditions because IC3 only requests
+          //assignments for latches in the COI. Thus add them back.
+          set<ID> initSet(init.state.begin(), init.state.end());
+          for (vector<ID>::const_iterator it = eat->initialConditions().begin(); it != eat->initialConditions().end(); ++it) {
+            if (initSet.find(*it) == initSet.end())
+              init.state.push_back(*it);
           }
-          for (vector<ID>::const_iterator it = trIt->inputs.begin(); it != trIt->inputs.end(); ++it) {
+          for (vector<ID>::const_iterator it = init.state.begin(); it != init.state.end(); ++it) {
             bool pos = ev->op(*it) == Expr::Not ? false : true;
             ID var = pos ? *it : ev->apply(Expr::Not, *it);
             cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
           }
+          for (vector<ID>::const_iterator it = init.inputs.begin(); it != init.inputs.end(); ++it) {
+            bool pos = ev->op(*it) == Expr::Not ? false : true;
+            ID var = pos ? *it : ev->apply(Expr::Not, *it);
+            cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
+          }
+          for (vector<Transition>::iterator trIt = cexTrace->begin()+1; trIt != cexTrace->end(); ++trIt) {
+            vector<ID> next = eat->nextStateFns();
+            varSub(*ev, cur, next);
+            cur.clear();
+            trIt->state.clear();
+            for (unsigned i = 0; i < next.size(); ++i) {
+              assert(next[i] == ev->btrue() || next[i] == ev->bfalse());
+              ID stateVar = eat->stateVars()[i];
+              trIt->state.push_back(next[i] == ev->btrue() ? stateVar : ev->apply(Expr::Not, stateVar));
+              cur.insert(Expr::IDMap::value_type(stateVar, next[i]));
+            }
+            for (vector<ID>::const_iterator it = trIt->inputs.begin(); it != trIt->inputs.end(); ++it) {
+              bool pos = ev->op(*it) == Expr::Not ? false : true;
+              ID var = pos ? *it : ev->apply(Expr::Not, *it);
+              cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
+            }
+          }
+          //Sanity check: make sure state is bad
+          ID error = varSub(*ev, cur, eat->outputFns()[0]);
+          assert(error == ev->btrue());
+          if (m.verbosity() > Options::Informative)
+            cout << "IC3: Counterexample verified!" << endl;
+          m.constRelease(eat);
         }
-        //Error state
-        cexTrace->push_back(Transition());
-        vector<ID> next = eat->nextStateFns();
-        varSub(*ev, cur, next);
-        for (unsigned i = 0; i < next.size(); ++i) {
-          assert(next[i] == ev->btrue() || next[i] == ev->bfalse());
-          ID stateVar = eat->stateVars()[i];
-          cexTrace->back().state.push_back(next[i] == ev->btrue() ? stateVar : ev->apply(Expr::Not, stateVar));
-        }
-        //Sanity check: make sure state is bad. Use a SAT query rather than
-        //varSub to account for models for which the property is a function of
-        //primary inputs
-        SAT::Manager * sman = m.newSATManager();
-        SAT::Manager::View * sview = sman->newView(*ev);
-        SAT::Clauses npi;
-        tseitin(*ev, eat->outputFns()[0], npi);
-        try {
-          sview->add(npi);
-        }
-        catch (SAT::Trivial tr) {
-          assert(false); //Property is true?!
-        }
-        bool sat = sview->sat(&cexTrace->back().state);
-        assert(sat);
-        delete sview;
-        delete sman;
-
-        m.constRelease(eat);
         delete ev;
       }
       if(cubes != NULL) {
@@ -5884,7 +5991,7 @@ namespace IC3 {
         *indCubes = cex.indCubes;
       }
     }
-    catch (Safe safe) {
+    catch (Safe const & safe) {
       rt.returnType = MC::Proof;
       if(proofCNF != NULL) {
         Expr::Manager::View * ev = m.newView();
@@ -5897,12 +6004,16 @@ namespace IC3 {
         if (gprop) *gprop = safe.gprop;
       }
     }
-    catch (Timeout to) {
+    catch (IC3Timeout const & to) {
       rt.returnType = MC::Unknown;
 
-      //if (!sstate.opts.reverse) {
-        // do the incremental thing here, as well
-        if (indCubes || sstate.opts.propNconstr) {
+      // do the incremental thing here, as well
+      if (indCubes || sstate.opts.propNconstr) {
+        if (m.verbosity() > Options::Informative)
+          cout << "Number of F_inf cubes = " << sstate.infCubes.size() << endl;
+        if (indCubes)
+          *indCubes = to.indCubes;
+        if (sstate.opts.propNconstr && !_indCubes.empty()) {
           if (m.verbosity() > Options::Informative)
             cout << "Number of F_inf cubes = " << sstate.infCubes.size() << endl;
           int timeout = sstate.opts.timeout;
@@ -5920,7 +6031,7 @@ namespace IC3 {
             if (m.verbosity() > Options::Informative)
               cout << "Total F_inf cubes = " << _indCubes.size() << endl;
             Expr::Manager::View * ev = m.newView();
-            ExprAttachment * eat = (ExprAttachment*) m.attachment(Key::EXPR);
+            auto eat = m.attachment<ExprAttachment>(Key::EXPR);
             for (CubeSet::const_iterator it = _indCubes.begin(); it != _indCubes.end();
                  ++it) {
               ostringstream oss;
@@ -5932,34 +6043,35 @@ namespace IC3 {
               eat->addConstraint(discConstr, ev->apply(Expr::Not, ev->apply(Expr::And, cube)));
               if (m.verbosity() > Options::Verbose) {
                 vector<ID> cls;
-                complement(*ev, *it, cls);
+                Expr::complement(*ev, *it, cls);
                 for(vector<ID>::const_iterator it2 = cls.begin(); it2 != cls.end();
                     ++it2) {
                   cout << Expr::stringOf(*ev, *it2) << " ";
                 }
                 cout << endl;
               }
+              cout << endl;
             }
             m.release(eat);
             delete ev;
           }
- 
-          if (cubes && sstate.opts.incremental) {
-            CubeSet result;
-            set_difference(sstate.cubes.back().begin(), sstate.cubes.back().end(),
-                           indCubes->begin(), indCubes->end(),
-                           inserter(result, result.end()));
-            sstate.cubes.back() = result;
-          }
         }
-        if(cubes && sstate.opts.incremental) {
-          *cubes = sstate.cubes;
-          // IGNORE propClauses
+
+        if (cubes && sstate.opts.incremental) {
+          CubeSet result;
+          set_difference(sstate.cubes.back().begin(), sstate.cubes.back().end(),
+                         indCubes->begin(), indCubes->end(),
+                         inserter(result, result.end()));
+          sstate.cubes.back() = result;
         }
-      //}
+      }
+      if(cubes && sstate.opts.incremental) {
+        *cubes = sstate.cubes;
+        // IGNORE propClauses
+      }
 
       if (useRAT) {
-        RchAttachment * rat = (RchAttachment *) m.constAttachment(Key::RCH);
+        auto rat = m.attachment<RchAttachment>(Key::RCH);
         Expr::Manager::View * ev = m.newView();
         for (unsigned int i = 1; i < sstate.cubes.size(); ++i) {
           const CubeSet & cs = sstate.cubes[i];
@@ -5973,17 +6085,17 @@ namespace IC3 {
             rat->setKForwardUpperBound(i, lvl);
         }
         if (sstate.cubes.size() > 2)
-          rat->updateCexLowerBound(sstate.cubes.size() - 2);
+          rat->updateCexLowerBound(sstate.cubes.size() - 2, string(opts.reverse ? "IC3r" : "IC3"));
         delete ev;
         m.release(rat);
       }
     }
-    catch (Trivial tr) {
+    catch (Trivial const & tr) {
       if (m.verbosity() > Options::Informative)
         cout << "IC3: trivially unsat\n";
       rt.returnType = MC::Proof;
     }
-    catch (SAT::Trivial tr) {
+    catch (SAT::Trivial const & tr) {
       cout << tr.value() << endl;
       assert (false);
     }
@@ -5991,7 +6103,7 @@ namespace IC3 {
     if(opts.stats)
       sstate.stats.print();
 
-    if (sstate.ev) {
+    if (sstate.ev && !ev) {
       sstate.ev->end_local();
       delete sstate.ev;
     }
@@ -6007,7 +6119,7 @@ namespace IC3 {
   }
 
   void postProcessProof(Model & m, vector< vector<ID> > & proof, ProofProcType type,
-      IC3Options & opts, vector<ID> * gprop) {
+      IC3Options & opts, vector<ID> * gprop, Expr::Manager::View * ev) {
     if(proof.empty()) //Nothing to process
       return;
 
@@ -6019,12 +6131,12 @@ namespace IC3 {
     int abstract = opts.abstract;
     opts.abstract = 0;
 
-    ProofPostProcState st(m, opts);
+    ProofPostProcState st(m, opts, ev);
     if(gprop && !opts.iictl)
       st.gprop = *gprop;
     initProofPostProcState(st);
 
-    assert(verifyProof(m, proof, opts.constraints, opts, gprop));
+    assert(verifyProof(m, proof, opts.constraints, opts, gprop, ev));
 
     if (type == STRENGTHEN) {
       //Strengthen proof
@@ -6046,7 +6158,7 @@ namespace IC3 {
     if (gprop && !opts.iictl)
       *gprop = st.gprop;
 
-    assert(verifyProof(m, proof, opts.constraints, opts, gprop));
+    assert(verifyProof(m, proof, opts.constraints, opts, gprop, ev));
 
     opts.ctgs = ctgs;
     opts.abstract = abstract;
@@ -6057,7 +6169,8 @@ namespace IC3 {
                          vector< vector< vector<ID> > > * proofs,
                          vector<CubeSet> * cubes,
                          vector<LevClauses> * propClauses,
-                         CubeSet * indCubes) {
+                         CubeSet * indCubes,
+                         Expr::Manager::View * ev) {
 
     bool old_cycle = opts.cycle;
     opts.eqprop = false;
@@ -6069,15 +6182,15 @@ namespace IC3 {
     }
     vector<ID> gprop, concrete;
     bool bmcProof = true;
-    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes, 
-                               propClauses, indCubes, false, &bmcProof);
+    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes,
+                               propClauses, indCubes, false, &bmcProof, ev);
     opts.cycle = old_cycle;
     int timeout = opts.timeout;
     opts.timeout = -1;
 
     if(rv.returnType == MC::Proof && rawProof && !bmcProof) {
-      if(opts.proofProc != NONE) 
-        postProcessProof(m, *rawProof, opts.proofProc, opts, &gprop);
+      if(opts.proofProc != NONE)
+        postProcessProof(m, *rawProof, opts.proofProc, opts, &gprop, ev);
       if(!opts.iictl)
         rawProof->push_back(gprop);
     }
@@ -6117,11 +6230,11 @@ namespace FSIS {
 
   MC::ReturnValue check(Model & m, IC3::IC3Options & opts,
                         vector<Transition> * cexTrace,
-                        vector< vector<ID> > * proofCNF, 
+                        vector< vector<ID> > * proofCNF,
                         vector<ID> * gprop,
                         bool useRAT) {
 
-    RchAttachment const * rat = (RchAttachment *) m.constAttachment(Key::RCH);
+    RchAttachment const * const rat = (RchAttachment const *) m.constAttachment(Key::RCH);
     unsigned int clb = useRAT ? rat->cexLowerBound() : 0;
     m.constRelease(rat);
     MC::ReturnValue rv;
@@ -6137,59 +6250,65 @@ namespace FSIS {
     if (rv.returnType != MC::Unknown) {
       if(opts.printCex) {
         Expr::Manager::View * ev = m.newView();
+        ev->begin_local();
         for(vector<Transition>::iterator it = cexTrace->begin(); it != cexTrace->end(); ++it) {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
+        ev->end_local();
         delete ev;
       }
       return rv;
     }
     if (m.verbosity() > Options::Silent)
       cout << "FSIS: starting" << endl;
-    int rseed = m.options()["rand"].as<int>();
+    int rseed = opts.rseed;
     if(rseed != -1) {
-      srand(rseed);
-      Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(rseed));
+      Random::srand(rseed);
     }
     SharedState sstate(m, opts);
     MC::ReturnValue rt;
     try {
       fsisCheck(sstate);
     }
-    catch (CEX cex) {
+    catch (CEX const & cex) {
       rt.returnType = MC::CEX;
       if(cexTrace != NULL) {
         assert(!cex.cexTrace.empty());
         Expr::Manager::View * ev = m.newView();
+        ev->begin_local();
         *cexTrace = cex.cexTrace;
         reverse(cexTrace->begin(), cexTrace->end());
         for(vector<Transition>::iterator it = cexTrace->begin(); it != cexTrace->end(); ++it) {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
+        ev->end_local();
         delete ev;
       }
     }
-    catch (Safe safe) {
+    catch (Safe const & safe) {
       rt.returnType = MC::Proof;
       if(proofCNF != NULL) {
         Expr::Manager::View * ev = m.newView();
+        ev->begin_local();
         proofCNF->insert(proofCNF->end(), safe.proof.begin(), safe.proof.end());
         for(vector< vector<ID> >::iterator it = proofCNF->begin();
             it != proofCNF->end(); ++it)
           for(vector<ID>::iterator lit = it->begin(); lit != it->end(); ++lit)
             *lit = ev->apply(Expr::Not, *lit);
+        ev->end_local();
         delete ev;
         if (gprop) *gprop = safe.gprop;
       }
     }
-    catch (Timeout to) {
+    catch (IC3Timeout const & to) {
       rt.returnType = MC::Unknown;
 
       if (useRAT) {
-        RchAttachment * rat = (RchAttachment *) m.constAttachment(Key::RCH);
+        auto rat = m.attachment<RchAttachment>(Key::RCH);
         Expr::Manager::View * ev = m.newView();
+        ev->begin_local();
         for (unsigned int i = 0; i < sstate.cubes.size(); ++i) {
           const CubeSet & cs = sstate.cubes[i];
           vector< vector<ID> > lvl(cs.begin(), cs.end());
@@ -6202,17 +6321,18 @@ namespace FSIS {
             rat->setKForwardUpperBound(i, lvl);
         }
         if (sstate.cubes.size() > 2)
-          rat->updateCexLowerBound(sstate.cubes.size() - 2);
+          rat->updateCexLowerBound(sstate.cubes.size() - 2, string(opts.reverse ? "IC3r" : "IC3"));
+        ev->end_local();
         delete ev;
         m.release(rat);
       }
     }
-    catch (Trivial tr) {
+    catch (Trivial const & tr) {
       if (m.verbosity() > Options::Informative)
-        cout << "IC3: trivially unsat\n";
+        cout << "IC3: trivially unsat" << endl;
       rt.returnType = MC::Proof;
     }
-    catch (SAT::Trivial tr) {
+    catch (SAT::Trivial const & tr) {
       cout << tr.value() << endl;
       assert (false);
     }

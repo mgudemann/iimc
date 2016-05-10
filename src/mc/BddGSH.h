@@ -65,4 +65,4 @@ private:
   static ActionRegistrar action;
 };
 
-#endif // _BddGSH_
+#endif // BddGSH_

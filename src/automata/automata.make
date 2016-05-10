@@ -38,12 +38,12 @@ test_Auto_SOURCES = \
   $(parser_Parser_sources) \
   $(util_Util_sources)
 
-src/automata/AutoParser.hh src/automata/AutoParser.cc: src/automata/AutoParser.yy Makefile
+src/automata/AutoParser.hh src/automata/AutoParser.cc: src/automata/AutoParser.yy
 	$(YACC) --name-prefix=autoparser -o src/automata/AutoParser.cc $(top_srcdir)/src/automata/AutoParser.yy
 
-src/automata/AutoScanner.cc: $(top_srcdir)/src/automata/AutoScanner.ll src/automata/AutoParser.hh Makefile
+src/automata/AutoScanner.cc: $(top_srcdir)/src/automata/AutoScanner.ll src/automata/AutoParser.hh
 
-test_auto.sh: src/automata/test_auto.sh.in Makefile
+test_auto.sh: src/automata/test_auto.sh.in
 	$(do_subst) $< > $@
 	chmod +x $@
 

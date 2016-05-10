@@ -88,7 +88,7 @@ namespace Parser {
 
     model.setName(fn);
     Expr::Manager::View * v = model.newView();
-    ExprAttachment * eat = (ExprAttachment *) model.attachment(Key::EXPR);
+    auto eat = model.attachment<ExprAttachment>(Key::EXPR);
     vector<ID> ids(1+aig->num_inputs+aig->num_latches+aig->num_outputs+aig->num_ands, 
                    v->bfalse());
 
@@ -151,6 +151,8 @@ namespace Parser {
         just.push_back(idOf(v, ids, sym.lits[j]));
       eat->setJusticeSet(vnm, just);
     }
+
+    eat->saveInitialModelInfo();
 
     model.release(eat);
     delete v;

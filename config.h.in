@@ -15,6 +15,12 @@
 /* define if the Boost::Regex library is available */
 #undef HAVE_BOOST_REGEX
 
+/* define if the Boost::System library is available */
+#undef HAVE_BOOST_SYSTEM
+
+/* define if the Boost::Thread library is available */
+#undef HAVE_BOOST_THREAD
+
 /* Define to 1 if you have the <cinttypes> header file. */
 #undef HAVE_CINTTYPES
 
@@ -101,9 +107,6 @@
 
 /* Define to 1 if the system has the type `_Bool'. */
 #undef HAVE__BOOL
-
-/* Define to 1 if libtbb is requested and available. */
-#undef MTHREADS
 
 /* Name of package */
 #undef PACKAGE

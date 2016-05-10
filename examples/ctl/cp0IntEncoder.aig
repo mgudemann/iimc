@@ -1,0 +1,142 @@
+aig 326 34 35 16 257
+150
+160
+172
+182
+192
+202
+288
+300
+322
+332
+342
+354
+366
+376
+386
+396
+406
+426
+436
+446
+456
+468
+478
+490
+500
+510
+522
+532
+542
+552
+562
+574
+590
+600
+610
+114
+110
+132
+613
+126
+128
+637
+88
+639
+136
+641
+106
+648
+650
+652
+80
+GFÉOG&pB@+!@$o'i#c*êq%w öëS&t`)ãGç5Üèd8ìyóSõü∆æ|j∞ö.ÇZ∂<†d’#*06<@DHK´ï8Îôù# EKQW^aeinÕÎ-ˇúÛ/£¶À0–Qœ”◊.Ó?€ﬂ„,ÊOÈó7ì<“ü9œ
+‹Å&Ñ}áiF≥∫ø≈…Õ—÷∂¡?±PÑ…A«Dé—CÀJòî]Û˜˚ˇﬂ„F¨%Ø”à!◊€ﬂ‚wÂ˝M…ŒÛ…˜˚ˇÇaÖóS±:ÓüU—§¯ßW•ZÇØYŸâéçR„ÍÌÚı˙Ÿ«]Ò4®œ_Ø≤ÅX€òïıp”ëèçãµ¨¶˚x±D§≠îûaƒ=i0 IntMask_s2<7>
+i1 Syscall_s2m
+i2 Reset_s1
+i3 Interrupt_w<1>
+i4 BExTaken_s1w
+i5 IntMask_s2<2>
+i6 Interrupt_w<5>
+i7 IntMask_s2<6>
+i8 AIsBoosted_s2e
+i9 Interrupt_w<0>
+i10 Break_s2m
+i11 IntMask_s2<1>
+i12 InstrIsLoad_s1m
+i13 Interrupt_w<4>
+i14 IntPending_s2<0>
+i15 BALUOvfl_v2e
+i16 IntMask_s2<5>
+i17 InstrIsStore_s1m
+i18 IntMask_s2<0>
+i19 TLBRefill_v2m
+i20 Interrupt_w<3>
+i21 Phi1
+i22 AALUOvfl_v2e
+i23 IntPending_s2<1>
+i24 IntMask_s2<4>
+i25 IEc_s2
+i26 BIsBoosted_s2e
+i27 Except_s1w
+i28 TLBInvalid_v2m
+i29 Interrupt_w<2>
+i30 TLBModified_v2m
+i31 IntMask_s2<3>
+i32 MemExcept_s2m
+i33 Stall_s1
+l0 Int_s2<1>
+l1 ExceptionCauseTmp_s1w<0>
+l2 BIsBoosted_s2m
+l3 Int_s2<4>
+l4 ExceptionCauseTmp_s1w<3>
+l5 Int_s1<4>
+l6 ExceptionCause_v2<0>
+l7 InstrIsLoad_s2m
+l8 ExceptionCause_v2<3>
+l9 Int_s1<1>
+l10 BALUOvfl_s1m
+l11 AIsBoosted_s2m
+l12 AALUOvfl_s2m
+l13 Int_s2<2>
+l14 ExceptionCauseTmp_s1w<1>
+l15 BIsBoosted_s1m
+l16 Int_s2<5>
+l17 ExceptionCause_v2<1>
+l18 Int_s1<3>
+l19 ExceptionCauseTmp_s1w<4>
+l20 Int_s1<0>
+l21 ExceptionCause_v2<4>
+l22 Reset_s2
+l23 BALUOvfl_s2m
+l24 Int_s2<0>
+l25 AALUOvfl_s1m
+l26 InstrIsStore_s2m
+l27 Int_s2<3>
+l28 Int_s1<5>
+l29 TLBL1_s1w
+l30 ExceptionCauseTmp_s1w<2>
+l31 SetBoost_s1w
+l32 ExceptionCause_v2<2>
+l33 Int_s1<2>
+l34 AIsBoosted_s1m
+o0 Reset_s2
+o1 Int_s1<0>
+o2 SetBoost_s1w
+o3 ExceptionCause_s1w<1>
+o4 Int_s1<5>
+o5 TLBL1_s1w
+o6 SeqExcept_v2
+o7 Int_s1<1>
+o8 ExceptionCause_s1w<2>
+o9 Int_s1<2>
+o10 ExceptionCause_s1w<3>
+o11 Int_s1<3>
+o12 BoostedExcept_v2
+o13 ExceptionCause_s1w<4>
+o14 ExceptionCause_s1w<0>
+o15 Int_s1<4>
+c
+bliftoaig
+1.9
+cp0IntEncoder.blif

@@ -54,7 +54,7 @@
 /*---------------------------------------------------------------------------*/
 
 #ifndef lint
-static char rcsid[] MTR_UNUSED = "$Id: testmtr.c,v 1.5 2012/02/05 06:10:35 fabio Exp $";
+static char rcsid[] MTR_UNUSED = "$Id: testmtr.c,v 1.7 2015/01/05 20:12:13 fabio Exp $";
 #endif
 
 /*---------------------------------------------------------------------------*/
@@ -142,6 +142,7 @@ main(
     node = Mtr_CreateFirstChild(root);
     node->flags = 3;
     node = Mtr_AllocNode();
+    node->child = NULL;
     node->flags = 4;
     Mtr_MakeNextSibling(root->child,node);
     if (pr > 0) {
@@ -211,9 +212,14 @@ main(
     /* Open input file. */
     fp = open_file(file, "r");
     root = Mtr_ReadGroups(fp,12);
+    fclose(fp);
     if (pr > 0) {
-        Mtr_PrintTree(root); (void) printf("#  ");
-        Mtr_PrintGroups(root,pr == 0); (void) printf("\n");
+        if (root) {
+            Mtr_PrintTree(root); (void) printf("#  ");
+            Mtr_PrintGroups(root,pr == 0); (void) printf("\n");
+        } else {
+            (void) printf("error in group file\n");
+        }
     }
     Mtr_FreeTree(root);
 

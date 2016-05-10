@@ -50,8 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 class AIGAttachment : public Model::Attachment {
 public:
   AIGAttachment(Model &model);
-  AIGAttachment(const AIGAttachment &from);
-  AIGAttachment& operator=(AIGAttachment &rhs);
+  AIGAttachment(const AIGAttachment &from, Model & model);
 
   inline Key::Type key() const { return Key::AIG; }
   std::string string(bool includeDetails = false) const;
@@ -66,6 +65,8 @@ public:
     }
   };
 
+  AIGAttachment* clone(Model & model) const { return new AIGAttachment(*this, model); }
+
   // This is for some decent reason!
   Opt::AIG aig;
   Opt::RefIDMap ref2id;
@@ -73,7 +74,7 @@ public:
 private:
   void buildAIG(Model &model);
   ID IDOf(Opt::NodeRef ref, Expr::Manager::View &v, Opt::IDRefMap& newId2ref,
-      Opt::RefIDMap& newRef2id);
+      Opt::RefIDMap& newRef2id) const;
 };
 
 #endif

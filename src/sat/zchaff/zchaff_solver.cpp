@@ -41,6 +41,7 @@
 #include <set>
 #include <string.h>
 #include <vector>
+#include "../../util/Random.h" // per thread
 
 using namespace std;
 
@@ -185,7 +186,7 @@ void CSolver::set_randomness(int n) {
 
 void CSolver::set_random_seed(int seed) {
   printf("seed %d\n", seed);
-  srand(seed);
+  Random::srand(seed);
 }
 
 void CSolver::enable_cls_deletion(bool allow) {
@@ -807,7 +808,7 @@ bool CSolver::decide_next_branch(void) {
       int randomness = _stats.current_randomness;
       if (randomness >= num_free_variables())
         randomness = num_free_variables() - 1;
-      int skip = rand() % (1 + randomness);
+      int skip = Random::rand() % (1 + randomness);
       int index = i;
       while (skip > 0) {
         ++index;
@@ -824,7 +825,7 @@ bool CSolver::decide_next_branch(void) {
         if (ptr->two_lits_count(0) > ptr->two_lits_count(1))
           sign += 1;
         else if (ptr->two_lits_count(0) == ptr->two_lits_count(1))
-          sign += rand() % 2;
+          sign += Random::rand() % 2;
       }
       int var_idx = ptr - &(*variables()->begin());
 

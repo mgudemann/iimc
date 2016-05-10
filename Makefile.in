@@ -80,13 +80,13 @@ build_triplet = @build@
 host_triplet = @host@
 @ZCHAFF_TRUE@am__append_1 = src/sat/zchaff
 bin_PROGRAMS = iimc$(EXEEXT)
-check_PROGRAMS = test_Util$(EXEEXT) $(am__EXEEXT_1) \
-	test_Model$(EXEEXT) test_Parser$(EXEEXT) test_SAT$(EXEEXT) \
+check_PROGRAMS = test_Util$(EXEEXT) test_Model$(EXEEXT) \
+	test_Parser$(EXEEXT) test_SAT$(EXEEXT) \
 	test_TruthTables$(EXEEXT) test_ISOP$(EXEEXT) \
 	test_Prop$(EXEEXT) test_Auto$(EXEEXT)
-TESTS = test_Util$(EXEEXT) $(am__EXEEXT_1) test_Model$(EXEEXT) \
-	test_Parser$(EXEEXT) test_SAT$(EXEEXT) \
-	test_TruthTables$(EXEEXT) test_ISOP$(EXEEXT) $(check_SCRIPTS)
+TESTS = test_Util$(EXEEXT) test_Model$(EXEEXT) test_Parser$(EXEEXT) \
+	test_SAT$(EXEEXT) test_TruthTables$(EXEEXT) test_ISOP$(EXEEXT) \
+	$(check_SCRIPTS)
 DIST_COMMON = $(top_srcdir)/src/util/util.make \
 	$(top_srcdir)/src/expressions/expressions.make \
 	$(top_srcdir)/src/model/model.make \
@@ -116,19 +116,19 @@ DIST_COMMON = $(top_srcdir)/src/util/util.make \
 	$(top_srcdir)/build-aux/config.sub \
 	$(top_srcdir)/build-aux/install-sh \
 	$(top_srcdir)/build-aux/missing
-@HAS_THREADS_TRUE@am__append_2 = test_Threads
-@HAS_THREADS_TRUE@am__append_3 = test_Threads
-@ZCHAFF_TRUE@am__append_4 = \
+@ZCHAFF_TRUE@am__append_2 = \
 @ZCHAFF_TRUE@    src/sat/SAT_zchaff.cpp \
 @ZCHAFF_TRUE@    src/sat/SAT_zchaff.h
 
-@ZCHAFF_TRUE@am__append_5 = src/sat/zchaff/libsat.a
+@ZCHAFF_TRUE@am__append_3 = src/sat/zchaff/libsat.a
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_boost_base.m4 \
 	$(top_srcdir)/m4/ax_boost_program_options.m4 \
-	$(top_srcdir)/m4/ax_boost_regex.m4 $(top_srcdir)/acinclude.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_boost_regex.m4 \
+	$(top_srcdir)/m4/m4_ax_boost_system.m4 \
+	$(top_srcdir)/m4/m4_ax_boost_thread.m4 \
+	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
@@ -138,20 +138,20 @@ CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES = Doxyfile
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
-@HAS_THREADS_TRUE@am__EXEEXT_1 = test_Threads$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
-am__iimc_SOURCES_DIST = src/util/UtilSystem.cpp src/util/Util.h \
-	src/util/Error.h src/util/BitTricks.h src/expressions/Expr.cpp \
+am__iimc_SOURCES_DIST = src/util/UtilSystem.cpp src/util/Random.cpp \
+	src/util/Util.h src/util/Error.h src/util/BitTricks.h \
+	src/util/Random.h src/expressions/Expr.cpp \
 	src/expressions/ExprUtil.cpp src/expressions/Expr.h \
-	src/expressions/ExprUtil.h src/expressions/Expr_ignore.h \
-	src/expressions/ExprBdd.cpp src/expressions/ExprBdd.h \
-	src/expressions/ExprVerilog.cpp src/expressions/ExprVerilog.h \
+	src/expressions/ExprUtil.h src/expressions/ExprNode.h \
+	src/expressions/ExprTypes.h src/expressions/ExprBdd.cpp \
+	src/expressions/ExprBdd.h src/expressions/ExprVerilog.cpp \
+	src/expressions/ExprVerilog.h \
 	src/expressions/HashedStructure.h \
 	src/expressions/ExprAttachment.h \
 	src/expressions/ExprAttachment.cpp src/model/Key.h \
 	src/model/Model.cpp src/model/Model.h src/sim/Sim.cpp \
-	src/sim/Sim.h src/sim/SimUtil.cpp src/sim/SimUtil.h \
-	src/sim/ThreeValuedSimulation.cpp \
+	src/sim/Sim.h src/sim/ThreeValuedSimulation.cpp \
 	src/sim/ThreeValuedSimulation.h src/parser/AIGER.cpp \
 	src/parser/AIGER.h src/parser/DIMACS.cpp src/parser/DIMACS.h \
 	src/parser/aiger19.h src/parser/aiger19.c src/sat/SAT.cpp \
@@ -199,17 +199,21 @@ am__iimc_SOURCES_DIST = src/util/UtilSystem.cpp src/util/Util.h \
 	src/mc/RchAttachment.h src/mc/RchAttachment.cpp src/mc/Fair.h \
 	src/mc/Fair.cpp src/mc/IICTL.h src/mc/IICTL.cpp src/mc/FCBMC.h \
 	src/mc/FCBMC.cpp src/mc/IIC.h src/mc/IIC.cpp src/mc/BddGSH.h \
-	src/mc/BddGSH.cpp src/main/options.cpp src/main/main.cpp \
-	src/main/options.h src/main/Verbosity.h
+	src/mc/BddGSH.cpp src/mc/Persist.h src/mc/Persist.cpp \
+	src/mc/KLive.h src/mc/KLive.cpp src/main/options.cpp \
+	src/main/main.cpp src/main/Dispatch.cpp src/main/Engine.cpp \
+	src/main/options.h src/main/Dispatch.h src/main/Engine.h \
+	src/main/Verbosity.h
 am__dirstamp = $(am__leading_dot)dirstamp
-am__objects_1 = src/util/UtilSystem.$(OBJEXT)
+am__objects_1 = src/util/UtilSystem.$(OBJEXT) \
+	src/util/Random.$(OBJEXT)
 am__objects_2 = src/expressions/Expr.$(OBJEXT) \
 	src/expressions/ExprUtil.$(OBJEXT) \
 	src/expressions/ExprBdd.$(OBJEXT) \
 	src/expressions/ExprVerilog.$(OBJEXT)
 am__objects_3 = src/expressions/ExprAttachment.$(OBJEXT)
 am__objects_4 = src/model/Model.$(OBJEXT)
-am__objects_5 = src/sim/Sim.$(OBJEXT) src/sim/SimUtil.$(OBJEXT) \
+am__objects_5 = src/sim/Sim.$(OBJEXT) \
 	src/sim/ThreeValuedSimulation.$(OBJEXT)
 am__objects_6 = src/parser/AIGER.$(OBJEXT) src/parser/DIMACS.$(OBJEXT) \
 	src/parser/aiger19.$(OBJEXT)
@@ -246,8 +250,10 @@ am__objects_18 = src/mc/BMC.$(OBJEXT) src/mc/COI.$(OBJEXT) \
 	src/mc/TacticMisc.$(OBJEXT) src/mc/ProofAttachment.$(OBJEXT) \
 	src/mc/RchAttachment.$(OBJEXT) src/mc/Fair.$(OBJEXT) \
 	src/mc/IICTL.$(OBJEXT) src/mc/FCBMC.$(OBJEXT) \
-	src/mc/IIC.$(OBJEXT) src/mc/BddGSH.$(OBJEXT)
-am__objects_19 = src/main/options.$(OBJEXT) src/main/main.$(OBJEXT)
+	src/mc/IIC.$(OBJEXT) src/mc/BddGSH.$(OBJEXT) \
+	src/mc/Persist.$(OBJEXT) src/mc/KLive.$(OBJEXT)
+am__objects_19 = src/main/options.$(OBJEXT) src/main/main.$(OBJEXT) \
+	src/main/Dispatch.$(OBJEXT) src/main/Engine.$(OBJEXT)
 am_iimc_OBJECTS = $(am__objects_1) $(am__objects_2) $(am__objects_3) \
 	$(am__objects_4) $(am__objects_5) $(am__objects_6) \
 	$(am__objects_8) $(am__objects_9) $(am__objects_12) \
@@ -258,10 +264,11 @@ iimc_OBJECTS = $(am_iimc_OBJECTS)
 iimc_LDADD = $(LDADD)
 am__DEPENDENCIES_1 =
 iimc_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am_test_Auto_OBJECTS = src/automata/test_Auto.$(OBJEXT) \
 	$(am__objects_17) $(am__objects_2) $(am__objects_4) \
 	$(am__objects_3) $(am__objects_10) $(am__objects_6) \
@@ -269,28 +276,31 @@ am_test_Auto_OBJECTS = src/automata/test_Auto.$(OBJEXT) \
 test_Auto_OBJECTS = $(am_test_Auto_OBJECTS)
 test_Auto_LDADD = $(LDADD)
 test_Auto_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am_test_ISOP_OBJECTS = src/truthtable/TreeTruthTable.$(OBJEXT) \
 	src/truthtable/BitTruthTable.$(OBJEXT) src/cnf/Cover.$(OBJEXT) \
 	src/cnf/test_ISOP.$(OBJEXT)
 test_ISOP_OBJECTS = $(am_test_ISOP_OBJECTS)
 test_ISOP_LDADD = $(LDADD)
 test_ISOP_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am__test_Model_SOURCES_DIST = src/model/test_Model.cpp src/model/Key.h \
 	src/model/Model.cpp src/model/Model.h src/util/UtilSystem.cpp \
-	src/util/Util.h src/util/Error.h src/util/BitTricks.h \
+	src/util/Random.cpp src/util/Util.h src/util/Error.h \
+	src/util/BitTricks.h src/util/Random.h \
 	src/expressions/Expr.cpp src/expressions/ExprUtil.cpp \
 	src/expressions/Expr.h src/expressions/ExprUtil.h \
-	src/expressions/Expr_ignore.h src/expressions/ExprBdd.cpp \
-	src/expressions/ExprBdd.h src/expressions/ExprVerilog.cpp \
-	src/expressions/ExprVerilog.h \
+	src/expressions/ExprNode.h src/expressions/ExprTypes.h \
+	src/expressions/ExprBdd.cpp src/expressions/ExprBdd.h \
+	src/expressions/ExprVerilog.cpp src/expressions/ExprVerilog.h \
 	src/expressions/HashedStructure.h \
 	src/expressions/ExprAttachment.h \
 	src/expressions/ExprAttachment.cpp src/opt/BddAttachment.h \
@@ -306,7 +316,6 @@ am__test_Model_SOURCES_DIST = src/model/test_Model.cpp src/model/Key.h \
 	src/truthtable/TurboTruthTable.h \
 	src/truthtable/BitTruthTable.h \
 	src/truthtable/BitTruthTable.cpp src/sim/Sim.cpp src/sim/Sim.h \
-	src/sim/SimUtil.cpp src/sim/SimUtil.h \
 	src/sim/ThreeValuedSimulation.cpp \
 	src/sim/ThreeValuedSimulation.h src/sat/SAT.cpp \
 	src/sat/SAT_minisat.cpp src/sat/SAT_minisat.h src/sat/SAT.h \
@@ -332,10 +341,11 @@ am_test_Model_OBJECTS = src/model/test_Model.$(OBJEXT) \
 test_Model_OBJECTS = $(am_test_Model_OBJECTS)
 test_Model_LDADD = $(LDADD)
 test_Model_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am__test_Parser_SOURCES_DIST = src/parser/test_Parser.cpp \
 	src/parser/AIGER.cpp src/parser/AIGER.h src/parser/DIMACS.cpp \
 	src/parser/DIMACS.h src/parser/aiger19.h src/parser/aiger19.c \
@@ -348,20 +358,21 @@ am__test_Parser_SOURCES_DIST = src/parser/test_Parser.cpp \
 	src/sat/SAT_minisat.cpp src/sat/SAT_minisat.h src/sat/SAT.h \
 	src/sat/SAT_zchaff.cpp src/sat/SAT_zchaff.h \
 	src/expressions/ExprVerilog.cpp src/expressions/ExprVerilog.h \
-	src/util/UtilSystem.cpp
+	src/util/UtilSystem.cpp src/util/Random.cpp
 am_test_Parser_OBJECTS = src/parser/test_Parser.$(OBJEXT) \
 	$(am__objects_6) src/expressions/Expr.$(OBJEXT) \
 	src/expressions/ExprUtil.$(OBJEXT) src/model/Model.$(OBJEXT) \
 	$(am__objects_3) $(am__objects_10) $(am__objects_8) \
 	src/expressions/ExprVerilog.$(OBJEXT) \
-	src/util/UtilSystem.$(OBJEXT)
+	src/util/UtilSystem.$(OBJEXT) src/util/Random.$(OBJEXT)
 test_Parser_OBJECTS = $(am_test_Parser_OBJECTS)
 test_Parser_LDADD = $(LDADD)
 test_Parser_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am_test_Prop_OBJECTS = src/properties/test_Prop.$(OBJEXT) \
 	$(am__objects_16) $(am__objects_2) $(am__objects_4) \
 	$(am__objects_3) $(am__objects_10) $(am__objects_6) \
@@ -369,44 +380,33 @@ am_test_Prop_OBJECTS = src/properties/test_Prop.$(OBJEXT) \
 test_Prop_OBJECTS = $(am_test_Prop_OBJECTS)
 test_Prop_LDADD = $(LDADD)
 test_Prop_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 am__test_SAT_SOURCES_DIST = src/sat/test_SAT.cpp src/sat/SAT.cpp \
 	src/sat/SAT_minisat.cpp src/sat/SAT_minisat.h src/sat/SAT.h \
 	src/sat/SAT_zchaff.cpp src/sat/SAT_zchaff.h \
 	src/expressions/Expr.cpp src/expressions/ExprUtil.cpp \
 	src/expressions/Expr.h src/expressions/ExprUtil.h \
-	src/expressions/Expr_ignore.h src/expressions/ExprBdd.cpp \
-	src/expressions/ExprBdd.h src/expressions/ExprVerilog.cpp \
-	src/expressions/ExprVerilog.h \
+	src/expressions/ExprNode.h src/expressions/ExprTypes.h \
+	src/expressions/ExprBdd.cpp src/expressions/ExprBdd.h \
+	src/expressions/ExprVerilog.cpp src/expressions/ExprVerilog.h \
 	src/expressions/HashedStructure.h src/model/Key.h \
 	src/model/Model.cpp src/model/Model.h src/util/UtilSystem.cpp \
-	src/util/Util.h src/util/Error.h src/util/BitTricks.h
+	src/util/Random.cpp src/util/Util.h src/util/Error.h \
+	src/util/BitTricks.h src/util/Random.h
 am_test_SAT_OBJECTS = src/sat/test_SAT.$(OBJEXT) $(am__objects_8) \
 	$(am__objects_2) $(am__objects_4) $(am__objects_1)
 test_SAT_OBJECTS = $(am_test_SAT_OBJECTS)
 am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 test_SAT_DEPENDENCIES = $(am__DEPENDENCIES_2) src/parser/aiger19.o
-am__test_Threads_SOURCES_DIST = src/expressions/test_Threads.cpp \
-	src/expressions/Expr.cpp src/expressions/ExprUtil.cpp \
-	src/expressions/Expr.h src/expressions/ExprUtil.h \
-	src/expressions/Expr_ignore.h src/expressions/ExprBdd.cpp \
-	src/expressions/ExprBdd.h src/expressions/ExprVerilog.cpp \
-	src/expressions/ExprVerilog.h \
-	src/expressions/HashedStructure.h src/model/Key.h \
-	src/model/Model.cpp src/model/Model.h
-@HAS_THREADS_TRUE@am_test_Threads_OBJECTS =  \
-@HAS_THREADS_TRUE@	src/expressions/test_Threads.$(OBJEXT) \
-@HAS_THREADS_TRUE@	$(am__objects_2) $(am__objects_4)
-test_Threads_OBJECTS = $(am_test_Threads_OBJECTS)
-@HAS_THREADS_TRUE@test_Threads_DEPENDENCIES = $(am__DEPENDENCIES_2) \
-@HAS_THREADS_TRUE@	src/parser/aiger19.o
 am_test_TruthTables_OBJECTS =  \
 	src/truthtable/test_TruthTables.$(OBJEXT) \
 	src/truthtable/TreeTruthTable.$(OBJEXT) \
@@ -414,19 +414,21 @@ am_test_TruthTables_OBJECTS =  \
 test_TruthTables_OBJECTS = $(am_test_TruthTables_OBJECTS)
 test_TruthTables_LDADD = $(LDADD)
 test_TruthTables_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) src/cudd/libobj.a \
 	src/cudd/libcudd.a src/cudd/libepd.a src/cudd/libmtr.a \
 	src/cudd/libst.a src/cudd/libutil.a \
 	src/sat/minisat20/libminisat20.a src/sat/minisat/libminisat.a \
-	$(am__append_5)
+	$(am__append_3)
 am_test_Util_OBJECTS = src/util/test_Util.$(OBJEXT) $(am__objects_1)
 test_Util_OBJECTS = $(am_test_Util_OBJECTS)
 test_Util_LDADD = $(LDADD)
 test_Util_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -484,13 +486,12 @@ am__v_YACC_1 =
 SOURCES = $(iimc_SOURCES) $(test_Auto_SOURCES) $(test_ISOP_SOURCES) \
 	$(test_Model_SOURCES) $(test_Parser_SOURCES) \
 	$(test_Prop_SOURCES) $(test_SAT_SOURCES) \
-	$(test_Threads_SOURCES) $(test_TruthTables_SOURCES) \
-	$(test_Util_SOURCES)
+	$(test_TruthTables_SOURCES) $(test_Util_SOURCES)
 DIST_SOURCES = $(am__iimc_SOURCES_DIST) $(test_Auto_SOURCES) \
 	$(test_ISOP_SOURCES) $(am__test_Model_SOURCES_DIST) \
 	$(am__test_Parser_SOURCES_DIST) $(test_Prop_SOURCES) \
-	$(am__test_SAT_SOURCES_DIST) $(am__test_Threads_SOURCES_DIST) \
-	$(test_TruthTables_SOURCES) $(test_Util_SOURCES)
+	$(am__test_SAT_SOURCES_DIST) $(test_TruthTables_SOURCES) \
+	$(test_Util_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
 	install-data-recursive install-dvi-recursive \
@@ -794,7 +795,7 @@ AM_CPPFLAGS = @AM_CPPFLAGS@ -I$(srcdir)/src/util \
 	__STDC_FORMAT_MACROS
 AM_CXXFLAGS = @AM_CXXFLAGS@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
-AM_LDFLAGS = @AM_LDFLAGS@
+AM_LDFLAGS = 
 AR = @AR@
 AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
@@ -804,6 +805,8 @@ BOOST_CPPFLAGS = @BOOST_CPPFLAGS@
 BOOST_LDFLAGS = @BOOST_LDFLAGS@
 BOOST_PROGRAM_OPTIONS_LIB = @BOOST_PROGRAM_OPTIONS_LIB@
 BOOST_REGEX_LIB = @BOOST_REGEX_LIB@
+BOOST_SYSTEM_LIB = @BOOST_SYSTEM_LIB@
+BOOST_THREAD_LIB = @BOOST_THREAD_LIB@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
@@ -958,20 +961,23 @@ CLEANFILES = src/properties/PropCtlParser.hh \
 	src/automata/AutoScanner.cc src/automata/location.hh \
 	src/automata/stack.hh src/automata/position.hh \
 	$(check_SCRIPTS)
-LDADD = $(BOOST_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LIB) \
-	$(BOOST_REGEX_LIB) src/cudd/libobj.a src/cudd/libcudd.a \
+LDADD = $(BOOST_LDFLAGS) $(BOOST_SYSTEM_LIB) \
+	$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_REGEX_LIB) \
+	$(BOOST_THREAD_LIB) src/cudd/libobj.a src/cudd/libcudd.a \
 	src/cudd/libepd.a src/cudd/libmtr.a src/cudd/libst.a \
 	src/cudd/libutil.a src/sat/minisat20/libminisat20.a \
-	src/sat/minisat/libminisat.a $(am__append_5)
+	src/sat/minisat/libminisat.a $(am__append_3)
 do_subst = sed \
   -e 's,[@]EXEEXT[@],$(EXEEXT),g' \
   -e 's,[@]srcdir[@],$(srcdir),g'
 
 util_Util_sources = \
   src/util/UtilSystem.cpp \
+  src/util/Random.cpp \
   src/util/Util.h \
   src/util/Error.h \
-  src/util/BitTricks.h
+  src/util/BitTricks.h \
+  src/util/Random.h
 
 test_Util_SOURCES = \
   src/util/test_Util.cpp \
@@ -982,7 +988,8 @@ expressions_Expr_sources = \
   src/expressions/ExprUtil.cpp \
   src/expressions/Expr.h \
   src/expressions/ExprUtil.h \
-  src/expressions/Expr_ignore.h \
+  src/expressions/ExprNode.h \
+  src/expressions/ExprTypes.h \
   src/expressions/ExprBdd.cpp \
   src/expressions/ExprBdd.h \
   src/expressions/ExprVerilog.cpp \
@@ -992,12 +999,6 @@ expressions_Expr_sources = \
 expressions_Attachment_sources = \
   src/expressions/ExprAttachment.h \
   src/expressions/ExprAttachment.cpp
-
-@HAS_THREADS_TRUE@test_Threads_LDADD = $(LDADD) src/parser/aiger19.o
-@HAS_THREADS_TRUE@test_Threads_SOURCES = \
-@HAS_THREADS_TRUE@  src/expressions/test_Threads.cpp \
-@HAS_THREADS_TRUE@  $(expressions_Expr_sources) \
-@HAS_THREADS_TRUE@  $(model_Model_sources)
 
 model_Model_sources = \
   src/model/Key.h \
@@ -1034,8 +1035,6 @@ test_Model_SOURCES = src/model/test_Model.cpp \
 sim_Sim_sources = \
   src/sim/Sim.cpp \
   src/sim/Sim.h \
-  src/sim/SimUtil.cpp \
-  src/sim/SimUtil.h \
   src/sim/ThreeValuedSimulation.cpp \
   src/sim/ThreeValuedSimulation.h
 
@@ -1058,10 +1057,11 @@ test_Parser_SOURCES = \
   $(sat_SAT_sources) \
   src/expressions/ExprVerilog.cpp \
   src/expressions/ExprVerilog.h \
-  src/util/UtilSystem.cpp
+  src/util/UtilSystem.cpp \
+  src/util/Random.cpp
 
 sat_SAT_sources = src/sat/SAT.cpp src/sat/SAT_minisat.cpp \
-	src/sat/SAT_minisat.h src/sat/SAT.h $(am__append_4)
+	src/sat/SAT_minisat.h src/sat/SAT.h $(am__append_2)
 test_SAT_LDADD = $(LDADD) src/parser/aiger19.o
 test_SAT_SOURCES = \
   src/sat/test_SAT.cpp \
@@ -1222,12 +1222,20 @@ mc_MC_sources = \
   src/mc/IIC.h \
   src/mc/IIC.cpp \
   src/mc/BddGSH.h \
-  src/mc/BddGSH.cpp
+  src/mc/BddGSH.cpp \
+  src/mc/Persist.h \
+  src/mc/Persist.cpp \
+  src/mc/KLive.h \
+  src/mc/KLive.cpp
 
 main_Main_sources = \
   src/main/options.cpp \
   src/main/main.cpp \
+  src/main/Dispatch.cpp \
+  src/main/Engine.cpp \
   src/main/options.h \
+  src/main/Dispatch.h \
+  src/main/Engine.h \
   src/main/Verbosity.h
 
 @DX_COND_doc_TRUE@@DX_COND_html_TRUE@DX_CLEAN_HTML = @DX_DOCDIR@/html
@@ -1364,6 +1372,8 @@ src/util/$(DEPDIR)/$(am__dirstamp):
 	@: > src/util/$(DEPDIR)/$(am__dirstamp)
 src/util/UtilSystem.$(OBJEXT): src/util/$(am__dirstamp) \
 	src/util/$(DEPDIR)/$(am__dirstamp)
+src/util/Random.$(OBJEXT): src/util/$(am__dirstamp) \
+	src/util/$(DEPDIR)/$(am__dirstamp)
 src/expressions/$(am__dirstamp):
 	@$(MKDIR_P) src/expressions
 	@: > src/expressions/$(am__dirstamp)
@@ -1397,8 +1407,6 @@ src/sim/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/sim/$(DEPDIR)
 	@: > src/sim/$(DEPDIR)/$(am__dirstamp)
 src/sim/Sim.$(OBJEXT): src/sim/$(am__dirstamp) \
-	src/sim/$(DEPDIR)/$(am__dirstamp)
-src/sim/SimUtil.$(OBJEXT): src/sim/$(am__dirstamp) \
 	src/sim/$(DEPDIR)/$(am__dirstamp)
 src/sim/ThreeValuedSimulation.$(OBJEXT): src/sim/$(am__dirstamp) \
 	src/sim/$(DEPDIR)/$(am__dirstamp)
@@ -1565,6 +1573,10 @@ src/mc/IIC.$(OBJEXT): src/mc/$(am__dirstamp) \
 	src/mc/$(DEPDIR)/$(am__dirstamp)
 src/mc/BddGSH.$(OBJEXT): src/mc/$(am__dirstamp) \
 	src/mc/$(DEPDIR)/$(am__dirstamp)
+src/mc/Persist.$(OBJEXT): src/mc/$(am__dirstamp) \
+	src/mc/$(DEPDIR)/$(am__dirstamp)
+src/mc/KLive.$(OBJEXT): src/mc/$(am__dirstamp) \
+	src/mc/$(DEPDIR)/$(am__dirstamp)
 src/main/$(am__dirstamp):
 	@$(MKDIR_P) src/main
 	@: > src/main/$(am__dirstamp)
@@ -1574,6 +1586,10 @@ src/main/$(DEPDIR)/$(am__dirstamp):
 src/main/options.$(OBJEXT): src/main/$(am__dirstamp) \
 	src/main/$(DEPDIR)/$(am__dirstamp)
 src/main/main.$(OBJEXT): src/main/$(am__dirstamp) \
+	src/main/$(DEPDIR)/$(am__dirstamp)
+src/main/Dispatch.$(OBJEXT): src/main/$(am__dirstamp) \
+	src/main/$(DEPDIR)/$(am__dirstamp)
+src/main/Engine.$(OBJEXT): src/main/$(am__dirstamp) \
 	src/main/$(DEPDIR)/$(am__dirstamp)
 
 iimc$(EXEEXT): $(iimc_OBJECTS) $(iimc_DEPENDENCIES) $(EXTRA_iimc_DEPENDENCIES) 
@@ -1615,13 +1631,6 @@ src/sat/test_SAT.$(OBJEXT): src/sat/$(am__dirstamp) \
 test_SAT$(EXEEXT): $(test_SAT_OBJECTS) $(test_SAT_DEPENDENCIES) $(EXTRA_test_SAT_DEPENDENCIES) 
 	@rm -f test_SAT$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(test_SAT_OBJECTS) $(test_SAT_LDADD) $(LIBS)
-src/expressions/test_Threads.$(OBJEXT):  \
-	src/expressions/$(am__dirstamp) \
-	src/expressions/$(DEPDIR)/$(am__dirstamp)
-
-test_Threads$(EXEEXT): $(test_Threads_OBJECTS) $(test_Threads_DEPENDENCIES) $(EXTRA_test_Threads_DEPENDENCIES) 
-	@rm -f test_Threads$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(test_Threads_OBJECTS) $(test_Threads_LDADD) $(LIBS)
 src/truthtable/test_TruthTables.$(OBJEXT):  \
 	src/truthtable/$(am__dirstamp) \
 	src/truthtable/$(DEPDIR)/$(am__dirstamp)
@@ -1680,7 +1689,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/expressions/$(DEPDIR)/ExprBdd.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/expressions/$(DEPDIR)/ExprUtil.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/expressions/$(DEPDIR)/ExprVerilog.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/expressions/$(DEPDIR)/test_Threads.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/main/$(DEPDIR)/Dispatch.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/main/$(DEPDIR)/Engine.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/main/$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/main/$(DEPDIR)/options.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/BMC.Po@am__quote@
@@ -1692,6 +1702,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/IC3.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/IIC.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/IICTL.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/KLive.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/Persist.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/ProofAttachment.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/RchAttachment.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/mc/$(DEPDIR)/TacticMisc.Po@am__quote@
@@ -1712,7 +1724,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/sat/$(DEPDIR)/SAT_zchaff.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/sat/$(DEPDIR)/test_SAT.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/sim/$(DEPDIR)/Sim.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/sim/$(DEPDIR)/SimUtil.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/sim/$(DEPDIR)/ThreeValuedSimulation.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/sopt/$(DEPDIR)/AbsInt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/sopt/$(DEPDIR)/Decode.Po@am__quote@
@@ -1725,6 +1736,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/truthtable/$(DEPDIR)/BitTruthTable.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/truthtable/$(DEPDIR)/TreeTruthTable.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/truthtable/$(DEPDIR)/test_TruthTables.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/util/$(DEPDIR)/Random.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/util/$(DEPDIR)/UtilSystem.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/util/$(DEPDIR)/test_Util.Po@am__quote@
 
@@ -2032,13 +2044,6 @@ recheck: all $(check_PROGRAMS) $(check_SCRIPTS) $(dist_check_DATA)
 test_Util.log: test_Util$(EXEEXT)
 	@p='test_Util$(EXEEXT)'; \
 	b='test_Util'; \
-	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
-	--log-file $$b.log --trs-file $$b.trs \
-	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
-	"$$tst" $(AM_TESTS_FD_REDIRECT)
-test_Threads.log: test_Threads$(EXEEXT)
-	@p='test_Threads$(EXEEXT)'; \
-	b='test_Threads'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
@@ -2484,23 +2489,23 @@ dist-hook:
 
 src/properties/PropCtlParser.$(OBJEXT): src/properties/PropCtlParser.cc src/properties/PropCtlParser.hh
 
-src/properties/PropCtlParser.hh src/properties/PropCtlParser.cc: src/properties/PropCtlParser.yy Makefile
+src/properties/PropCtlParser.hh src/properties/PropCtlParser.cc: src/properties/PropCtlParser.yy
 	$(YACC) -o src/properties/PropCtlParser.cc $(top_srcdir)/src/properties/PropCtlParser.yy
 
-src/properties/PropCtlScanner.cc: $(top_srcdir)/src/properties/PropCtlScanner.ll src/properties/PropCtlParser.hh Makefile
+src/properties/PropCtlScanner.cc: $(top_srcdir)/src/properties/PropCtlScanner.ll src/properties/PropCtlParser.hh
 
-test_prop.sh: src/properties/test_prop.sh.in Makefile
+test_prop.sh: src/properties/test_prop.sh.in
 	$(do_subst) $< > $@
 	chmod +x $@
 
 src/automata/AutoParser.$(OBJEXT): src/automata/AutoParser.cc src/automata/AutoParser.hh
 
-src/automata/AutoParser.hh src/automata/AutoParser.cc: src/automata/AutoParser.yy Makefile
+src/automata/AutoParser.hh src/automata/AutoParser.cc: src/automata/AutoParser.yy
 	$(YACC) --name-prefix=autoparser -o src/automata/AutoParser.cc $(top_srcdir)/src/automata/AutoParser.yy
 
-src/automata/AutoScanner.cc: $(top_srcdir)/src/automata/AutoScanner.ll src/automata/AutoParser.hh Makefile
+src/automata/AutoScanner.cc: $(top_srcdir)/src/automata/AutoScanner.ll src/automata/AutoParser.hh
 
-test_auto.sh: src/automata/test_auto.sh.in Makefile
+test_auto.sh: src/automata/test_auto.sh.in
 	$(do_subst) $< > $@
 	chmod +x $@
 

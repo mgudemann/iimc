@@ -86,8 +86,8 @@ main(int argc, char *argv[])
     build(model);
 
     // Create parser and use it.
-    ExprAttachment * eat = (ExprAttachment *) model.attachment(Key::EXPR);
-    auto_driver driver(eat);
+    auto eat = model.attachment<ExprAttachment>(Key::EXPR);
+    auto_driver driver(eat.operator->());
     if (vm.count("trace_parsing"))
       driver.trace_parsing = true;
     if (vm.count("trace_scanning"))
@@ -118,7 +118,7 @@ main(int argc, char *argv[])
       cout << model.string(true);
     }
     return 0;
-  } catch(exception& e) {
+  } catch(exception const & e) {
     cout << e.what() << "\n";
     return 1;
   }
@@ -130,7 +130,7 @@ main(int argc, char *argv[])
  */
 void build(Model& model)
 {
-  ExprAttachment *eat = (ExprAttachment *) model.attachment(Key::EXPR);
+  auto eat = model.attachment<ExprAttachment>(Key::EXPR);
   assert(eat != 0);
   Manager::View *v = model.newView();
   v->begin_local();

@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Error.h"
 #include "FCBMC.h"
 #include "Util.h"
+#include "Random.h"
 
 #define CNFIZE tseitin
 //#define CNFIZE wilson
@@ -178,7 +179,7 @@ void resetAssign(SAT::Assignment & asgn) {
 }
 
 void fullAssignOf(Expr::Manager::View & ev, Model & m, SAT::Assignment & asgn, vector<ID> & cube, vector<ID> & inputCube) {
-  ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
   for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
     if (it->second != SAT::Unknown) {
       if(eat->isInput(it->first)) {
@@ -203,13 +204,6 @@ void assignOf(Expr::Manager::View & ev, SAT::Assignment & asgn, vector<ID> & cub
       cube.push_back(it->second == SAT::False ? 
                      ev.apply(Expr::Not, it->first) : 
                      it->first);
-}
-
-void complement(Expr::Manager::View & ev, const vector<ID> & in,
-                vector<ID> & out) {
-  for (vector<ID>::const_iterator it = in.begin(); it != in.end(); ++it) {
-    out.push_back(ev.apply(Expr::Not, *it));
-  }
 }
 
 ID rep(Expr::Manager::View & ev, ID id) {
@@ -315,7 +309,7 @@ public:
   LabelInitFolder(IICTLAction & _iictl, ExprAttachment const * const _eat) :
     Expr::Manager::View::Folder(*_iictl.ev), iictl(_iictl), eat(_eat) {}
 
-  virtual ID fold(ID id, int n, const ID * const args) {
+  virtual ID fold(ID id, int, const ID * const args) {
  
     //During initialization QLB => UB, and so, LB = QLB & UB = QLB
     switch(view().op(id)) {
@@ -477,7 +471,12 @@ public:
       //Add !QLB
       SAT::Clauses notQLBCnf;
       Expr::CNFIZE(view(), view().apply(Expr::Not, qlbID), notQLBCnf);
-      sview->add(notQLBCnf);
+      try {
+        sview->add(notQLBCnf);
+      }
+      catch(SAT::Trivial const & tr) {
+        //Do nothing. Will be handled later
+      }
       //GR and UB are initially trivial, and last conjunct is added right
       //before generalization
 
@@ -518,7 +517,7 @@ public:
       try {
         sview->add(iictl.UB[id]);
       }
-      catch(SAT::Trivial tr) {
+      catch(SAT::Trivial const & tr) {
         //Do nothing. Will be handled later
       }
       iictl.liftSatViews.insert(IDSatViewMap::value_type(id, sview));
@@ -563,7 +562,12 @@ public:
       sman->add(iictl.tr);
       SAT::Manager::View * sview = sman->newView(view());
       //Add UB
-      sview->add(ubCnf);
+      try {
+        sview->add(ubCnf);
+      }
+      catch(SAT::Trivial const & tr) {
+        //Do nothing. Will be handled later
+      }
       //Add !QLB
       SAT::Clauses notQLBCnf;
       Expr::CNFIZE(view(), view().apply(Expr::Not, iictl.QLBId[id]), notQLBCnf);
@@ -604,7 +608,7 @@ IICTLAction::~IICTLAction() {
 }
 
 void IICTLAction::grabProperty() {
-  ExprAttachment const * eat = (ExprAttachment const *) 
+  ExprAttachment const * const eat = (ExprAttachment const *) 
                                model().constAttachment(Key::EXPR);
 
   assert(eat->ctlProperties().size() == 1);
@@ -621,7 +625,7 @@ void IICTLAction::grabProperty() {
 
 void IICTLAction::initializeLabels() {
 
-  ExprAttachment const * eat = (ExprAttachment *)
+  ExprAttachment const * const eat = (ExprAttachment const *)
                                model().constAttachment(Key::EXPR);
   LabelInitFolder initLabels(*this, eat);
   ev->fold(initLabels, property);
@@ -645,7 +649,7 @@ bool IICTLAction::lbContainsStates(ID id, const vector<ID> & state, vector<ID> *
   try {
     sview->add(negLBCnf);
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     delete sview;
     delete sman;
     return true;
@@ -678,7 +682,7 @@ bool IICTLAction::ubContainsStates(ID id, const vector<ID> & state) {
   try {
     sview->add(negUB);
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     delete sview;
     delete sman;
     return true;
@@ -722,7 +726,7 @@ bool IICTLAction::liftEF(Transition & tr1, ID id, ID qlbRep, SAT::GID gid, bool 
   assert(!sat);
 
   tr1.state.clear();
-  ExprAttachment const * eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   for(vector<ID>::const_iterator it = assumps.begin(); it != assumps.end(); ++it) {
     if(eat->isStateVar(*it) || eat->isStateVar(ev->apply(Expr::Not, *it))) {
       tr1.state.push_back(*it);
@@ -733,7 +737,7 @@ bool IICTLAction::liftEF(Transition & tr1, ID id, ID qlbRep, SAT::GID gid, bool 
   //Add negation of lifted cube to SAT database (in unprimed and primed forms)
   if(tr1.state.size() < size) {
     SAT::Clause cls;
-    complement(*ev, tr1.state, cls);
+    Expr::complement(*ev, tr1.state, cls);
     if(addUnprimed)
       liftSatView->add(cls);
     SAT::Clause primedCls;
@@ -758,7 +762,7 @@ bool IICTLAction::liftEX(Transition & tr1, ID id) {
   assert(!sat);
 
   tr1.state.clear();
-  ExprAttachment const * eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   for(vector<ID>::const_iterator it = assumps.begin(); it != assumps.end(); ++it) {
     if(eat->isStateVar(*it) || eat->isStateVar(ev->apply(Expr::Not, *it))) {
       tr1.state.push_back(*it);
@@ -777,7 +781,7 @@ bool IICTLAction::bruteForceLiftEF(Transition & tr1, ID id, ID qlbRep, SAT::GID 
   assert(liftSatViews.find(id) != liftSatViews.end());
   SAT::Manager::View * liftSatView = liftSatViews[id];
 
-  ExprAttachment const * eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   vector<ID> cube = tr1.state;
   for(unsigned i = 0; i < cube.size(); ++i) {
     vector<ID> rcube;
@@ -801,7 +805,7 @@ bool IICTLAction::bruteForceLiftEF(Transition & tr1, ID id, ID qlbRep, SAT::GID 
       //Add negation of lifted cube to SAT database (in unprimed and primed
       //forms) and to QLBcubes
       SAT::Clause cls;
-      complement(*ev, cube, cls);
+      Expr::complement(*ev, cube, cls);
       if(addUnprimed)
         liftSatView->add(cls);
       SAT::Clause primedCls;
@@ -823,7 +827,7 @@ bool IICTLAction::bruteForceLiftEX(Transition & tr1, ID id) {
 
   SAT::Manager::View * liftSatView = liftSatViews[id];
 
-  ExprAttachment const * eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   vector<ID> cube = tr1.state;
   for(unsigned i = 0; i < cube.size(); ++i) {
     vector<ID> rcube;
@@ -994,7 +998,7 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
           else {
             //As a last resort, check if the CTG state is reachable
             //Save model state
-            ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+            auto eat = model().attachment<ExprAttachment>(Key::EXPR);
             vector<ID> init(eat->initialConditions());
             eat->clearInitialConditions();
             eat->addInitialConditions(initialConditions);
@@ -1030,12 +1034,12 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
               _opts->ic3_opts.timeout = -1;
               _opts->ic3_opts.silent = false;
               //Restore model state
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              model().release(neat);
 
               if(rv.returnType != MC::Proof) {
                 if(verb > Options::Verbose) {
@@ -1051,7 +1055,7 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
                   }
                   for(IC3::CubeSet::const_iterator it = indCubes.begin(); it != indCubes.end(); ++it) {
                     SAT::Clause cls;
-                    complement(*ev, *it, cls);
+                    Expr::complement(*ev, *it, cls);
                     GR.push_back(cls);
                     for(IDSatViewMap::iterator it = liftSatViews.begin();
                         it != liftSatViews.end(); ++it) {
@@ -1088,18 +1092,18 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
               bool success = mic(model(), _opts->ic3_opts, tr.state);
               //Restore model state
               _opts->ic3_opts.silent = false;
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              model().release(neat);
               if(success) {
                 ++numSuccess;
                 if(verb > Options::Verbose)
                   cout << "Inductive subclause found!" << endl;
                 SAT::Clause cls;
-                complement(*ev, tr.state, cls);
+                Expr::complement(*ev, tr.state, cls);
                 GR.push_back(cls);
                 for(IDSatViewMap::iterator it = liftSatViews.begin();
                     it != liftSatViews.end(); ++it) {
@@ -1164,7 +1168,7 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
 
       //Add cube to the lifting SAT database (in unprimed and primed forms)
       SAT::Clause c;
-      complement(*ev, newCube, c);
+      Expr::complement(*ev, newCube, c);
       liftSatView->add(c);
       SAT::Clause pc;
       primeVector(*ev, c, pc);
@@ -1332,7 +1336,7 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
         bool q2sat = false;
         if(q2)
           q2sat = q2->sat(&assumps2);
-        bool q3sat;
+        bool q3sat = false; // arbitrary initialization to avoid warning
         if(!q2sat) {
           SAT::GID faegid = faeSatView->newGID();
           faeSatView->add(q3clauses, faegid);
@@ -1356,7 +1360,7 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
           else {
             //As a last resort, check if the CTG state is reachable
             //Save model state
-            ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+            auto eat = model().attachment<ExprAttachment>(Key::EXPR);
             vector<ID> init(eat->initialConditions());
             eat->clearInitialConditions();
             eat->addInitialConditions(initialConditions);
@@ -1392,12 +1396,12 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
               _opts->ic3_opts.timeout = -1;
               _opts->ic3_opts.silent = false;
               //Restore model state
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              model().release(neat);
 
               if(rv.returnType != MC::Proof) {
                 if(verb > Options::Verbose) {
@@ -1413,7 +1417,7 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
                   }
                   for(IC3::CubeSet::const_iterator it = indCubes.begin(); it != indCubes.end(); ++it) {
                     SAT::Clause cls;
-                    complement(*ev, *it, cls);
+                    Expr::complement(*ev, *it, cls);
                     GR.push_back(cls);
                     for(IDSatViewMap::iterator it = liftSatViews.begin();
                         it != liftSatViews.end(); ++it) {
@@ -1450,18 +1454,18 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
               bool success = mic(model(), _opts->ic3_opts, tr.state);
               //Restore model state
               _opts->ic3_opts.silent = false;
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              model().release(neat);
               if(success) {
                 ++numSuccess;
                 if(verb > Options::Verbose)
                   cout << "Inductive subclause found!" << endl;
                 SAT::Clause cls;
-                complement(*ev, tr.state, cls);
+                Expr::complement(*ev, tr.state, cls);
                 GR.push_back(cls);
                 for(IDSatViewMap::iterator it = liftSatViews.begin();
                     it != liftSatViews.end(); ++it) {
@@ -1525,7 +1529,7 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
       Expr::CNFIZE(*ev, tmpQLB, q3clauses);
       //Add cube to the lifting SAT database (in unprimed and primed forms)
       SAT::Clause c;
-      complement(*ev, newCube, c);
+      Expr::complement(*ev, newCube, c);
       liftSatView->add(c);
       SAT::Clause pc;
       primeVector(*ev, c, pc);
@@ -1626,7 +1630,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
           liftEX(tr, id);
           bruteForceLiftEX(tr, id);
           SAT::Clause cls;
-          complement(*ev, tr.state, cls);
+          Expr::complement(*ev, tr.state, cls);
           liftSatView->add(cls);
           QLBcubes[id].push_back(tr.state);
         }
@@ -1673,7 +1677,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
           else {
             //As a last resort, check if the CTG state is reachable
             //Save model state
-            ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+            auto eat = model().attachment<ExprAttachment>(Key::EXPR);
             vector<ID> init(eat->initialConditions());
             eat->clearInitialConditions();
             eat->addInitialConditions(initialConditions);
@@ -1709,12 +1713,12 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
               _opts->ic3_opts.timeout = -1;
               _opts->ic3_opts.silent = false;
               //Restore model state
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              model().release(neat);
 
               if(rv.returnType != MC::Proof) {
                 if(verb > Options::Verbose) {
@@ -1730,7 +1734,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
                   }
                   for(IC3::CubeSet::const_iterator it = indCubes.begin(); it != indCubes.end(); ++it) {
                     SAT::Clause cls;
-                    complement(*ev, *it, cls);
+                    Expr::complement(*ev, *it, cls);
                     GR.push_back(cls);
                     for(IDSatViewMap::iterator it = liftSatViews.begin();
                         it != liftSatViews.end(); ++it) {
@@ -1767,18 +1771,18 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
               bool success = mic(model(), _opts->ic3_opts, tr.state);
               //Restore model state
               _opts->ic3_opts.silent = false;
-              eat = (ExprAttachment *) model().attachment(Key::EXPR);
-              eat->clearInitialConditions();
-              eat->addInitialConditions(init);
-              eat->clearOutputFns();
-              eat->setOutputFns(outputs, outputFns);
-              model().release(eat);
+              auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+              neat->clearInitialConditions();
+              neat->addInitialConditions(init);
+              neat->clearOutputFns();
+              neat->setOutputFns(outputs, outputFns);
+              model().release(neat);
               if(success) {
                 ++numSuccess;
                 if(verb > Options::Verbose)
                   cout << "Inductive subclause found!" << endl;
                 SAT::Clause cls;
-                complement(*ev, tr.state, cls);
+                Expr::complement(*ev, tr.state, cls);
                 GR.push_back(cls);
                 for(IDSatViewMap::iterator it = liftSatViews.begin();
                     it != liftSatViews.end(); ++it) {
@@ -1804,7 +1808,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
           liftEX(tr, id);
           bruteForceLiftEX(tr, id);
           SAT::Clause cls;
-          complement(*ev, tr.state, cls);
+          Expr::complement(*ev, tr.state, cls);
           liftSatView->add(cls);
           //Add to QLBcubes
           QLBcubes[id].push_back(tr.state);
@@ -1825,7 +1829,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
       s_bar = newCube;
       //Add cube to SAT database
       vector<ID> cls;
-      complement(*ev, newCube, cls);
+      Expr::complement(*ev, newCube, cls);
       liftSatView->add(cls);
       --i;
     }
@@ -1942,7 +1946,7 @@ void IICTLAction::generalizeTwoStateTrace(vector<Transition> & cex, ID id, ID ch
 
     //Add reduced cube to lifting SAT database
     vector<ID> cls;
-    complement(*ev, cex.front().state, cls);
+    Expr::complement(*ev, cex.front().state, cls);
     liftSatView->add(cls);
 
     int64_t totTime = 0;
@@ -2004,7 +2008,7 @@ void IICTLAction::generalizeTwoStateTrace(vector<Transition> & cex, ID id, ID ch
     liftSatView->remove(gid1);
     faeSatView->remove(gid2);
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     assert(!tr.value());
     liftSatView->remove(gid1);
     faeSatView->remove(gid2);
@@ -2020,7 +2024,7 @@ void IICTLAction::generalizeTwoStateTrace(vector<Transition> & cex, ID id, ID ch
   CubeSet cs;
   for(vector< vector<ID> >::iterator it = GR.begin(); it != GR.end(); ++it) {
     vector<ID> cube;
-    complement(*ev, *it, cube);
+    Expr::complement(*ev, *it, cube);
     cs.insert(cube);
   }
   int size = GR.size();
@@ -2029,14 +2033,14 @@ void IICTLAction::generalizeTwoStateTrace(vector<Transition> & cex, ID id, ID ch
   GR.clear();
   for(CubeSet::iterator it = cs.begin(); it != cs.end(); ++it) {
     vector<ID> cls;
-    complement(*ev, *it, cls);
+    Expr::complement(*ev, *it, cls);
     GR.push_back(cls);
   }
   if(verbosity > Options::Informative)
     cout << "Subsumption on GR removed " << size - GR.size() << endl;
 
   if(model().options().count("iictl_count_reach")) {
-    BddAttachment const * bat = (BddAttachment *) model().constAttachment(Key::BDD);
+    BddAttachment const * const bat = (BddAttachment const *) model().constAttachment(Key::BDD);
     if(verbosity > Options::Informative)
       cout << "Number of potentially reachable states";
     bat->countStates(GR, *ev);
@@ -2083,7 +2087,7 @@ void IICTLAction::generalizeTwoStateTrace(vector<Transition> & cex, ID id, ID ch
     //2) Add !QLBcubes
     for(vector< vector<ID> >::const_iterator it = QLBcubes[id].begin(); it != QLBcubes[id].end(); ++it) {
       SAT::Clause cls;
-      complement(*ev, *it, cls);
+      Expr::complement(*ev, *it, cls);
       sman->add(cls);
     }
     //3) Add UB
@@ -2124,7 +2128,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
     try {
       liftSatView->add(cls, gid1);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       assert(tr.value());
     }
   }
@@ -2142,14 +2146,14 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
     try {
       liftSatView->add(cls, gid1);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       assert(tr.value());
     }
   }
   //c) Second add !QLBcubes'
   for(vector< vector<ID> >::const_iterator it = QLBcubes[id].begin(); it != QLBcubes[id].end(); ++it) {
     SAT::Clause cls;
-    complement(*ev, *it, cls);
+    Expr::complement(*ev, *it, cls);
     //Prime
     SAT::Clause prcls;
     primeVector(*ev, cls, prcls);
@@ -2168,7 +2172,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
   for(vector<Transition>::const_iterator it = cex.begin();
       it != cex.end(); ++it) {
     SAT::Clause cls;
-    complement(*ev, it->state, cls);
+    Expr::complement(*ev, it->state, cls);
     liftSatView->add(cls);
     SAT::Clause primedCls;
     primeVector(*ev, cls, primedCls);
@@ -2380,7 +2384,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
 */
     }
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     liftSatView->remove(gid1);
     assert(!tr.value());
     QLBId[id] = ev->btrue();
@@ -2396,7 +2400,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
   CubeSet cs;
   for(vector< vector<ID> >::iterator it = GR.begin(); it != GR.end(); ++it) {
     vector<ID> cube;
-    complement(*ev, *it, cube);
+    Expr::complement(*ev, *it, cube);
     cs.insert(cube);
   }
   int size = GR.size();
@@ -2405,14 +2409,14 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
   GR.clear();
   for(CubeSet::iterator it = cs.begin(); it != cs.end(); ++it) {
     vector<ID> cls;
-    complement(*ev, *it, cls);
+    Expr::complement(*ev, *it, cls);
     GR.push_back(cls);
   }
   if(verbosity > Options::Informative)
     cout << "Subsumption on GR removed " << size - GR.size() << endl;
 
   if(model().options().count("iictl_count_reach")) {
-    BddAttachment const * bat = (BddAttachment *) model().constAttachment(Key::BDD);
+    BddAttachment const * const bat = (BddAttachment const *) model().constAttachment(Key::BDD);
     cout << "Number of potentially reachable states";
     bat->countStates(GR, *ev);
     model().constRelease(bat);
@@ -2426,7 +2430,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
       if(it == cex.begin()) {
         set<ID> ids;
         ids.insert(it->state.begin(), it->state.end());
-        ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+        auto eat = model().attachment<ExprAttachment>(Key::EXPR);
         vector<ID> svs = eat->stateVars();
         for(vector<ID>::const_iterator it2 = svs.begin(); it2 != svs.end(); ++it2) {
           if(ids.find(*it2) != ids.end()) {
@@ -2462,7 +2466,7 @@ void IICTLAction::generalizeEFTrace(vector<Transition> & cex, ID id) {
     //2) Add !QLBcubes
     for(vector< vector<ID> >::const_iterator it = QLBcubes[id].begin(); it != QLBcubes[id].end(); ++it) {
       SAT::Clause cls;
-      complement(*ev, *it, cls);
+      Expr::complement(*ev, *it, cls);
       sman->add(cls);
     }
     //3) Add UB
@@ -2510,7 +2514,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
     try {
       liftSatView->add(cls, gid1);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       assert(tr.value());
     }
   }
@@ -2528,14 +2532,14 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
     try {
       liftSatView->add(cls, gid1);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       assert(tr.value());
     }
   }
   //c) Second add !QLBcubes'
   for(vector< vector<ID> >::const_iterator it = QLBcubes[id].begin(); it != QLBcubes[id].end(); ++it) {
     SAT::Clause cls;
-    complement(*ev, *it, cls);
+    Expr::complement(*ev, *it, cls);
     //Prime
     SAT::Clause prcls;
     primeVector(*ev, cls, prcls);
@@ -2558,7 +2562,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
     try {
       q2view->add(cls);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       if(!tr.value()) {
         delete q2view;
         q2view = NULL;
@@ -2580,7 +2584,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
   for(vector<Transition>::const_iterator it = cex.begin();
       it != cex.end(); ++it) {
     SAT::Clause cls;
-    complement(*ev, it->state, cls);
+    Expr::complement(*ev, it->state, cls);
     liftSatView->add(cls);
     SAT::Clause primedCls;
     primeVector(*ev, cls, primedCls);
@@ -2785,7 +2789,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
 */
     }
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     liftSatView->remove(gid1);
     delete q2view;
     delete q2man;
@@ -2805,7 +2809,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
   CubeSet cs;
   for(vector< vector<ID> >::iterator it = GR.begin(); it != GR.end(); ++it) {
     vector<ID> cube;
-    complement(*ev, *it, cube);
+    Expr::complement(*ev, *it, cube);
     cs.insert(cube);
   }
   int size = GR.size();
@@ -2814,14 +2818,14 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
   GR.clear();
   for(CubeSet::iterator it = cs.begin(); it != cs.end(); ++it) {
     vector<ID> cls;
-    complement(*ev, *it, cls);
+    Expr::complement(*ev, *it, cls);
     GR.push_back(cls);
   }
   if(verbosity > Options::Informative)
     cout << "Subsumption on GR removed " << size - GR.size() << endl;
 
   if(model().options().count("iictl_count_reach")) {
-    BddAttachment const * bat = (BddAttachment *) model().constAttachment(Key::BDD);
+    BddAttachment const * const bat = (BddAttachment const *) model().constAttachment(Key::BDD);
     cout << "Number of potentially reachable states";
     bat->countStates(GR, *ev);
     model().constRelease(bat);
@@ -2835,7 +2839,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
       if(it == cex.begin()) {
         set<ID> ids;
         ids.insert(it->state.begin(), it->state.end());
-        ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+        auto eat = model().attachment<ExprAttachment>(Key::EXPR);
         vector<ID> svs = eat->stateVars();
         for(vector<ID>::const_iterator it2 = svs.begin(); it2 != svs.end(); ++it2) {
           if(ids.find(*it2) != ids.end()) {
@@ -2872,7 +2876,7 @@ void IICTLAction::generalizeEUTrace(vector<Transition> & cex, ID id, ID child) {
     //2) Add !QLBcubes
     for(vector< vector<ID> >::const_iterator it = QLBcubes[id].begin(); it != QLBcubes[id].end(); ++it) {
       SAT::Clause cls;
-      complement(*ev, *it, cls);
+      Expr::complement(*ev, *it, cls);
       sview->add(cls);
     }
     //3) Add UB
@@ -2911,7 +2915,7 @@ MC::ReturnValue IICTLAction::runIC3(IC3::IC3Options & opts, ID targetID,
         cout << indCubes.size() << " inductive clauses derived" << endl;
       for(IC3::CubeSet::const_iterator it = indCubes.begin(); it != indCubes.end(); ++it) {
         SAT::Clause cls;
-        complement(*ev, *it, cls);
+        Expr::complement(*ev, *it, cls);
         GR.push_back(cls);
         //Add to all lifting SAT databases
         for(IDSatViewMap::iterator it = liftSatViews.begin();
@@ -2920,7 +2924,7 @@ MC::ReturnValue IICTLAction::runIC3(IC3::IC3Options & opts, ID targetID,
         }
       }
       if(model().options().count("iictl_count_reach")) {
-        BddAttachment const * bat = (BddAttachment *) model().constAttachment(Key::BDD);
+        BddAttachment const * const bat = (BddAttachment const *) model().constAttachment(Key::BDD);
         cout << "Number of potentially reachable states";
         bat->countStates(GR, *ev);
         model().constRelease(bat);
@@ -2934,8 +2938,8 @@ MC::ReturnValue IICTLAction::runIC3(IC3::IC3Options & opts, ID targetID,
 
 bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints, SAT::Clauses & negConstraints,
                        IC3::ProofProcType grppt, bool globalLast,
-                       vector<SAT::Clauses> & proofs, Lasso & cex, ID id) {
-  ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+                       vector<SAT::Clauses> & proofs, Lasso & cex, ID) {
+  auto eat = model().attachment<ExprAttachment>(Key::EXPR);
   //Save the old output functions
   vector<ID> outputs = eat->outputs();
   vector<ID> outputFns = eat->outputFns();
@@ -2993,7 +2997,7 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints, SA
   int iter = 0;
   while(true) {
     double prob = exp(-bmcFail[id] * iter / double(bmcFactor));
-    if(rand() < prob * RAND_MAX) {
+    if(Random::rand() < prob * RAND_MAX) {
       if(verbosity > Options::Informative)
         cout << "FCBMC: (" << timeout << "s)" << endl;
       rv = fcbmc.check(timeout, 8191, &cex);
@@ -3009,7 +3013,7 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints, SA
 
     opts.timeout = timeout;
     prob = exp(-ic3Fail[id] * iter / double(ic3Factor));
-    if(rand() < prob * RAND_MAX) {
+    if(Random::rand() < prob * RAND_MAX) {
       if(verbosity > Options::Informative)
         cout << "Fair: (" << timeout << "s)" << endl;
       rv = Fair::fairPath(model(), opts, &cex, &proofs);
@@ -3028,12 +3032,12 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints, SA
   }
 #endif
 
-  eat = (ExprAttachment *) model().attachment(Key::EXPR);
-  eat->clearOutputFns();
-  eat->setOutputFns(outputs, outputFns);
-  eat->clearInitialConditions();
-  eat->addInitialConditions(init);
-  model().release(eat);
+  auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+  neat->clearOutputFns();
+  neat->setOutputFns(outputs, outputFns);
+  neat->clearInitialConditions();
+  neat->addInitialConditions(init);
+  model().release(neat);
 
   if(rv.returnType == MC::Proof)
     return false;
@@ -3046,9 +3050,9 @@ bool IICTLAction::reach(const vector<ID> & source, ID targetID,
                         vector<SAT::Clauses> & constraints,
                         SAT::Clauses & negConstraints,
                         IC3::ProofProcType ppt, vector<SAT::Clauses> & proofs,
-                        vector<Transition> & cex, ID id, bool isEU) {
+                        vector<Transition> & cex, ID, bool isEU) {
 
-  ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+  auto eat = model().attachment<ExprAttachment>(Key::EXPR);
   //Change the output function
   vector<ID> outputs = eat->outputs();
   vector<ID> outputFns = eat->outputFns();
@@ -3121,7 +3125,7 @@ bool IICTLAction::reach(const vector<ID> & source, ID targetID,
     bopts.timeout = timeout;
     bound = 8191; //Maximum number of primes allowed by the expression package
     double prob = exp(-bmcFail[id] * iter / double(bmcFactor));
-    if(rand() < prob * RAND_MAX) {
+    if(Random::rand() < prob * RAND_MAX) {
       if(verbosity > Options::Informative)
         cout << "BMC: (" << timeout << "s)" << endl;
       rv = BMC::check(model(), bopts, &cex);
@@ -3139,7 +3143,7 @@ bool IICTLAction::reach(const vector<ID> & source, ID targetID,
     opts.timeout = timeout;
 
     prob = exp(-ic3Fail[id] * iter / double(ic3Factor));
-    if(rand() < prob * RAND_MAX) {
+    if(Random::rand() < prob * RAND_MAX) {
       if(verbosity > Options::Informative)
         cout << "IC3: (" << timeout << "s)" << endl;
       rv = runIC3(opts, targetID, cex, proofs, incremental, propagate);
@@ -3159,12 +3163,12 @@ bool IICTLAction::reach(const vector<ID> & source, ID targetID,
 #endif
 
   //Restore the original model
-  eat = (ExprAttachment *) model().attachment(Key::EXPR);
-  eat->clearOutputFns();
-  eat->setOutputFns(outputs, outputFns);
-  eat->clearInitialConditions();
-  eat->addInitialConditions(init);
-  model().release(eat);
+  auto neat = model().attachment<ExprAttachment>(Key::EXPR);
+  neat->clearOutputFns();
+  neat->setOutputFns(outputs, outputFns);
+  neat->clearInitialConditions();
+  neat->addInitialConditions(init);
+  model().release(neat);
   
   if(rv.returnType == MC::CEX)
     return true;
@@ -3211,7 +3215,7 @@ bool IICTLAction::equivalent(ID id1, ID id2) {
   try {
     sview->add(clauses);
   }
-  catch(SAT::Trivial tr) {
+  catch(SAT::Trivial const & tr) {
     //Unsat (equivalent)
     delete sview;
     delete sman;
@@ -3228,7 +3232,9 @@ bool IICTLAction::equivalent(ID id1, ID id2) {
 RefineType IICTLAction::update(ID id, RefineType childRefinement) {
 
   int nArgs;
-  ID const * const child = ev->arguments(id, &nArgs);
+  ID const * const childAr = ev->arguments(id, &nArgs);
+
+  vector<ID> child(childAr, childAr + nArgs);
 
   assert(childRefinement != None);
 
@@ -3491,7 +3497,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           try {
             satView->add(cls);
           }
-          catch(SAT::Trivial tr) {
+          catch(SAT::Trivial const & tr) {
             assert(tr.value());
           }
         }
@@ -3500,7 +3506,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         resetAssign(primedStateAsgn);
         asgn = primedStateAsgn;
         //Add inputs
-        ExprAttachment const * eat = (ExprAttachment const *)
+        ExprAttachment const * const eat = (ExprAttachment const *)
                                      model().constAttachment(Key::EXPR);
         const vector<ID> & inputs = eat->inputs();
         for(vector<ID>::const_iterator it = inputs.begin(); it != inputs.end(); ++it) {
@@ -3549,7 +3555,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         }
         else {
           vector<ID> cls;
-          complement(*ev, assumps, cls);
+          Expr::complement(*ev, assumps, cls);
           if(verbosity > Options::Verbose) {
             set<ID> ids(cls.begin(), cls.end());
             ExprAttachment const * const eat = (ExprAttachment const *)
@@ -3614,7 +3620,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
               try {
                 satView->add(cls);
               }
-              catch(SAT::Trivial tr) {
+              catch(SAT::Trivial const & tr) {
                 assert(tr.value());
               }
             }
@@ -3759,7 +3765,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           for(vector< vector<ID> >::const_iterator it = proof.begin();
               it != proof.end(); ++it) {
             vector<ID> cube;
-            complement(*ev, *it, cube);
+            Expr::complement(*ev, *it, cube);
             cubes.push_back(ev->apply(Expr::And, cube));
           }
           cubes.push_back(UBId[child[0]]);
@@ -3845,7 +3851,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           for(vector< vector<ID> >::const_iterator it = proof.begin();
               it != proof.end(); ++it) {
             vector<ID> cube;
-            complement(*ev, *it, cube);
+            Expr::complement(*ev, *it, cube);
             cubes.push_back(ev->apply(Expr::And, cube));
           }
           cubes.push_back(ev->apply(Expr::And, UBId[id], QLBId[id]));
@@ -3966,7 +3972,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           for(vector< vector<ID> >::const_iterator it = proof.begin();
               it != proof.end(); ++it) {
             vector<ID> cube;
-            complement(*ev, *it, cube);
+            Expr::complement(*ev, *it, cube);
             cubes.push_back(ev->apply(Expr::And, cube));
           }
           ID nproofID = ev->apply(Expr::Or, cubes);
@@ -4192,7 +4198,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           for(vector< vector<ID> >::const_iterator it = proof.begin();
               it != proof.end(); ++it) {
             vector<ID> cube;
-            complement(*ev, *it, cube);
+            Expr::complement(*ev, *it, cube);
             cubes.push_back(ev->apply(Expr::And, cube));
           }
           cubes.push_back(UBId[child[1]]);
@@ -4365,7 +4371,7 @@ MC::ReturnValue IICTLAction::check() {
 
   if (model().options().count("iictl_use_bdd_reach")) {
     if (model().options().count("bdd_save_fw_reach")) {
-      RchAttachment const *rat = (RchAttachment const *) model().constAttachment(Key::RCH);
+      RchAttachment const * const rat = (RchAttachment const *) model().constAttachment(Key::RCH);
       //this is actually the exact forward reachable states and not a lower
       //bound because with the bdd_save_fw_reach option, the lower bound is
       //only saved if forward reachability has completed
@@ -4414,11 +4420,11 @@ MC::ReturnValue IICTLAction::check() {
     try {
       decide(state, property, multiInit ? SkipForUpper : SkipForBoth); 
     }
-    catch(Safe) {
+    catch(Safe const &) {
       rv.returnType = MC::Proof;
       break;
     }
-    catch(CEX) {
+    catch(CEX const &) {
       rv.returnType = MC::CEX;
       break;
     }
@@ -4431,7 +4437,7 @@ void IICTLAction::init() {
   ev = model().newView();
  
   //Grab the transition relation CNF
-  CNFAttachment const * cat = (CNFAttachment const *)
+  CNFAttachment const * const cat = (CNFAttachment const *)
                               model().constAttachment(Key::CNF);
   tr = cat->getPlainCNF();
   model().constRelease(cat);
@@ -4440,7 +4446,7 @@ void IICTLAction::init() {
   faeSatView = faeSatMan->newView(*ev);
   faeSatView->add(tr);
 
-  ExprAttachment const * eat = (ExprAttachment const *)
+  ExprAttachment const * const eat = (ExprAttachment const *)
                                model().constAttachment(Key::EXPR);
   if(eat->initialConditions().size() != eat->stateVars().size()) {
     multiInit = true;
@@ -4490,7 +4496,7 @@ void IICTLAction::exec() {
 
   MC::ReturnValue rv = check();
   if (rv.returnType != MC::Unknown) {
-    ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+    auto pat = model().attachment<ProofAttachment>(Key::PROOF);
     if (rv.returnType == MC::Proof)
       pat->setConclusion(0);
     else if (rv.returnType == MC::CEX)

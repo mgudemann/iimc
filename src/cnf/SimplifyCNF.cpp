@@ -53,8 +53,8 @@ namespace CNF {
                 vector< vector<ID> > & out,
                 vector<ID> inputs,
                 vector<ID> latches,
-                vector<ID> fns,
-                bool replace,
+                vector<ID>,
+                bool,
                 Expr::Manager::View * _ev)
   {
     ID2VAR id2var;

@@ -96,7 +96,7 @@ namespace {
   }
 } // namespace anonymous
 
-void CNFAttachment::techMap(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>& inputs, vector<ID>& fns, vector<vector<ID> >& _cnf)
+void CNFAttachment::techMap(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>&, vector<ID>& fns, vector<vector<ID> >& _cnf)
 {
   // get options
   unsigned k = _model.options()["tmcnf_k"].as<unsigned>();
@@ -112,8 +112,8 @@ void CNFAttachment::techMap(const ExprAttachment * eat, Expr::Manager::View * vi
     cout << "CNFAttachment: building CNF using Technology Mapping (k = " << k << ", l = " << l << ")\n";
   
   // get mutable aig attachments
-  const AIGAttachment* aigat = static_cast<const AIGAttachment *>(_model.constAttachment(Key::AIG));
-  AIGAttachment cpaigat(*aigat);
+  const AIGAttachment* const aigat = static_cast<const AIGAttachment *>(_model.constAttachment(Key::AIG));
+  AIGAttachment cpaigat(*aigat, model());
 
   // save off initial AIG size
   unsigned aig_init_size = cpaigat.aig.size();
@@ -229,7 +229,7 @@ void CNFAttachment::techMap(const ExprAttachment * eat, Expr::Manager::View * vi
   _model.constRelease(aigat);
 }
 
-void CNFAttachment::nice(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>& inputs, vector<ID>& fns, vector<vector<ID> >& _cnf)
+void CNFAttachment::nice(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>&, vector<ID>& fns, vector<vector<ID> >& _cnf)
 {
   if (model().verbosity() > Options::Silent)
     cout << "CNFAttachment: building CNF using NiceDAGs translation\n";
@@ -266,7 +266,7 @@ void CNFAttachment::nice(const ExprAttachment * eat, Expr::Manager::View * view,
   //exit(1);
 }
 
-void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>& inputs, vector<ID>& fns, vector<vector<ID> >& _cnf)
+void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>&, vector<ID>& fns, vector<vector<ID> >& _cnf)
 {
   if (model().verbosity() > Options::Silent)
     cout << "CNFAttachment: building CNF using Tseitin translation\n";
@@ -316,7 +316,7 @@ void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * vi
 }
 
 
-void CNFAttachment::wilson(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>& inputs, vector<ID>& fns, vector<vector<ID> >& _cnf)
+void CNFAttachment::wilson(const ExprAttachment * eat, Expr::Manager::View * view, vector<ID>& latches, vector<ID>&, vector<ID>& fns, vector<vector<ID> >& _cnf)
 {
   if (model().verbosity() > Options::Silent)
     cout << "CNFAttachment: building CNF using Wilson translation\n";
@@ -364,7 +364,7 @@ void CNFAttachment::build()
 {
   bool disable_simp = model().options().count("cnf_simp_disable");
   // create constant ExprAttachment.  It is used by all CNF conversions
-  ExprAttachment const * eat = static_cast<ExprAttachment const *>(_model.constAttachment(Key::EXPR));
+  ExprAttachment const * const eat = static_cast<ExprAttachment const *>(_model.constAttachment(Key::EXPR));
   vector<vector<ID> > tmp;
   cnf.clear();
   _core_cnf.clear();
@@ -415,7 +415,7 @@ void CNFAttachment::build()
   model().constRelease(eat);
 }
 
-string CNFAttachment::string(bool includeDetails) const
+string CNFAttachment::string(bool) const
 {
   return "";
 }

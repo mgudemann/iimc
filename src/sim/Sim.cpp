@@ -36,12 +36,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include<vector>
 
 #include "Sim.h"
-#include "SimUtil.h"
 #include "Expr.h"
 #include "AIGAttachment.h"
 #include "ExprAttachment.h"
 #include "Model.h"
 #include "AIG.h"
+#include "Random.h"
 
 using namespace std;
 
@@ -51,7 +51,7 @@ namespace {
    * This is the low-level function that evaluates the AIG node values
    * according to the topological sort
    */
-  void simulateAig(Opt::AIG& aig, vector<char>& nodeValues) {
+  void simulateAig(Opt::AIG const & aig, vector<char>& nodeValues) {
     for(unsigned i = 1; i < aig.size(); ++i) {
       //Skip nodes that don't have fanins
       if(aig[i].isVar()) continue;
@@ -91,7 +91,7 @@ namespace Sim {
       bool operator()(vector<char>& state, vector<char>& inputs) {
         bool ret = stateFunc(state);
         for(unsigned i = 0; i < inputs.size(); ++i) {
-          inputs[i] = RandomGenerator::randomBool();
+          inputs[i] = Random::randomBool();
         }
         return ret;
       }
@@ -109,14 +109,14 @@ namespace Sim {
       StateAndInputsFunctor& func) {
 
     //Grab the AIG attachment (read-only)
-    AIGAttachment *aat = (AIGAttachment*) model.constAttachment(Key::AIG);
+    AIGAttachment const * const aat = (AIGAttachment const *) model.constAttachment(Key::AIG);
     //Create a reference to the AIG from the AIG attachment
-    Opt::AIG& aig = aat->aig;
+    Opt::AIG const & aig = aat->aig;
     //Get the ID to AIG reference
-    Opt::IDRefMap& aigRefOfId = aat->id2ref;
+    Opt::IDRefMap const & aigRefOfId = aat->id2ref;
 
     //Get the ExprAttachment (read-only)
-    ExprAttachment *eat = (ExprAttachment*) model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) model.constAttachment(Key::EXPR);
     const vector<ID>& inputs = eat->inputs();
     const vector<ID>& stateVars = eat->stateVars();
 
@@ -145,10 +145,10 @@ namespace Sim {
         cout << "op not Var!" << endl;
         assert(false);
         //Check if the latch references by this initial condition is in the AIG
-        Opt::IDRefMap::iterator it = aigRefOfId.find(initialConditions[i]);
+        Opt::IDRefMap::const_iterator it = aigRefOfId.find(initialConditions[i]);
         if(it != aigRefOfId.end()) {
           //Then it is true
-          nodeValues[UIGET(Opt::indexOf(aigRefOfId[initialConditions[i]]))] =
+          nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(initialConditions[i])))] =
               1;
           //Mark this latch as assigned
           latchAssigned.insert(initialConditions[i]);
@@ -158,9 +158,9 @@ namespace Sim {
         assert(op == Expr::Not);
         ID latch = modelView->apply(Expr::Not,initialConditions[i]);
         //Check if the latch references by this initial condition is in the AIG
-        Opt::IDRefMap::iterator it = aigRefOfId.find(latch);
+        Opt::IDRefMap::const_iterator it = aigRefOfId.find(latch);
         if(it != aigRefOfId.end()) {
-          nodeValues[UIGET(Opt::indexOf(aigRefOfId[latch]))] =
+          nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(latch)))] =
               0;
           latchAssigned.insert(latch);
         }
@@ -173,18 +173,18 @@ namespace Sim {
     if(latchAssigned.size() < stateVars.size()) {
       for(unsigned i = 0; i < stateVars.size(); ++i) {
         //Check if this latch is in the AIG
-        Opt::IDRefMap::iterator it = aigRefOfId.find(stateVars[i]);
+        Opt::IDRefMap::const_iterator it = aigRefOfId.find(stateVars[i]);
         if(it != aigRefOfId.end()) {
           //Check if this latch has not already been assigned
           if(latchAssigned.find(stateVars[i]) == latchAssigned.end()) {
             //Should never come here for AIGER
             assert(false);
             //If not generate a random value for it
-            nodeValues[UIGET(Opt::indexOf(aigRefOfId[stateVars[i]]))] =
-                RandomGenerator::randomBool();
+            nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(stateVars[i])))] =
+                Random::randomBool();
           }
           //Assign this state
-          state[i] = nodeValues[UIGET(Opt::indexOf(aigRefOfId[stateVars[i]]))];
+          state[i] = nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(stateVars[i])))];
         }
       }
     }
@@ -198,9 +198,9 @@ namespace Sim {
       //Assign input values
       for(unsigned i = 0; i < inputs.size(); ++i) {
         //Make sure this input is in the AIG
-        Opt::IDRefMap::iterator it = aigRefOfId.find(inputs[i]);
+        Opt::IDRefMap::const_iterator it = aigRefOfId.find(inputs[i]);
         if(it != aigRefOfId.end()) {
-          nodeValues[UIGET(Opt::indexOf(aigRefOfId[inputs[i]]))] =
+          nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(inputs[i])))] =
               inputValues[i];
         }
       }
@@ -212,13 +212,13 @@ namespace Sim {
       if(cycle != numCycles - 1) {
         for(unsigned i = 0; i < stateVars.size(); ++i) {
           //Check if this latch is in the AIG
-          Opt::IDRefMap::iterator it = aigRefOfId.find(stateVars[i]);
+          Opt::IDRefMap::const_iterator it = aigRefOfId.find(stateVars[i]);
           if(it != aigRefOfId.end()) {
             //Get the next state values of this state variable. The next state
             //value might either be a value in nodeValues if it's equal to a node
             //in the AIG, or the negation of a value in nodeValues if it's the
             //negation of a node in the AIG
-            Opt::NodeRef nextFn = aigRefOfId[eat->nextStateFnOf(stateVars[i])];
+            Opt::NodeRef nextFn = aigRefOfId.at(eat->nextStateFnOf(stateVars[i]));
             bool val = nodeValues[UIGET(Opt::indexOf(nextFn))];
             if(Opt::isNot(nextFn)) {
               val = !val;
@@ -227,7 +227,7 @@ namespace Sim {
             state[i] = val;
 
             //Assign the value of the latch to the next state value
-            nodeValues[UIGET(Opt::indexOf(aigRefOfId[stateVars[i]]))] = val;
+            nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(stateVars[i])))] = val;
           }
         }
       }
@@ -242,7 +242,7 @@ namespace Sim {
   void randomSimulate(Model& model, Opt::AIG& aig,
       Opt::IDRefMap& aigRefOfId, vector<char>& nodeValues) {
 
-    ExprAttachment *eat = (ExprAttachment *) model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) model.constAttachment(Key::EXPR);
     int inputLength = eat->inputs().size() + eat->stateVars().size();
 
     //Create random vectors
@@ -250,7 +250,7 @@ namespace Sim {
     //Generate random values
     for(int i = 0; i < inputLength; ++i) {
       //randValues[i] = rand() % 2;
-      randValues[i] = RandomGenerator::randomBool();
+      randValues[i] = Random::randomBool();
     }
 
     simulate(model, aig, aigRefOfId, nodeValues, randValues);
@@ -262,7 +262,7 @@ namespace Sim {
       vector<char>& nodeValues, vector<char>& inputValues) {
     
     //Add the input and state variable values to the map
-    ExprAttachment *eat = (ExprAttachment *) model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) model.constAttachment(Key::EXPR);
     const vector<ID>& inputs = eat->inputs();
     const vector<ID>& stateVars = eat->stateVars();
 
@@ -299,7 +299,7 @@ namespace Sim {
                       vector<uint64_t>::iterator inputsEnd) {
         bool ret = stateFunc(stateBegin, stateEnd);
         for(vector<uint64_t>::iterator it = inputsBegin; it != inputsEnd; ++it) {
-          *it = RandomGenerator::randomUint64();
+          *it = Random::randomUint64();
         }
         return ret;
       }
@@ -323,7 +323,7 @@ namespace Sim {
                       vector<uint64_t>::iterator inputsEnd) {
         bool ret = nodeValuesFunc(nodeValues);
         for(vector<uint64_t>::iterator it = inputsBegin; it != inputsEnd; ++it) {
-          *it = RandomGenerator::randomUint64();
+          *it = Random::randomUint64();
         }
         return ret;
       }
@@ -344,16 +344,16 @@ namespace Sim {
       NodeValuesAndInputsFunctor64& func) {
 
     //Grab the AIG attachment (read-only)
-    AIGAttachment *aat = (AIGAttachment*) model.constAttachment(Key::AIG);
+    AIGAttachment const * const aat = (AIGAttachment const *) model.constAttachment(Key::AIG);
     //Create a reference to the AIG from the AIG attachment
-    Opt::AIG& aig = aat->aig;
+    Opt::AIG const & aig = aat->aig;
     //Get the ID to AIG reference map
-    Opt::IDRefMap& aigRefOfId = aat->id2ref;
+    Opt::IDRefMap const & aigRefOfId = aat->id2ref;
     //Get the AIG reference to ID map
-    Opt::RefIDMap& idOfAigRef = aat->ref2id;
+    Opt::RefIDMap const & idOfAigRef = aat->ref2id;
 
     //Get the ExprAttachment (read-only)
-    ExprAttachment *eat = (ExprAttachment*) model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) model.constAttachment(Key::EXPR);
 
     //Create a view of the model
     Expr::Manager::View* modelView = model.newView();
@@ -377,7 +377,7 @@ namespace Sim {
         //For AIGER, we should never come here
         assert(aigRefOfId.find(initialConditions[i]) != aigRefOfId.end());
         //Set it's value to true
-        nodeValues[UIGET(Opt::indexOf(aigRefOfId[initialConditions[i]]))] =
+        nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(initialConditions[i])))] =
             0xFFFFFFFFFFFFFFFFLL;
         //Mark this latch as assigned
         latchAssigned.insert(initialConditions[i]);
@@ -386,7 +386,7 @@ namespace Sim {
         assert(op == Expr::Not);
         ID latch = modelView->apply(Expr::Not, initialConditions[i]);
         assert(aigRefOfId.find(latch) != aigRefOfId.end());
-        nodeValues[UIGET(Opt::indexOf(aigRefOfId[latch]))] = 0;
+        nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(latch)))] = 0;
         latchAssigned.insert(latch);
       }
     }
@@ -397,9 +397,9 @@ namespace Sim {
     for(unsigned i = 1 + aig.numInputs();
         i < 1 + aig.numInputs() + aig.numStateVars(); ++i) {
       //Check if this latch has not already been assigned
-      if(latchAssigned.find(idOfAigRef[Opt::refOf(i, false)]) == latchAssigned.end()) {
+      if(latchAssigned.find(idOfAigRef.at(Opt::refOf(i, false))) == latchAssigned.end()) {
         //If not generate a random value for it
-        nodeValues[i] = RandomGenerator::randomUint64();
+        nodeValues[i] = Random::randomUint64();
       }
     }
 
@@ -411,7 +411,7 @@ namespace Sim {
     vector<ID> indexToID(aig.size());
     for(unsigned i = 0; i < aig.size(); ++i) {
       assert(idOfAigRef.find(Opt::refOf(i, false)) != idOfAigRef.end());
-      indexToID[i] = idOfAigRef[Opt::refOf(i, false)];
+      indexToID[i] = idOfAigRef.at(Opt::refOf(i, false));
     }
 
     func.indexToIDMap(indexToID);
@@ -446,16 +446,16 @@ namespace Sim {
       StateAndInputsFunctor64& func, OutputsFunctor64& outFunc) {
 
     //Grab the AIG attachment (read-only)
-    AIGAttachment *aat = (AIGAttachment*) model.constAttachment(Key::AIG);
+    AIGAttachment const * const aat = (AIGAttachment const *) model.constAttachment(Key::AIG);
     //Create a reference to the AIG from the AIG attachment
-    Opt::AIG& aig = aat->aig;
+    Opt::AIG const & aig = aat->aig;
     //Get the ID to AIG reference map
-    Opt::IDRefMap& aigRefOfId = aat->id2ref;
+    Opt::IDRefMap const & aigRefOfId = aat->id2ref;
     //Get the AIG reference to ID map
-    Opt::RefIDMap& idOfAigRef = aat->ref2id;
+    Opt::RefIDMap const & idOfAigRef = aat->ref2id;
 
     //Get the ExprAttachment (read-only)
-    ExprAttachment *eat = (ExprAttachment*) model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) model.constAttachment(Key::EXPR);
 
     //Create a view of the model
     Expr::Manager::View* modelView = model.newView();
@@ -478,7 +478,7 @@ namespace Sim {
       if(op == Expr::Var) {
         assert(aigRefOfId.find(initialConditions[i]) != aigRefOfId.end());
         //Set it's value to true
-        nodeValues[UIGET(Opt::indexOf(aigRefOfId[initialConditions[i]]))] =
+        nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(initialConditions[i])))] =
             0xFFFFFFFFFFFFFFFFLL;
         //Mark this latch as assigned
         latchAssigned.insert(initialConditions[i]);
@@ -487,7 +487,7 @@ namespace Sim {
         assert(op == Expr::Not);
         ID latch = modelView->apply(Expr::Not, initialConditions[i]);
         assert(aigRefOfId.find(latch) != aigRefOfId.end());
-        nodeValues[UIGET(Opt::indexOf(aigRefOfId[latch]))] = 0;
+        nodeValues[UIGET(Opt::indexOf(aigRefOfId.at(latch)))] = 0;
         latchAssigned.insert(latch);
       }
     }
@@ -498,9 +498,9 @@ namespace Sim {
     for(unsigned i = 1 + aig.numInputs();
         i < 1 + aig.numInputs() + aig.numStateVars(); ++i) {
       //Check if this latch has not already been assigned
-      if(latchAssigned.find(idOfAigRef[Opt::refOf(i, false)]) == latchAssigned.end()) {
+      if(latchAssigned.find(idOfAigRef.at(Opt::refOf(i, false))) == latchAssigned.end()) {
         //If not generate a random value for it
-        nodeValues[i] = RandomGenerator::randomUint64();
+        nodeValues[i] = Random::randomUint64();
       }
     }
 
@@ -549,7 +549,7 @@ namespace Sim {
 
     //Generate random values and assign them to nodeValues directly
     for(unsigned i = 1; i <= aig.numInputs() + aig.numStateVars(); ++i) {
-      nodeValues[i] = RandomGenerator::randomUint64();
+      nodeValues[i] = Random::randomUint64();
     }
 
     //simulateAig64(aig, nodeValues, liveNodes);

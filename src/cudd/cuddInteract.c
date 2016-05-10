@@ -105,7 +105,7 @@
 /*---------------------------------------------------------------------------*/
 
 #ifndef lint
-static char rcsid[] DD_UNUSED = "$Id: cuddInteract.c,v 1.14 2012/02/05 01:07:19 fabio Exp $";
+static char rcsid[] DD_UNUSED = "$Id: cuddInteract.c,v 1.15 2013/09/19 19:46:35 fabio Exp $";
 #endif
 
 /*---------------------------------------------------------------------------*/

@@ -1,0 +1,13 @@
+MODULE main
+VAR
+  counter : 0..1000;
+
+ASSIGN
+
+  init(counter) := 0;
+  next(counter) := case
+                      counter < 1000 : counter + 1;
+                      counter = 1000 : counter;
+                   esac;
+
+SPEC (AG counter < 1000)

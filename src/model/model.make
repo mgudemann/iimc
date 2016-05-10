@@ -11,7 +11,6 @@ AM_CPPFLAGS += -I$(srcdir)/src/model
 check_PROGRAMS += \
   test_Model
 TESTS += test_Model
-
 test_Model_SOURCES = src/model/test_Model.cpp \
   $(model_Model_sources) \
   $(util_Util_sources) \

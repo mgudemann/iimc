@@ -45,11 +45,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Error.h"
 #include "AIGAttachment.h"
 #include "Sim.h"
-#include "SimUtil.h"
 #include "SAT.h"
 #include "options.h"
 #include "Util.h"
 #include "CombAttachment.h"
+#include "Random.h"
 
 using namespace std;
 using namespace Opt;
@@ -175,7 +175,7 @@ bool checkEquivalence(Model& model, AIG& aig1, AIG& aig2, RefIDMap& idOfAigRef1,
     try {
       satView->add(clauses);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       //If UNSAT
       delete satView;
       if(tr.value() == false) continue;
@@ -245,7 +245,7 @@ bool checkEquivalence(Model& model, AIG& aig1, AIG& aig2, RefIDMap& idOfAigRef1,
     try {
       satView->add(clauses);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       //IF UNSAT
       delete satView;
       if(tr.value() == false) continue;
@@ -745,7 +745,7 @@ void printEquivClasses(list<EquivClass>& classes, vector<char>& sig,
 
 void updateAIGAttachment(Model& model, vector<pair<NodeIndex, NodeRef> >& merges, Stats& stats) {
   if(stats.numMerges != 0) {
-    AIGAttachment * aatUpdate = (AIGAttachment*) model.attachment(Key::AIG);
+    auto aatUpdate = model.attachment<AIGAttachment>(Key::AIG);
     for(unsigned i = 0; i < merges.size(); ++i) {
       aatUpdate->aig.merge(merges[i].first, merges[i].second, false);
     }
@@ -755,12 +755,12 @@ void updateAIGAttachment(Model& model, vector<pair<NodeIndex, NodeRef> >& merges
       //Copy the old ref2id
       RefIDMap newIdOfAigRef = aatUpdate->ref2id;
       //Update the old one
-      aatUpdate->aig.update(model);
+      aatUpdate->aig.update(aatUpdate.operator->());
       //Check their equivalence
       checkEquivalence(model, aatUpdate->aig, newAig, aatUpdate->ref2id, newIdOfAigRef);
     }
     else {
-      aatUpdate->aig.update(model);
+      aatUpdate->aig.update(aatUpdate.operator->());
     }
     stats.finalNodes = nodeCount(aatUpdate->aig);
     model.release(aatUpdate);
@@ -769,7 +769,7 @@ void updateAIGAttachment(Model& model, vector<pair<NodeIndex, NodeRef> >& merges
 
 void updateCombAttachment(Model& model, Stats& stats) {
   if(stats.complete || stats.numMerges != 0) {
-    CombAttachment * cat = (CombAttachment*) model.attachment(Key::COMB);
+    auto cat = model.attachment<CombAttachment>(Key::COMB);
     if(stats.complete) {
       cat->simplificationEffort() = CombAttachment::Complete;
     }
@@ -801,7 +801,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
     return;
   }
 
-  CombAttachment const * const cat = (CombAttachment*)
+  CombAttachment const * const cat = (CombAttachment const *)
       model.constAttachment(Key::COMB);
 
   //Get the global verbosity level, and the module-specific verbosity level
@@ -829,15 +829,15 @@ void satSweep(Model& model, AIGAttachment const * const aat,
 
   model.constRelease(cat);
 
-  //Seed the RNGs (rand and Sim::RandomGenerator::generator)
+  //Seed the RNGs (rand and Sim::Random::generator)
   int rseed = model.options()["rand"].as<int>();
   if(rseed != -1) {
-    srand(rseed);
-    Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(rseed));
+    Random::srand(rseed);
   }
 
   //Get the timeout
-  int64_t timeout = model.options()["satsweep_timeout"].as<int>() * 1000000;
+  int64_t timeout = model.options()["satsweep_timeout"].as<int>();
+  timeout *= 1000000;
 
   if(verbosity >= Options::Informative) {
     if(timeout > 0) {
@@ -1134,7 +1134,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
       try {
         satView->add(equiv, gid);
       }
-      catch(SAT::Trivial tr) {
+      catch(SAT::Trivial const & tr) {
       }
 
       if(verbosity >= Options::Logorrheic) {
@@ -1161,7 +1161,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
       try {
         satisfiable = satView->sat(NULL, &assign);
       }
-      catch(Timeout excep) {
+      catch(Timeout const & excep) {
         if(timeout > 0 && remainingTime < satTimeout) {
           if(verbosity >= Options::Informative) {
             cout << ss << "timeout";
@@ -1227,7 +1227,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
               }
             }
             else if(assignIterators[i]->second == SAT::Unknown) {
-              if(Sim::RandomGenerator::randomBool()) {
+              if(Random::randomBool()) {
                 inputValues.back()[i] = 0xFFFFFFFFFFFFFFFFLL;
                 if(model.options().count("satsweep_assumeProperty")) {
                   outputConesVals[i + 1] = 0xFFFFFFFFFFFFFFFFLL;
@@ -1348,7 +1348,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
             try { 
               satView->add(merge);
             }
-            catch(SAT::Trivial tr) {
+            catch(SAT::Trivial const & tr) {
             }
             if(verbosity > Options::Verbose) {
               cout << ss << "Merging node " << *nodeIt << " with "
@@ -1500,9 +1500,9 @@ namespace Action {
 void SATSweepAction::exec() {
 
   Stats stats;
-
+  Random::save_state();
   //Get read-only access to the AIG attachment
-  AIGAttachment const * const aat = (AIGAttachment*) model().constAttachment(Key::AIG);
+  AIGAttachment const * const aat = (AIGAttachment const *) model().constAttachment(Key::AIG);
   stats.initialNodes = nodeCount(aat->aig);
   stats.finalNodes = stats.initialNodes;
   if(model().verbosity() > Options::Silent) {
@@ -1519,6 +1519,7 @@ void SATSweepAction::exec() {
   if(model().verbosity() > Options::Silent) {
     printStats(stats, model().verbosity());
   }
+  Random::restore_state();
 }
 
 } //namespace Opt

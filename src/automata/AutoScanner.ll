@@ -76,4 +76,5 @@ void
 auto_driver::scan_end()
 {
   fclose(yyin);
+  yylex_destroy();
 }

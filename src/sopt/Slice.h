@@ -50,10 +50,8 @@ class SliceAction : public Model::Action {
 public:
   SliceAction(Model & model) : Model::Action(model) {
     ExprAttachment::Factory f;
-    SeqAttachment::Factory seqFactory;
     CNFAttachment::Factory cnfaf;
     requires(Key::EXPR, &f);
-    requires(Key::SEQ, &seqFactory);
     requires(Key::CNF, &cnfaf);
   }
 

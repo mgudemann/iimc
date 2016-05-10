@@ -1,0 +1,21 @@
+aig 11 3 3 2 5 0 0 1
+14 1
+4
+23
+6
+23
+2
+6
+23
+i0 in<0>
+i1 in<1>
+i2 in<2>
+l0 s<0>
+l1 s<1>
+l2 s<2>
+o0 fair<0>
+o1 fair<1>
+c
+bliftoaig
+1.9
+encarm.blif

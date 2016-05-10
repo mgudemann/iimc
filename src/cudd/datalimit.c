@@ -42,7 +42,7 @@ static char rcsid[] UNUSED = "$Id: datalimit.c,v 1.6 2008/04/25 07:00:55 fabio E
 /*---------------------------------------------------------------------------*/
 
 #ifndef RLIMIT_DATA_DEFAULT
-#define RLIMIT_DATA_DEFAULT 268435456	/* assume 256MB by default */
+#define RLIMIT_DATA_DEFAULT 2147483648ul /* assume 2GB by default */
 #endif
 
 /*---------------------------------------------------------------------------*/
@@ -75,7 +75,11 @@ getSoftDataLimit(void)
     struct rlimit rl;
     int result;
 
+#ifdef NOTCOMP
     result = getrlimit(RLIMIT_DATA, &rl);
+#else
+    result = 1;
+#endif
     if (result != 0 || rl.rlim_cur == RLIM_INFINITY)
 	return((unsigned long) RLIMIT_DATA_DEFAULT);
     else

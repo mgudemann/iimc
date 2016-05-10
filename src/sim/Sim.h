@@ -35,7 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
 #ifndef _Sim_
-#define _Sim__
+#define _Sim_
 
 /** @file Sim.h */
 
@@ -108,7 +108,7 @@ namespace {
   //class DefaultOutputsFunctor64 : public OutputsFunctor64 {
   class DefaultOutputsFunctor64 : public Sim::OutputsFunctor64 {
     public:
-      void operator()(std::vector<uint64_t>& outputValues) { }
+      void operator()(std::vector<uint64_t>&) { }
   };
 
   DefaultOutputsFunctor64 empty;

@@ -37,7 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Util.h"
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
 
 using namespace std;
 
@@ -57,37 +57,31 @@ namespace SAT {
 
     View::cleanClause(clause);
 
-#ifdef MTHREADS
-    { VMuxType::scoped_lock lock(mux);
-#endif
-      Minisat::vec<Minisat::Lit> lits(clause.size());
-      int i = 0;
-      for (Clause::iterator it = clause.begin(); it != clause.end(); ++i, it++) {
-        ID v = *it;
-        bool pos = true;
-        if (exprView.op(v) != Expr::Var) {
-          int _n;
-          const ID * const _args = exprView.arguments(v, &_n);
-          v = _args[0];
-          pos = false;
-        }
-        VMap::iterator mapIt = vmap.find(v);
-        if (mapIt == vmap.end()) {
-          Minisat::Var vi = satMan.newVar();
-          pair<VMap::iterator, bool> rv = vmap.insert(VMap::value_type(v, vi));
-          mapIt = rv.first;
-          ivmap.insert(IVMap::value_type(vi, v));
-        }
-        Minisat::Var sv = mapIt->second;
-        lits[i] = Minisat::mkLit(sv, !pos);
+    Minisat::vec<Minisat::Lit> lits(clause.size());
+    int i = 0;
+    for (Clause::iterator it = clause.begin(); it != clause.end(); ++i, it++) {
+      ID v = *it;
+      bool pos = true;
+      if (exprView.op(v) != Expr::Var) {
+        int _n;
+        const ID * const _args = exprView.arguments(v, &_n);
+        v = _args[0];
+        pos = false;
       }
-      if(gid != NULL_GID)
-        lits.push(~(*(Minisat::Lit *) gid));
-      satMan.addClause(lits);
-      return true;
-#ifdef MTHREADS
+      VMap::iterator mapIt = vmap.find(v);
+      if (mapIt == vmap.end()) {
+        Minisat::Var vi = satMan.newVar();
+        pair<VMap::iterator, bool> rv = vmap.insert(VMap::value_type(v, vi));
+        mapIt = rv.first;
+        ivmap.insert(IVMap::value_type(vi, v));
+      }
+      Minisat::Var sv = mapIt->second;
+      lits[i] = Minisat::mkLit(sv, !pos);
     }
-#endif
+    if(gid != NULL_GID)
+      lits.push(~(*(Minisat::Lit *) gid));
+    satMan.addClause(lits);
+    return true;
   }
 
   GID MinisatView::newGID() {
@@ -108,7 +102,7 @@ namespace SAT {
   }
 
   bool MinisatView::sat(Expr::IDVector * assump, Assignment * asgn, 
-                          Expr::IDVector * crits, GID gid, bool full_init, 
+                          Expr::IDVector * crits, GID, bool, 
                           Assignment * lift)
   {
     Minisat::vec<Minisat::Lit> assumps;
@@ -143,7 +137,7 @@ namespace SAT {
     }
 
     bool result = false;
-    int64_t stime = View::tt() ? Util::get_user_cpu_time() : 0;
+    int64_t stime = View::tt() ? Util::get_thread_cpu_time() : 0;
     Minisat::lbool ret = satMan.solveLimited(assumps);
     int status;
     if(ret == Minisat::l_True)
@@ -152,7 +146,7 @@ namespace SAT {
       status = UNSATISFIABLE;
     else
       status = TIMEOUT;
-    int64_t etime = View::tt() ? Util::get_user_cpu_time() : 0;
+    int64_t etime = View::tt() ? Util::get_thread_cpu_time() : 0;
     View::satTime() += (etime - stime);
     View::satCount()++;
     if (status == UNSATISFIABLE) {

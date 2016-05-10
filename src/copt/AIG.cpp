@@ -244,10 +244,8 @@ void AIG::traverse(NodeRef ref, AIG &newAig,
       oldIdOfRef[ref]));
 }
 
-void AIG::update(Model& model)
+void AIG::update(AIGAttachment * aat)
 {
-  //Grab the AIGAttachment read-write
-  AIGAttachment* aat = (AIGAttachment*) model.attachment(Key::AIG);
   IDRefMap& oldRefOfId = aat->id2ref;
   RefIDMap& oldIdOfRef = aat->ref2id;
 

@@ -40,6 +40,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SAT.h"
 #include "SimplifyCNF.h"
 #include "Util.h"
+#include "Random.h"
 
 #include <sstream>
 #include <stdlib.h>
@@ -88,6 +89,7 @@ namespace {
       gd(1.0), lcnt(0), ld(2.0), consM(NULL), consV(NULL), trivial(false),
       records(_records), recordProofs(true)
     {
+      _ev->begin_local();
       for (vector<Record>::const_iterator it = records.begin();
            it != records.end(); ++it)
         switch (it->pt) {
@@ -102,11 +104,15 @@ namespace {
           break;
         }
 
-      ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+      ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
 
       fairs = eat->outputFnOf(eat->outputs());
       for (vector<ID>::const_iterator it = fairs.begin(); it != fairs.end(); ++it) {
-        if (m.verbosity() > Options::Terse) cout << Expr::stringOf(ev, *it) << endl;
+        if (m.verbosity() > Options::Terse) {
+          ostringstream oss;
+          oss << Expr::stringOf(ev, *it) << endl;
+          cout << oss.str();
+        }
         if(*it == ev.bfalse()) {
           trivial = true;
           return;
@@ -147,7 +153,7 @@ namespace {
         
       m.constRelease(eat);
 
-      CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
+      CNFAttachment const * const cnfat = (CNFAttachment const *) m.constAttachment(Key::CNF);
       trltn = cnfat->getPlainCNF();
       m.constRelease(cnfat);
 
@@ -189,6 +195,7 @@ namespace {
       if (full_fairM && full_fairM != fairM) delete full_fairM;
       if (consV) delete consV;
       if (consM) delete consM;
+      _ev->end_local();
       delete _ev;
     }
 
@@ -219,8 +226,8 @@ namespace {
 
     vector<SAT::Clauses> pproofs;
     vector<SAT::Clauses> nproofs;
-    vector<SAT::Clauses> rproofs;
-    vector<SAT::Clauses> rconstraints;
+    vector<SAT::Clauses> rproofs; //global reachability proofs used as constraints for all queries
+    vector<SAT::Clauses> rconstraints; //states that do not satisfy rconstraints are not on a reachable fair cycle
     SAT::Clauses negrconstraints; //negation of some (not all) rconstraints plus those from IICTL
     vector<SAT::Clauses> allConstraints;
 
@@ -241,9 +248,13 @@ namespace {
   };
 
   void printVector(State & st, const vector<ID> & c) {
-    for (vector<ID>::const_iterator it = c.begin(); it != c.end(); it++)
-      if (st.m.verbosity() > Options::Terse) cout << " " << Expr::stringOf(st.ev, *it);
-    if (st.m.verbosity() > Options::Terse) cout << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      for (vector<ID>::const_iterator it = c.begin(); it != c.end(); it++)
+        oss << " " << Expr::stringOf(st.ev, *it);
+      oss << endl;
+      cout << oss.str();
+    }
   }
 
   ID fairVar(State & st, ID var, unsigned fi) {
@@ -333,8 +344,11 @@ namespace {
     cnf.clear();
     CNF::simplify(st.m, curr, cnf, dummy, st.svars, dummy, false);
     int fsz = cnf.size();
-    if (st.m.verbosity() > Options::Terse)
-      cout << "Fair: compress " << osz << " -> " << fsz << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: compress " << osz << " -> " << fsz << endl;
+      cout << oss.str();
+    }
   }
 
   void addFair(State & st, const SAT::Clauses & fair, unsigned fi, 
@@ -423,7 +437,7 @@ namespace {
       return st.fairV->sat();
     }
     if (!simple && i < 63) {
-      if ((Util::get_user_cpu_time() - stt) / 1000000 > 5)
+      if ((Util::get_thread_cpu_time() - stt) / 1000000 > 5)
         throw Timeout();
       for (unsigned tfi = 1; tfi <= fi; ++tfi) {
         SAT::GID gid = st.fairV->newGID();
@@ -440,7 +454,11 @@ namespace {
     return _weakenFair(st, i+1, fi+1, simple, stt);
   }
   bool weakenFair(State & st, bool simple = false) {
-    if (st.m.verbosity() > Options::Terse) cout << "Fair: weakenFair" << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: weakenFair" << endl;
+      cout << oss.str();
+    }
 
     if (st.fairV) delete st.fairV;
     if (st.fairM) delete st.fairM;
@@ -449,7 +467,7 @@ namespace {
 
     bool rv;
     try {
-      rv = _weakenFair(st, 0, 0, simple, Util::get_user_cpu_time());
+      rv = _weakenFair(st, 0, 0, simple, Util::get_thread_cpu_time());
       if (st.full_fairM && st.fairIndex == st.fairSets.size()) {
         delete st.fairV;
         delete st.fairM;
@@ -457,9 +475,12 @@ namespace {
         st.fairV = st.full_fairV;
       }
     }
-    catch (Timeout to) {
-      if (st.m.verbosity() > Options::Terse) 
-        cout << "Fair: weakenFair -> simple" << endl;
+    catch (Timeout const & to) {
+      if (st.m.verbosity() > Options::Terse) {
+        ostringstream oss;
+        oss << "Fair: weakenFair -> simple" << endl;
+        cout << oss.str();
+      }
       delete st.fairV;
       delete st.fairM;
       if (st.k == st.c_k) {
@@ -471,7 +492,7 @@ namespace {
       else {
         st.fairM = st.m.newSATManager();
         st.fairV = st.fairM->newView(st.ev);
-        rv = _weakenFair(st, 0, 0, true, Util::get_user_cpu_time());
+        rv = _weakenFair(st, 0, 0, true, Util::get_thread_cpu_time());
       }
     }
 
@@ -479,14 +500,21 @@ namespace {
       st.opts.ic3_opts.abs_patterns.clear();
     }
 
-    if (st.m.verbosity() > Options::Terse) 
-      cout << "Fair: " << st.fairIndex << "/" << st.fairSets.size() << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: " << st.fairIndex << "/" << st.fairSets.size() << endl;
+      cout << oss.str();
+    }
 
     return rv;
   }
 
   bool getSkeleton(State & st, vector< vector<ID> > & skel) {
-    if (st.m.verbosity() > Options::Terse) cout << "Fair: getSkeleton" << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: getSkeleton" << endl;
+      cout << oss.str();
+    }
     skel.clear();
     SAT::Assignment asgn;
     // 111611: svars -> sivars
@@ -520,7 +548,9 @@ namespace {
 
   void addGlobalProof(State & st, SAT::Clauses & proof, bool isproof = true) {
     if (isproof && st.m.verbosity() > Options::Terse) {
-      cout << "Fair: addGlobalProof " << proof.size() << endl;
+      ostringstream oss;
+      oss << "Fair: addGlobalProof " << proof.size() << endl;
+      cout << oss.str();
       for (SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it)
         printVector(st, *it);
     }
@@ -554,7 +584,9 @@ namespace {
 
   void addCycleProof(State & st, SAT::Clauses & proof, vector<ID> * source, bool rec = true) {
     if (st.m.verbosity() > Options::Terse) {
-      cout << "Fair: addCycleProof " << proof.size() << endl;
+      ostringstream oss;
+      oss << "Fair: addCycleProof " << proof.size() << endl;
+      cout << oss.str();
       for (SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it)
         printVector(st, *it);
     }
@@ -626,14 +658,20 @@ namespace {
       if (!st.consV->sat(&assumps, NULL, &assumps, gid) 
           && assumps.size() < source->size()) {
         if (assumps.size() == 0) {
-          if (st.m.verbosity() > Options::Terse)
-            cout << "Fair: empty after source expansion" << endl;
+          if (st.m.verbosity() > Options::Terse) {
+            ostringstream oss;
+            oss << "Fair: empty after source expansion" << endl;
+            cout << oss.str();
+          }
           nempty = true;
         }
         else {
-          if (st.m.verbosity() > Options::Terse)
-            cout << "Fair: adding negation of source (" << source->size() 
-                 << " -> " << assumps.size() << ")" << endl;
+          if (st.m.verbosity() > Options::Terse) {
+            ostringstream oss;
+            oss << "Fair: adding negation of source (" << source->size() 
+                << " -> " << assumps.size() << ")" << endl;
+            cout << oss.str();
+          }
           for (vector<ID>::iterator it = assumps.begin(); it != assumps.end(); ++it)
             *it = st.ev.apply(Expr::Not, *it);
           nproof.push_back(assumps);
@@ -662,7 +700,11 @@ namespace {
       st.full_fairV->remove(gid);
 
       if (!pside) {
-        if (st.m.verbosity() > Options::Terse) cout << "PSIDE" << endl;
+        if (st.m.verbosity() > Options::Terse) {
+          ostringstream oss;
+          oss << "PSIDE" << endl;
+          cout << oss.str();
+        }
         if (st.opts.ic3_opts.lift) {
           nreach = proof;
           for (SAT::Clauses::iterator it = nreach.begin(); it != nreach.end(); ++it) {
@@ -677,7 +719,11 @@ namespace {
           primeFormulas(st.ev, *it);
       }
       if (!nside) {
-        if (st.m.verbosity() > Options::Terse) cout << "NSIDE" << endl;
+        if (st.m.verbosity() > Options::Terse) {
+          ostringstream oss;
+          oss << "NSIDE" << endl;
+          cout << oss.str();
+        }
         if (st.opts.ic3_opts.lift)
           nreach = nproof;
         nproof.clear();
@@ -742,17 +788,22 @@ namespace {
                   vector<IC3::CubeSet> & incr) {
     bool same = st.ev.apply(Expr::And, source) == st.ev.apply(Expr::And, target);
 
-    if (st.m.verbosity() > Options::Terse) 
-      cout << "Fair: cycle reach (" << same << ")" << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: cycle reach (" << same << ")" << endl;
+      cout << oss.str();
+    }
 
-    ExprAttachment * eat = (ExprAttachment *) st.m.attachment(Key::EXPR);
+    Model safetyModel(st.m);
+    safetyModel.setView(&(st.ev));
+
+    auto eat = safetyModel.attachment<ExprAttachment>(Key::EXPR);
     ID o0 = eat->outputs()[0];
-    ID ofn0 = eat->outputFnOf(o0);
-    eat->setOutputFn(o0, st.ev.apply(Expr::And, target));
+    eat->setOutputFn(o0, Expr::AIGOfExpr(st.ev, st.ev.apply(Expr::And, target)));
     vector<ID> init(eat->initialConditions());
     eat->clearInitialConditions();
     eat->addInitialConditions(source);
-    st.m.release(eat);
+    safetyModel.release(eat);
 
     vector<SAT::Clauses> constraints;
     if(st.opts.constraints) {
@@ -769,28 +820,28 @@ namespace {
     st.opts.ic3_opts.proofProc = IC3::SHRINK;
     st.opts.ic3_opts.printCex = st.opts.printCex;
 
+    IC3::IC3Action ic3Action(safetyModel);
+    ic3Action.makeDeps();
+
     IC3::CubeSet indCubes;
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
     st.opts.ic3_opts.propagate = true;
-    int64_t startTime = Util::get_user_cpu_time();
-    MC::ReturnValue rv = IC3::reach2(st.m, st.opts.ic3_opts, trace, &proofs, &incr, 
-                                     &dummy, &indCubes);
+    int64_t startTime = Util::get_thread_cpu_time();
+    MC::ReturnValue rv = IC3::reach2(safetyModel, st.opts.ic3_opts, trace, &proofs, &incr, 
+                                     &dummy, &indCubes, &st.ev);
     st.opts.ic3_opts.negConstraints = NULL;
-    if(st.m.verbosity() > Options::Informative)
-      cout << "IC3 query CPU time: "
-           << (Util::get_user_cpu_time() - startTime) / 1000000.0
-           << " seconds" << endl;
+    if(st.m.verbosity() > Options::Informative) {
+      ostringstream oss;
+      oss << "IC3 query CPU time: "
+          << (Util::get_thread_cpu_time() - startTime) / 1000000.0
+          << " seconds" << endl;
+      cout << oss.str();
+    }
     st.opts.ic3_opts.incremental = false;
     st.opts.ic3_opts.propagate = false;
     incr.clear();
     if (indCubes.size() > 0) incr.push_back(indCubes);
-
-    eat = (ExprAttachment *) st.m.attachment(Key::EXPR);
-    eat->setOutputFn(o0, ofn0);
-    eat->clearInitialConditions();
-    eat->addInitialConditions(init);
-    st.m.release(eat);
 
     if (rv.returnType == MC::Unknown) throw Timeout();
     return rv.returnType == MC::Proof;
@@ -798,14 +849,20 @@ namespace {
 
   bool globalReach(State & st, vector<ID> & target, SAT::Clauses & proof, 
                    vector<Transition> * trace, vector<IC3::CubeSet> & incr) {
-    if (st.m.verbosity() > Options::Terse) 
-      cout << "Fair: global reach" << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: global reach" << endl;
+      cout << oss.str();
+    }
 
-    ExprAttachment * eat = (ExprAttachment *) st.m.attachment(Key::EXPR);
+    //Clone model
+    Model safetyModel(st.m);
+    safetyModel.setView(&(st.ev));
+
+    auto eat = safetyModel.attachment<ExprAttachment>(Key::EXPR);
     ID o0 = eat->outputs()[0];
-    ID ofn0 = eat->outputFnOf(o0);
-    eat->setOutputFn(o0, st.ev.apply(Expr::And, target));
-    st.m.release(eat);
+    eat->setOutputFn(o0, Expr::AIGOfExpr(st.ev, st.ev.apply(Expr::And, target)));
+    safetyModel.release(eat);
 
     vector<SAT::Clauses> constraints;
     if(st.opts.constraints) {
@@ -822,18 +879,24 @@ namespace {
       st.opts.ic3_opts.proofProc = IC3::STRENGTHEN;
     st.opts.ic3_opts.printCex = st.opts.printCex;
 
+    IC3::IC3Action ic3Action(safetyModel);
+    ic3Action.makeDeps();
+
     vector<SAT::Clauses> proofs;
     IC3::CubeSet indCubes;
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
     st.opts.ic3_opts.propagate = true;
-    int64_t startTime = Util::get_user_cpu_time();
-    MC::ReturnValue rv = IC3::reach2(st.m, st.opts.ic3_opts, trace, &proofs, &incr, 
-                                     &dummy, &indCubes);
-    if(st.m.verbosity() > Options::Informative)
-      cout << "IC3 query CPU time: "
-           << (Util::get_user_cpu_time() - startTime) / 1000000.0
-           << " seconds" << endl;
+    int64_t startTime = Util::get_thread_cpu_time();
+    MC::ReturnValue rv = IC3::reach2(safetyModel, st.opts.ic3_opts, trace, &proofs, &incr, 
+                                     &dummy, &indCubes, &st.ev);
+    if(st.m.verbosity() > Options::Informative) {
+      ostringstream oss;
+      oss << "IC3 query CPU time: "
+          << (Util::get_thread_cpu_time() - startTime) / 1000000.0
+          << " seconds" << endl;
+      cout << oss.str();
+    }
     st.opts.ic3_opts.incremental = false;
     st.opts.ic3_opts.propagate = false;
     incr.clear();
@@ -842,8 +905,11 @@ namespace {
       proof = proofs[0];
     else if (indCubes.size() > 0) {
       // use inductive clauses
-      if (st.m.verbosity() > Options::Terse)
-        cout << "Fair: obtained " << indCubes.size() << " inductive clauses" << endl;
+      if (st.m.verbosity() > Options::Terse) {
+        ostringstream oss;
+        oss << "Fair: obtained " << indCubes.size() << " inductive clauses" << endl;
+        cout << oss.str();
+      }
       SAT::Clauses indClauses;
       for (IC3::CubeSet::const_iterator it = indCubes.begin(); 
            it != indCubes.end(); ++it) {
@@ -855,17 +921,16 @@ namespace {
       addGlobalProof(st, indClauses, false);
     }
 
-    eat = (ExprAttachment *) st.m.attachment(Key::EXPR);
-    eat->setOutputFn(o0, ofn0);
-    st.m.release(eat);
-
     if (rv.returnType == MC::Unknown) throw Timeout();
     return rv.returnType == MC::Proof;
   }
 
   void sliceNDice(State & st) {
-    if (st.m.verbosity() > Options::Terse) 
-      cout << "Fair: begin slice'n'dice" << endl;
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "Fair: begin slice'n'dice" << endl;
+      cout << oss.str();
+    }
     int cnt = 0;
     bool changed = true;
     vector<ID> checks(st.svars);
@@ -908,15 +973,17 @@ namespace {
       }
     }
     if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
       if (cnt) 
-        cout << "Fair: end slice'n'dice (" << cnt << ")" << endl;
+        oss << "Fair: end slice'n'dice (" << cnt << ")" << endl;
       else
-        cout << "Fair: end slice'n'dice" << endl;
+        oss << "Fair: end slice'n'dice" << endl;
+      cout << oss.str();
     }
   }
 
   bool check(State & st) {
-    int64_t stime = Util::get_user_cpu_time();
+    int64_t stime = Util::get_thread_cpu_time();
     // 072511
     int kcp = st.k;
     st.k = st.c_k;
@@ -938,8 +1005,11 @@ namespace {
       }
       vector< vector<ID> > skel;
       while (getSkeleton(st, skel)) {
-        if (st.m.verbosity() > Options::Terse) 
-          cout << "Fair: skeleton size = " << skel.size() << endl;
+        if (st.m.verbosity() > Options::Terse) {
+          ostringstream oss;
+          oss << "Fair: skeleton size = " << skel.size() << endl;
+          cout << oss.str();
+        }
         if (st.m.verbosity() > Options::Verbose) {
           for (vector< vector<ID> >::const_iterator it = skel.begin();
                it != skel.end(); ++it)
@@ -955,8 +1025,8 @@ namespace {
         if(st.opts.global_last)
           gfirst = false;
         else
-          gfirst = rand() < st.gd * INT_MAX;
-        unsigned offset = rand() % skel.size(), i;
+          gfirst = Random::rand() < st.gd * INT_MAX;
+        unsigned offset = Random::rand() % skel.size(), i;
         vector< vector<Transition> > traces(sched.size());
         //The index of the skeleton state for which global reachability is to
         //be checked (randomly selected)
@@ -964,13 +1034,15 @@ namespace {
         vector< vector<IC3::CubeSet> > incr(sched.size(), vector<IC3::CubeSet>());
         while (true) {
           if (st.m.options().count("fair_xincr"))
-            for (uint x = 0; x < incr.size(); ++x)
+            for (unsigned x = 0; x < incr.size(); ++x)
               incr[x].clear();
           if (st.m.verbosity() > Options::Terse) {
-            cout << "Fair: incremental levels are ";
-            for (uint x = 0; x < incr.size(); ++x)
-              cout << incr[x].size() << " ";
-            cout << endl;
+            ostringstream oss;
+            oss << "Fair: incremental levels are ";
+            for (unsigned x = 0; x < incr.size(); ++x)
+              oss << incr[x].size() << " ";
+            oss << endl;
+            cout << oss.str();
           }
           unsigned j = 0;
           for (i = gfirst ? 0 : 1+offset; 
@@ -986,10 +1058,13 @@ namespace {
             if (sched[i]) continue;
             //Check timeout
             if (st.opts.timeout > 0) {
-              int64_t sofar = Util::get_user_cpu_time() - stime;
+              int64_t sofar = Util::get_thread_cpu_time() - stime;
               if (sofar / 1000000 >= st.opts.timeout) {
-                if (st.m.verbosity() > Options::Terse)
-                  cout << "Fair: timeout" << endl;
+                if (st.m.verbosity() > Options::Terse) {
+                  ostringstream oss;
+                  oss << "Fair: timeout" << endl;
+                  cout << oss.str();
+                }
                 // HACK: clear LR patterns' resumption memory
                 if (!st.opts.iictl) {
                   for (unsigned i = 0; i < sched.size(); ++i)
@@ -1025,7 +1100,7 @@ namespace {
               if (i == 0) {
                 SAT::Clauses proof;
                 vector<Transition> trace;
-                skelIndex = rand() % skel.size();
+                skelIndex = Random::rand() % skel.size();
                 if (globalReach(st, skel[skelIndex], 
                                 proof, st.opts.printCex ? &trace : NULL,
                                 incr[i])) {
@@ -1057,9 +1132,12 @@ namespace {
               sched[i] = true;
               if (--todo == 1) st.opts.ic3_opts.timeout = -1;
             }
-            catch (Timeout t) {
-              if (st.m.verbosity() > Options::Terse) 
-                cout << "timeout (" << st.opts.ic3_opts.timeout << ")" << endl;
+            catch (Timeout const & t) {
+              if (st.m.verbosity() > Options::Terse) {
+                ostringstream oss;
+                oss << "timeout (" << st.opts.ic3_opts.timeout << ")" << endl;
+                cout << oss.str();
+              }
               if (i == 0) {
                 st.gd *= 0.7;
                 if (st.gd <= 0.001) st.gd = 0.001;
@@ -1079,16 +1157,19 @@ namespace {
                 st.lasso->loop.insert(st.lasso->loop.end(), traces[traceIndex].begin(), traces[traceIndex].end());
                 lassoLength += traces[traceIndex].size();
               }
-              if (st.m.verbosity() > Options::Informative)
-                cout << "Counterexample of stem length "
-                     << st.lasso->stem.size() << " and lasso length "
-                     << lassoLength << endl;
+              if (st.m.verbosity() > Options::Informative) {
+                ostringstream oss;
+                oss << "Counterexample of stem length "
+                    << st.lasso->stem.size() << " and lasso length "
+                    << lassoLength << endl;
+                cout << oss.str();
+              }
             }
             return false;
           }
           st.opts.ic3_opts.timeout *= 2;
           if (st.opts.timeout > 0) {
-            int64_t sofar = Util::get_user_cpu_time() - stime;
+            int64_t sofar = Util::get_thread_cpu_time() - stime;
             int remTime = st.opts.timeout - sofar / 1000000;
             if (st.opts.ic3_opts.timeout > 0)
               st.opts.ic3_opts.timeout = min(st.opts.ic3_opts.timeout, remTime);
@@ -1140,13 +1221,17 @@ namespace Fair {
 
   MC::ReturnValue check(Model & m, FairOptions & opts, Lasso * lasso,
                         vector<SAT::Clauses> * proofs) {
-    if (m.verbosity() > Options::Silent)
-      cout << "Fair: starting" << endl;
+    if (m.verbosity() > Options::Silent) {
+      ostringstream oss;
+      oss << "Fair: starting" << endl;
+      cout << oss.str();
+    }
     static vector< vector<Record> > records;
-    ExprAttachment * eat = (ExprAttachment *) m.attachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
     vector<ID> init(eat->initialConditions());
-    m.release(eat);
+    m.constRelease(eat);
     Expr::Manager::View * ev = m.newView();
+    ev->begin_local();
     Expr::IDMap asgn;
     for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
       bool isvar = ev->op(*it) == Expr::Var;
@@ -1173,14 +1258,18 @@ namespace Fair {
           crec.back().dup = true;
         }
       }
+    ev->end_local();
     delete ev;
     unsigned int sz = crec.size();
 
     State st(m, opts, lasso, proofs, crec);
 
-    if (st.m.verbosity() > Options::Terse) 
-      cout << "FAIR: using " << sz << " previous proofs" << endl;
-    
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "FAIR: using " << sz << " previous proofs" << endl;
+      cout << oss.str();
+    }
+
     MC::ReturnValue rv;
     try {
       if (st.trivial || check(st))
@@ -1188,7 +1277,7 @@ namespace Fair {
       else
         rv.returnType = MC::CEX;
     }
-    catch (Timeout to) {
+    catch (Timeout const & to) {
       rv.returnType = MC::Unknown;
     }
 

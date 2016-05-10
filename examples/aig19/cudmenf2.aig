@@ -1,0 +1,154 @@
+aig 434 38 44 0 352 4 0 2
+194
+206
+218
+230
+248
+266
+278
+296
+308
+320
+332
+344
+356 1
+368
+380
+392
+404
+414
+444
+456
+468
+480
+498
+516
+528
+546
+558
+570
+582
+594
+606
+618 1
+630
+642
+654
+664
+698
+720
+754
+776
+806
+828
+845
+861
+862
+864
+866
+868
+1
+1
+846
+869
+U©^!$%±\}LeÕ—áLo◊€âå‚òõõû	Ú®´±LπÄÖ∑∫å¬√ÀLÀõü’Lß,§©ﬂLÁØ≥ÈLÍπΩÛLÛ√«˝LÅÕ—áLå◊€ëLò·ÂõL¶ÎÔ•L™J˜´é*ˇ¥ï*ó+ö)á≤”Lª£ß›L≈≠±ﬂ‚∏ÓÒÒÙ	»˛ÅáLè÷€çê‚òô°L°Òı´L©˙ˇµLΩÖâøL¿èì…L…ôù”L◊£ß›L‚≠±ÁLÓ∑ªÒL¸¡≈˚LÄJÕÅ≠%´ä¥≥∏ïô&¡
+
+ìÜß©(‘#Ø.
+ µ¡Gøæ»«Ã…Õ’
+
+«∫€›Ë#„.
+ È†Ó¸˚©˘˛4ä
+
+˜â6ãé6õ#ì*
+ öõØ(¢•8©Ω)≥†Ã$«≈√i0 cell0.a.nd1
+i1 cell0.a.nd2
+i2 cell0.c.nd
+i3 cell0.d.nd
+i4 cell0.e.nd
+i5 cell0.f.nd
+i6 cell0.g.nd
+i7 cell0.h.nd
+i8 cell0.i.nd
+i9 cell0.j.nd
+i10 cell0.k.nd
+i11 cell0.l.nd
+i12 cell0.m.nd
+i13 cell0.n.nd
+i14 cell0.p.nd
+i15 cell0.q.nd
+i16 cell0.r.nd
+i17 user0.nd
+i18 cell1.a.nd1
+i19 cell1.a.nd2
+i20 cell1.c.nd
+i21 cell1.d.nd
+i22 cell1.e.nd
+i23 cell1.f.nd
+i24 cell1.g.nd
+i25 cell1.h.nd
+i26 cell1.i.nd
+i27 cell1.j.nd
+i28 cell1.k.nd
+i29 cell1.l.nd
+i30 cell1.m.nd
+i31 cell1.n.nd
+i32 cell1.p.nd
+i33 cell1.q.nd
+i34 cell1.r.nd
+i35 user1.nd
+i36 A0.nd
+i37 A1.nd
+l0 cell0.acks<1>
+l1 cell0.acks<0>
+l2 cell0.c_out
+l3 cell0.d_out
+l4 cell0.e_out
+l5 cell0.f_out
+l6 cell0.g_out
+l7 cell0.h_out
+l8 cell0.i_out
+l9 cell0.j_out
+l10 cell0.k_out
+l11 cell0.l_out
+l12 cell0.m_out
+l13 cell0.n_out
+l14 cell0.p_out
+l15 cell0.q_out
+l16 cell0.r_out
+l17 u_req<0>
+l18 cell1.acks<1>
+l19 cell1.acks<0>
+l20 cell1.c_out
+l21 cell1.d_out
+l22 cell1.e_out
+l23 cell1.f_out
+l24 cell1.g_out
+l25 cell1.h_out
+l26 cell1.i_out
+l27 cell1.j_out
+l28 cell1.k_out
+l29 cell1.l_out
+l30 cell1.m_out
+l31 cell1.n_out
+l32 cell1.p_out
+l33 cell1.q_out
+l34 cell1.r_out
+l35 u_req<1>
+l36 A0.state<1>
+l37 A0.state<0>
+l38 A1.state<1>
+l39 A1.state<0>
+l40 A8.state<1>
+l41 A8.state<0>
+l42 A9.state<1>
+l43 A9.state<0>
+b0 bad<0>0
+b1 bad<1>0
+b2 bad<2>0
+b3 bad<3>0
+j0 just<0>0
+j1 just<1>0
+c
+bliftoaig
+1.9
+cudmenf2.blif

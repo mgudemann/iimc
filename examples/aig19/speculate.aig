@@ -1,0 +1,28 @@
+aig 61 3 8 1 50 1
+34
+50
+60
+76
+86
+96
+106
+116 1
+123
+123
+&+'*5'+04;==OEEYMMcU]mgji0 clock
+i1 enable
+i2 data
+l0 o1
+l1 i1.cnt<1>
+l2 i1.cnt<0>
+l3 o2
+l4 i2.cnt<3>
+l5 i2.cnt<2>
+l6 i2.cnt<1>
+l7 i2.cnt<0>
+o0 bad
+b0 bad0
+c
+bliftoaig
+1.9
+speculate.blif

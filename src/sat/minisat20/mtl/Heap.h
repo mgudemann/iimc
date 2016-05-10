@@ -158,7 +158,7 @@ class Heap {
 
 
     // COMPAT: should be removed
-    void setBounds (int n) { }
+    void setBounds (int) { }
     void increase  (int n) { decrease(n); }
     int  getmin    ()      { return removeMin(); }
 

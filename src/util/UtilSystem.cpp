@@ -39,6 +39,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Util.h"
 
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #if HAVE_CSTDLIB
@@ -377,21 +378,46 @@ namespace Util {
   }
 
   /**
+   * Return user and system CPU time for this thread.
+   * Return -1 in case of failure or if the implementation does
+   * not support the query.  Time is measured in microseconds.
+   * @param include_children_time include the time spent by the children processes that have terminated
+   * @see get_user_cpu_time
+   */
+  int64_t get_thread_cpu_time(void)
+  {
+#if HAVE_GETRUSAGE && HAVE_SYS_RESOURCE_H && defined(RUSAGE_THREAD)
+    struct rusage ru;
+    int status = getrusage(RUSAGE_THREAD,&ru);
+    if (status == 0) {
+      int64_t cpu_time = (int64_t) ru.ru_utime.tv_sec * 1000000;
+      cpu_time += (int64_t) ru.ru_utime.tv_usec;
+      cpu_time += (int64_t) ru.ru_stime.tv_sec * 1000000;
+      cpu_time += (int64_t) ru.ru_stime.tv_usec;
+      return cpu_time;
+    }
+#endif
+    return -1;
+  }
+
+  /**
    * Print system information.
    */
   void printSystemInfo(ostream& os)
   {
-    os << "Host name (machine type) = " << get_host_name() << " ("
-       << get_machine() << ")" << endl;
-    os << "OS = " << get_os_name() << " " << get_os_version() << endl;
-    os << "Physical memory = " << get_physical_memory() << endl;
-    os << "Maximum resident size = " << get_maximum_resident_size() << endl;
-    os << "Soft datasize/address space limit = " << get_soft_data_limit() << "/"
-       << get_soft_as_limit() << endl;
-    os << "Page faults (major/minor) = " << get_major_page_faults() << "/"
-       << get_minor_page_faults() << endl;
-    os << "CPU time (user + system) = " << ((double) get_cpu_time()/1000000.0) 
-       << " s" << endl;
+    ostringstream oss;
+    oss << "Host name (machine type) = " << get_host_name() << " ("
+        << get_machine() << ")" << endl;
+    oss << "OS = " << get_os_name() << " " << get_os_version() << endl;
+    oss << "Physical memory = " << get_physical_memory() << endl;
+    oss << "Maximum resident size = " << get_maximum_resident_size() << endl;
+    oss << "Soft datasize/address space limit = " << get_soft_data_limit()
+        << "/" << get_soft_as_limit() << endl;
+    oss << "Page faults (major/minor) = " << get_major_page_faults() << "/"
+        << get_minor_page_faults() << endl;
+    oss << "CPU time (user + system) = " << ((double) get_cpu_time()/1000000.0) 
+        << " s" << endl;
+    os << oss.str();
   }
 
   /**
@@ -399,8 +425,10 @@ namespace Util {
    */
   void printCpuTime(ostream& os)
   {
-    os << "CPU time (user + system) = " << ((double) get_cpu_time()/1000000.0) 
-       << " s" << endl;
+    ostringstream oss;
+    oss << "CPU time (user + system) = " << ((double) get_cpu_time()/1000000.0) 
+        << " s" << endl;
+    os << oss.str();
   }
 
 }

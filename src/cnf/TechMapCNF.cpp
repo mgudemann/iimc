@@ -32,8 +32,8 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
-#include<map>
-#include<algorithm>
+#include <map>
+#include <algorithm>
 #include "TechMapCNF.h"
 #include "Cut.h"
 #include "CutAlgorithm.h"
@@ -167,7 +167,7 @@ namespace {
     CNFClauseCountCost(unsigned max_cut, Options::Verbosity v) : cost_count(0), cut_size(max_cut), verbosity(v)
     { }
 
-    CNFClauseCountCost(const CNFClauseCountCost& c)
+    CNFClauseCountCost(const CNFClauseCountCost&)
     {
       // do not copy a cost function
       assert(false);
@@ -337,7 +337,7 @@ namespace {
         for(std::vector<long>::iterator j = clind->begin(); j != clind->end(); ++j) {
 
           long l = *j;
-          long ul = abs(l);
+          long ul = labs(l);
           bool neg = l < 0;
           cnf[curr_clause].push_back(::Opt::refOf(vartoindex[ul-1], !neg));
         }
@@ -353,7 +353,7 @@ namespace {
         for(std::vector<long>::iterator j = clind->begin(); j != clind->end(); ++j) {
 
           long l = *j;
-          long ul = abs(l);
+          long ul = labs(l);
           bool neg = l < 0;
           cnf[curr_clause].push_back(::Opt::refOf(vartoindex[ul-1], !neg));
         }

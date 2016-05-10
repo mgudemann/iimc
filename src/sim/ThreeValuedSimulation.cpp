@@ -32,6 +32,7 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
+#include "Util.h"
 #include "ThreeValuedSimulation.h"
 
 using namespace std;
@@ -78,13 +79,13 @@ namespace ThreeValued {
       TV nsfVal = Opt::isNot(aig.nextStateFnRefs()[i]) ?  tv_not(val) : val; 
       nsValues[i] = nsfVal;
     }
-    copy(nsValues.begin(), nsValues.end(), _latchBegin);
     //Extract output values
     for (unsigned int i = 0; i < aig.outputFnRefs().size(); ++i) {
       TV val = tvs[UIGET(Opt::indexOf(aig.outputFnRefs()[i]))];
       TV outputVal = Opt::isNot(aig.outputFnRefs()[i]) ?  tv_not(val) : val; 
       outputValues[i] = outputVal;
     }
+    copy(nsValues.begin(), nsValues.end(), _latchBegin);
   }
 
   vector<TV>::iterator AIGTVSim::inputBegin() {
@@ -103,11 +104,11 @@ namespace ThreeValued {
     return _latchEnd;
   }
 
-  const vector<TV> & AIGTVSim::getNSValues() {
+  const vector<TV> & AIGTVSim::getNSValues() const {
     return nsValues;
   }
 
-  const vector<TV> & AIGTVSim::getOutputValues() {
+  const vector<TV> & AIGTVSim::getOutputValues() const {
     return outputValues;
   }
 
@@ -157,9 +158,10 @@ namespace {
    *  simulation does not converge rapidly. */
   class WidenIfSlow {
   public:
-    WidenIfSlow(vecSeq const & ls, Options::Verbosity verb, bool wide = true):
+    WidenIfSlow(vecSeq const & ls, Options::Verbosity verb,
+                bool wide = true, int finalTime = -1):
       lasso(ls), tCounts(ls.front().size(), 0), i(1), mask(255),
-      verbosity(verb), widen(wide) {}
+      verbosity(verb), widen(wide), finalTime(finalTime) {}
 
     bool operator()(TVvec & vec) {
       bool widened = false;
@@ -193,7 +195,7 @@ namespace {
           cout << " m=" << min << " M=" << max << " tot=" << tot;
         }
         // Allow grace period to let things settle a bit.
-        if (lasso.size() < 32767) {
+        if (lasso.size() < 32767 && (finalTime == -1 || Util::get_user_cpu_time() < finalTime)) {
           if (verbosity > Options::Terse) {
             if (widen)
               cout << ": no widening";
@@ -254,6 +256,7 @@ namespace {
     vecSeq::size_type const mask;
     Options::Verbosity verbosity;
     bool widen;
+    int finalTime;
   };
 
 } // anonymous
@@ -278,6 +281,9 @@ namespace ThreeValued {
   }
 
 
+  /**
+   * Construct a PackedTvVector with unpacked size vs.
+   */
   PackedTvVector::PackedTvVector(size_type vs)
   {
     usize = vs;
@@ -286,6 +292,10 @@ namespace ThreeValued {
   }
 
 
+  /**
+   * Construct a PackedTvVector initialized with the contents
+   * of unpacked vector v.
+   */
   PackedTvVector::PackedTvVector(std::vector<TV> const & v)
   {
     usize = v.size();
@@ -308,10 +318,16 @@ namespace ThreeValued {
   }
 
 
+  /**
+   * Copy constructor.
+   */
   PackedTvVector::PackedTvVector(PackedTvVector const & from) :
     usize(from.usize), data(from.data) {}
 
 
+  /**
+   * Assignment operator.
+   */
   PackedTvVector & PackedTvVector::operator=(PackedTvVector const & rhs)
   {
     if (&rhs != this) {
@@ -322,7 +338,10 @@ namespace ThreeValued {
   }
 
 
-  TV PackedTvVector::get(size_type i) const
+  /**
+   * Getter.
+   */
+  TV PackedTvVector::at(size_type i) const
   {
     size_type word = findWord(i);
     size_type shift = findShift(i);
@@ -330,6 +349,9 @@ namespace ThreeValued {
   }
 
 
+  /**
+   * Setter.
+   */
   void PackedTvVector::set(size_type i, TV val)
   {
     size_type word = findWord(i);
@@ -339,10 +361,14 @@ namespace ThreeValued {
   }
 
 
+  /**
+   * Appends the contents of the PackedTvVector to the end of
+   * unpacked vector v.  
+   */
   void PackedTvVector::unpack(std::vector<TV> & v) const
   {
     for (PackedTvVector::size_type i = 0; i < usize; ++i) {
-      TV val = get(i);
+      TV val = at(i);
       v.push_back(val);
     }
   }
@@ -364,10 +390,56 @@ namespace ThreeValued {
   std::ostream & operator<<(std::ostream & os, PackedTvVector const & v) 
   {
     for (PackedTvVector::size_type i = 0; i < v.size(); ++i) {
-      TV val = v.get(i);
+      TV val = v.at(i);
       os << val;
     }
     return os;
+  }
+
+
+  /**
+   * Checks for early termination of simulation because of violation
+   * of a safety property.  This happens if the output is unambiguously
+   * true.  This function also discharges reporting duties.
+   */
+  void checkEarlyConclusion(
+    vector<ID> const & outputFns,
+    int * pconclusion,
+    Model::Mode mode,
+    AIGTVSim const & tvsim,
+    vecSeq::size_type thisStep,
+    unsigned int * pfirstNonzero,
+    TV & outVal,
+    bool & unchanged,
+    Options::Verbosity verbosity)
+  {
+    if (mode == Model::mIC3) {
+      assert(outputFns.size() == 1);
+      TV newOutVal = tvsim.getOutputValues()[0];
+      if (outVal != newOutVal) {
+        if (unchanged) {
+          if (verbosity > Options::Silent) {
+            cout << "First output change at cycle " << thisStep << ": "
+                 << newOutVal << endl;
+          }
+          unchanged = false;
+          if (pfirstNonzero != 0)
+            *pfirstNonzero = thisStep;
+        } else if (!unchanged && verbosity > Options::Terse) {
+          cout << "Output changed at cycle " << thisStep << ": "
+               << newOutVal << endl;
+        }
+        if (newOutVal == TVTrue && pconclusion != 0) {
+          // Early termination.
+          if (verbosity > Options::Silent) {
+            cout << "Output definitely SAT after " << thisStep
+                 << " steps" << endl;
+          }
+          *pconclusion = 1;
+        }
+        outVal = newOutVal;
+      }
+    }
   }
 
 
@@ -378,11 +450,14 @@ namespace ThreeValued {
     vector<ID> const & outputFns,
     AIGAttachment const * aat,
     vecSeq & lasso,
+    vecSeq & outputValues,
     Options::Verbosity verbosity,
     bool allowWidening,
     int * pconclusion,
+    Model::Mode mode,
     unsigned int * pfirstNonzero,
-    bool * pwidened)
+    bool * pwidened,
+    int finalTime)
   {
     if (verbosity > Options::Informative && outputFns.size() == 1) {
       ostringstream oss;
@@ -402,44 +477,29 @@ namespace ThreeValued {
     TVvec latchTVs(tvsim.latchBegin(), tvsim.latchEnd());
     // The order of the following two statements is important.
     brie.insert(latchTVs);
-    WidenIfSlow widen(lasso, verbosity, allowWidening);
+    WidenIfSlow widen(lasso, verbosity, allowWidening, finalTime);
     bool widened = false;
+    // Initial settings for safety conclusion check.
     TV outVal = TVFalse;
     bool unchanged = true;
+    // Simulation loop.
     while (true) {
       tvsim.step();
-      if (outputFns.size() == 1) {
-        TV newOutVal = tvsim.getOutputValues()[0];
-        if (outVal != newOutVal) {
-          vecSeq::size_type thisStep = lasso.size() - 1;
-          if (unchanged) {
-            if (verbosity > Options::Silent) {
-              cout << "First output change at cycle " << thisStep << ": "
-                   << newOutVal << endl;
-            }
-            unchanged = false;
-            if (pfirstNonzero != 0)
-              *pfirstNonzero = thisStep;
-          } else if (!unchanged && verbosity > Options::Terse) {
-            cout << "Output changed at cycle " << thisStep << ": "
-                 << newOutVal << endl;
-          }
-          if (newOutVal == TVTrue && pconclusion != 0) {
-            // Early termination.
-            if (verbosity > Options::Silent) {
-              cout << "Output definitely SAT after " << thisStep
-                   << " steps" << endl;
-            }
-            *pconclusion = 1;
-            return thisStep;
-          }
-          outVal = newOutVal;
-        }
-      }
+      vecSeq::size_type thisStep = lasso.size() - 1;
+      // Check for conclusion.  This check is for safety properties.
+      checkEarlyConclusion(outputFns, pconclusion, mode, tvsim,
+                           thisStep, pfirstNonzero, outVal,
+                           unchanged, verbosity);
+      if (pconclusion != 0 && *pconclusion == 1)
+        return thisStep;
       // Extract latch values from simulation result.
       latchTVs = tvsim.getNSValues();
       widened |= widen(latchTVs);
       PackedTvVector platch(latchTVs);
+      if (pconclusion != 0 && mode == Model::mFAIR) {
+        PackedTvVector poutputs(tvsim.getOutputValues());
+        outputValues.push_back(poutputs);
+      }
       vecSeq::const_iterator lit = brie.find(platch);
       if (lit != lasso.cend()) {
         stem = lit - lasso.cbegin();
@@ -449,15 +509,17 @@ namespace ThreeValued {
       // Make next state values current in preparation for next cycle.
       copy(latchTVs.begin(), latchTVs.end(), tvsim.latchBegin());
     }
-    if (unchanged) {
-      if (pconclusion != 0)
-        *pconclusion = 0;
-      // Passing property.
-      if (verbosity > Options::Silent) {
-        cout << "Output UNSAT over all reachable states" << endl;
+    if (mode == Model::mIC3) {
+      if (unchanged) {
+        if (pconclusion != 0)
+          *pconclusion = 0;
+        // Passing property.
+        if (verbosity > Options::Silent) {
+          cout << "Output UNSAT over all reachable states" << endl;
+        }
+        if (pfirstNonzero != 0)
+          *pfirstNonzero = lasso.size();
       }
-      if (pfirstNonzero != 0)
-        *pfirstNonzero = lasso.size();
     }
 #if 0
     if (verbosity > Options::Informative) {

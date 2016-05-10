@@ -37,11 +37,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "SAT.h"
 
-#include <assert.h>
+#include <cassert>
+#include <iostream>
 
 using namespace std;
 
-int main(int argc, const char * argv[]) {
+int main(void) {
   Expr::Manager * man = new Expr::Manager();
   Expr::Manager::View * v = man->newView();
 

@@ -53,14 +53,24 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace FCBMC {
   struct FCBMCOptions {
     FCBMCOptions(SAT::Clauses * _constraints = NULL) :
-      constraints(_constraints), silent(false), backend("minisat") {}
+      extractCex(true), constraints(_constraints), silent(false),
+      action(nullptr),
+#ifndef DISABLE_ZCHAFF
+      backend("zchaff")
+#else
+      backend("minisat")
+#endif
+    {}
     FCBMCOptions(const boost::program_options::variables_map & opts) : 
-      extractCex(opts.count("print_cex")), constraints(NULL), silent(false),
-      backend(opts["fcbmc_backend"].as<std::string>()) {}
+      extractCex(opts.count("print_cex")), constraints(nullptr), silent(false),
+      action(nullptr), backend(opts["fcbmc_backend"].as<std::string>()),
+      rseed(opts["rand"].as<int>()) {}
     bool extractCex;
     SAT::Clauses * constraints;
     bool silent;
+    Model::Action * action;
     std::string backend;
+    int rseed;
   };
 
   class FCBMC {
@@ -68,7 +78,8 @@ namespace FCBMC {
     FCBMC(Model & m, const FCBMCOptions & opts);
     ~FCBMC();
     MC::ReturnValue check(int timeout, int bound,
-                          Lasso * cexTrace = NULL);
+                          Lasso * cexTrace = NULL,
+                          long memlimit = 0);
   private:
     void addVarsAt(int k);
     void clearAsgn();
@@ -92,7 +103,7 @@ namespace FCBMC {
   // Defines the basic BMC tactic.
   class FCBMCAction : public Model::Action {
   public:
-    FCBMCAction(Model &m) : Model::Action(m) {
+    FCBMCAction(Model &m, FCBMCOptions *_opts = nullptr) : Model::Action(m), _opts(_opts ? new FCBMCOptions(*_opts) : nullptr){
       COIAttachment::Factory caf;
       requires(Key::COI, &caf);
       ExprAttachment::Factory eaf;
@@ -102,18 +113,30 @@ namespace FCBMC {
       CNFAttachment::Factory cnfaf;
       requires(Key::CNF, &cnfaf);
     }
+    ~FCBMCAction() {
+      if(_opts)
+	delete _opts;
+    }
     virtual void exec() {
       FCBMCOptions opts(options());
+      if (_opts) opts = *_opts;
+      opts.action = this;
+
       FCBMC fcbmc(model(), opts);
       int timeout = (model().options().count("fcbmc_timeout")) ?
                      model().options()["fcbmc_timeout"].as<int>() : -1;
 
+      long memlimit = (model().options().count("fcbmc_memlimit")) ?
+                       model().options()["fcbmc_memlimit"].as<long>() : 0;
+
       int bound = (model().options().count("fcbmc_bound")) ?
                    model().options()["fcbmc_bound"].as<int>() : -1;
 
-      MC::ReturnValue rv = fcbmc.check(timeout, bound);
+      MC::ReturnValue rv = fcbmc.check(timeout, bound, NULL, memlimit);
       if(rv.returnType != MC::Unknown) {
-        ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+        if (model().verbosity() > Options::Silent)
+          std::cout << "Conclusion found by FCBMC." << std::endl;
+        auto pat = model().attachment<ProofAttachment>(Key::PROOF);
         if(rv.returnType == MC::Proof) {
           pat->setConclusion(0);
         }
@@ -124,6 +147,7 @@ namespace FCBMC {
     }
   private:
     static ActionRegistrar action;
+    FCBMCOptions *_opts;
   };
 }
 

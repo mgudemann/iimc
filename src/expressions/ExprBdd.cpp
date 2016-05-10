@@ -52,8 +52,7 @@ void updateCombAttachment(
   unsigned int limit,
   unsigned int numPairs)
 {
-  CombAttachment *cat = 
-    (CombAttachment *) model.attachment(Key::COMB);
+  auto cat = model.attachment<CombAttachment>(Key::COMB);
   assert(cat != 0);
   CombAttachment::Effort currentEffort;
   if (timedOut)
@@ -72,13 +71,20 @@ void updateCombAttachment(
     cat->simplificationEffort() = currentEffort;
   cat->numEquivalences() += numPairs;
   if(!timedOut) {
-    //Update unusedTime
+#ifdef NOTCOMP
+    // The reason for excluding the unused-time update in comp mode is that we
+    // lacked the time to test its effect.
+    // Update unusedTime
     if(model.options().count("bdd_sw_timeout")) {
-      unsigned long timeout = 1000 * 
+      unsigned long timeout = 1000 *
         model.options()["bdd_sw_timeout"].as<unsigned long>();
       unsigned long elapsed = model.bddManager().ReadElapsedTime();
-      cat->unusedTime() += (timeout - elapsed) * 1000;
+      // Since handling of timeout is not precise, elapsed may exceed
+      // timeout even though sweeping didn't time out.
+      if (timeout > elapsed)
+        cat->unusedTime() += (timeout - elapsed) * 1000;
     }
+#endif
   }
   else
     cat->unusedTime() = 0;
@@ -113,10 +119,12 @@ public:
   }
 
   ID fold(ID id, int n, const ID * const args) {
+    DdNode *tag = tags(id);
+    if (tag == 0) // timeout
+      return Manager::View::Folder::fold(id, n, args);
+    DdNode *regtag = Cudd_Regular(tag);
     // Check if this is the first element of its equivalence class.
     // If so, it becomes the representative.
-    DdNode *tag = tags(id);
-    DdNode *regtag = Cudd_Regular(tag);
     assert(regtag != 0);
     DdIdMap::const_iterator irep = b2i.find(regtag);
     bool replace = irep != b2i.end();
@@ -131,6 +139,30 @@ public:
       }
       if (replacement != id && view().op(id) != Not) {
         nequiv++;
+        if (verbosity > Options::Verbose)
+          switch (view().op(id))
+            {
+            case Var:
+              cout << "Var ";
+              break;
+            case Not:
+              cout << "Not ";
+              break;
+            case And:
+              cout << "And ";
+              break;
+            case Or:
+              cout << "Or ";
+              break;
+            case Equiv:
+              cout << "Equiv ";
+              break;
+            case Implies:
+              cout << "Implies ";
+              break;
+            default:
+              break;
+            }
         if (verbosity > Options::Verbose)
           cout << id << (reptag == tag ? " is equivalent to " :
                          " is the negation of ") << representative << endl;
@@ -236,7 +268,7 @@ private:
 };
 
 /**
- * Class for fanout counting.  
+ * Class for fanout counting.
  *
  * Used to find the number of parents backward-reachable from the roots.
  */
@@ -269,11 +301,11 @@ public:
   /**
    * Constructor.
    */
-  bdd_folder(Manager::View& v, Cudd const & bddMgr, 
-             unordered_map<ID, int>& orderMap, 
+  bdd_folder(Manager::View& v, Cudd const & bddMgr,
+             unordered_map<ID, int>& orderMap,
              unordered_map<ID, int>& auxVarMap, IdBddMap& id2bdd,
-             unordered_map<ID, unsigned int>& count, 
-             unsigned int limit, bool swp, Options::Verbosity verb) : 
+             unordered_map<ID, unsigned int>& count,
+             unsigned int limit, bool swp, Options::Verbosity verb) :
     Manager::View::Folder(v), bddMgr(bddMgr), orderMap(orderMap),
     auxVarMap(auxVarMap), i2b(id2bdd), count(count),
     limit(limit), sweep(swp), verbosity(verb) {  /*id2bdd[0] = bddMgr.bddOne();*/ }
@@ -393,7 +425,7 @@ private:
 
 
 BDD bddOf(Manager::View & v, ID id, Model const & model,
-          unordered_map<ID, int>& orderMap, 
+          unordered_map<ID, int>& orderMap,
           unordered_map<ID, int>& auxVarMap, unsigned int limit,
           bool sweep, Options::Verbosity verbosity)
 {
@@ -409,7 +441,7 @@ BDD bddOf(Manager::View & v, ID id, Model const & model,
 }
 
 
-IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model, 
+IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model,
                unordered_map<ID, int>& orderMap,
                unordered_map<ID, int>& auxVarMap, unsigned int limit,
                bool sweep, Options::Verbosity verbosity)
@@ -429,13 +461,13 @@ IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model,
   IdBddMap id2bdd;
   bdd_folder bddf(v, bddMgr, orderMap, auxVarMap, id2bdd,
                   count, limit, sweep, verbosity);
-  bool timedOut = false;
+  bool incomplete = false;
   try {
     v.fold(bddf, ids);
-  } catch (Timeout& e) {
+  } catch (Timeout const & e) {
     if (verbosity > Options::Silent)
       cout << e.what() << endl;
-    timedOut = true;
+    incomplete = true;
     bddMgr.ClearErrorCode();
     bddMgr.UnsetTimeLimit();
     bddMgr.ResetStartTime();
@@ -443,18 +475,19 @@ IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model,
   if (sweep) {
     bdd_sweep bdds(v, ids, auxVarMap, id2bdd, bddMgr, verbosity);
     v.fold(bdds, ids);
+
     if (verbosity > Options::Silent) {
       cout << "Found " << bdds.equivalentPairs()
            << " equivalent node pairs" << endl;
       if (verbosity > Options::Terse)
         cout << "Final node count = " << sizeOf(v, ids) << endl;
     }
-    if (!timedOut)
+    if (!incomplete)
       bdds.cleanup();
-    updateCombAttachment(model, timedOut, auxVarMap.size(), limit,
+    updateCombAttachment(model, incomplete, auxVarMap.size(), limit,
                          bdds.equivalentPairs());
   }
-  if (timedOut) {
+  if (incomplete) {
     id2bdd.clear();
     auxVarMap.clear();
   }
@@ -496,7 +529,7 @@ IdBddMap bddOf(Manager::View & v, vector<ID> & ids,
                   count, limit, false, verbosity);
   try {
     v.fold(bddf, ids);
-  } catch (Timeout& e) {
+  } catch (Timeout const & e) {
     if (verbosity > Options::Silent)
       cout << e.what() << endl;
     bddMgr.ClearErrorCode();
@@ -521,13 +554,13 @@ public:
   bool operator<(const lexPair<First, Second> other) const {
     if (first < other.first)
       return true;
-    else 
+    else
       return first == other.first && second < other.second;
   }
   bool operator>(const lexPair<First, Second> other) const {
     if (first > other.first)
       return true;
-    else 
+    else
       return first == other.first && second > other.second;
   }
 private:
@@ -567,7 +600,7 @@ private:
  */
 class node_height : public Manager::View::Folder {
 public:
-  node_height(Manager::View& v, unordered_map<ID, unsigned int>& h) 
+  node_height(Manager::View& v, unordered_map<ID, unsigned int>& h)
     : Manager::View::Folder(v), height(h) {
     assert(height.size() == 0);
   }
@@ -690,9 +723,9 @@ vector<ID> bddOrderOf(Manager::View& v, vector<ID>& roots)
   for (unordered_map<ID, unsigned int>::const_iterator it = count.begin();
        it != count.end(); ++it)
     allNodes.push_back(it->first);
-  stable_sort(allNodes.begin(), allNodes.end(), 
+  stable_sort(allNodes.begin(), allNodes.end(),
               compareByRank<ID, unsigned int>(count));
-  for (vector<ID>::const_iterator it = allNodes.begin(); 
+  for (vector<ID>::const_iterator it = allNodes.begin();
        it != allNodes.end(); ++it) {
     if (count[*it] > 1)
       cout << *it << ": " << count[*it] << " ";
@@ -721,7 +754,7 @@ vector<ID> bddOrderOf(Manager::View& v, vector<ID>& roots)
 
   // Now run the interleaving algorithm.
   Interleaver< lexPair<unsigned int, unsigned int> > ilv(v, ranking);
-  for (vector<ID>::const_iterator i = roots.begin(); 
+  for (vector<ID>::const_iterator i = roots.begin();
        i != roots.end(); ++i) {
     ilv.resetLast();
     ilv.order(*i, *i);
@@ -742,7 +775,7 @@ class collect : public Manager::View::Folder {
 public:
   collect(Manager::View& v, vector<ID> & all)
     :  Manager::View::Folder(v), nodes(all) {}
-  ID fold(ID id, int n, const ID * const args) {
+  ID fold(ID id, int, const ID * const) {
     nodes.push_back(id);
     return id;
   }
@@ -757,8 +790,8 @@ class node_com : public Manager::View::Folder {
 public:
   node_com(Manager::View& v, unordered_map<ID, int>& vcom,
            unordered_map<ID, unsigned int> & position,
-           unordered_map<ID, unsigned int> & cnt)
-    :  Manager::View::Folder(v), vercom(vcom), posn(position), count(cnt) {}
+           unordered_map<ID, unsigned int> &)
+    :  Manager::View::Folder(v), vercom(vcom), posn(position) {}
   ID fold(ID id, int n, const ID * const args) {
     if (view().op(id) == Var) {
       vercom[id] = - (int) posn[id];
@@ -773,7 +806,6 @@ public:
 private:
   unordered_map<ID, int>& vercom;
   unordered_map<ID, unsigned int> & posn;
-  unordered_map<ID, unsigned int> & count;
 };
 
 

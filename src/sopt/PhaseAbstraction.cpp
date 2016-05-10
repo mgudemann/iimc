@@ -144,7 +144,7 @@ void findPeriodicSets(
 class SATchecker {
 public:
   SATchecker(Model & model, Expr::Manager::View & ev, CNFAttachment const * cat, SAT::Clauses * constraints = 0) :
-    model_(model), cat_(cat), ev_(ev) {
+    ev_(ev) {
     satman_ = model.newSATManager();
     sview_ = satman_->newView(ev);
     SAT::Clauses tr = cat->getPlainCNF();
@@ -174,8 +174,6 @@ public:
     return !rv;
   }
 private:
-  Model & model_;
-  CNFAttachment const * cat_;
   Expr::Manager::View & ev_;
   SAT::Manager * satman_;
   SAT::Manager::View * sview_;
@@ -227,7 +225,7 @@ void buildConstraintsFromSimulationResults(
   // else we should attempt something else
 }
 
-
+#if 0
 /** Comparison function called by prepareConstraints to sort
  *  persistent signals. */
 bool comparePersistentLast(pair<ID, PersistentSignalCard> const & a,
@@ -309,6 +307,7 @@ void prepareConstraints(Expr::Manager::View & v, PersistentCardMap const & map, 
     }
   }
 }
+#endif
 
 
 /** Collect the roots for the phase finder folder. */
@@ -348,11 +347,11 @@ namespace Expr {
 /** Phase finder folder. */
 class PhasePhinder : public Manager::View::Folder {
 public:
-  PhasePhinder(Manager::View & v, Model & model, SATchecker & checker,
+  PhasePhinder(Manager::View & v, Model &, SATchecker & checker,
                unordered_map<ID,ID> & lmap, unordered_set<ID> & phase0,
                unordered_set<ID> & phase1, unordered_set<ID> & selfDep,
                ID phi0, ID phi1, Options::Verbosity verbosity):
-    Manager::View::Folder(v), model_(model), checker_(checker), lmap_(lmap),
+    Manager::View::Folder(v), checker_(checker), lmap_(lmap),
     phase0_(phase0), phase1_(phase1), selfDep_(selfDep), phi0_(phi0),
     phi1_(phi1), verbosity_(verbosity), satcalls_(0), satproofs_(0),
     iterations_(0)
@@ -390,7 +389,7 @@ public:
    *  phase, then the latch inherits the opposite phase.  Primary
    *  inputs are labeled lazily as needed.
    */
-  ID fold(ID id, int n, const ID * const args) {
+  ID fold(ID id, int, const ID * const) {
     assert(view().op(id) ==  Var);
     unordered_map<ID,ID>::const_iterator it = lmap_.find(id);
     assert(it != lmap_.end());  // only latches should be roots
@@ -601,7 +600,6 @@ private:
   }
 
 
-  Model & model_;
   SATchecker & checker_;
   unordered_map<ID,ID> & lmap_;
   unordered_set<ID> & phase0_;
@@ -815,19 +813,14 @@ void phaseAbstract(
   if (verbosity > Options::Silent)
     cout << "Keeping phase " << Expr::stringOf(*ev, phi) << endl;
 
-  SeqAttachment * squat = (SeqAttachment *) model.attachment(Key::SEQ);
-  ExprAttachment * eat = (ExprAttachment *) model.attachment(Key::EXPR);
+  auto seat = model.attachment<SeqAttachment>(Key::SEQ);
+  auto eat = model.attachment<ExprAttachment>(Key::EXPR);
 
   if (tossPhase.size() + keepPhase.size() + 1 != eat->stateVars().size())
     cout << (tossPhase.size() + keepPhase.size())
          << " labeled latches instead of "
          << (eat->stateVars().size() - 1)
          << ".  Proceed at your own risk." << endl;
-
-  if (squat->stateVars.empty()) {
-    squat->stateVars = eat->stateVars();
-    squat->nextStateFns = eat->nextStateFns();
-  }
 
   // Build implication set from lasso.
   implSet implications;
@@ -883,7 +876,7 @@ void phaseAbstract(
   for (vector<ID>::size_type i = 0; i < tossCs.size(); ++i) {
     map.insert(unordered_map<ID, ID>::value_type(tossCs[i],tossNs[i]));
     // Don't know what to do.  Arbitrarily replace with ns.
-    squat->optimized.insert(unordered_map<ID, ID>::value_type(tossCs[i],tossNs[i]));
+    seat->optimized.insert(unordered_map<ID, ID>::value_type(tossCs[i],tossNs[i]));
   }
 
   vector<ID> keepCs, keepNs;
@@ -911,8 +904,6 @@ void phaseAbstract(
   eat->setNextStateFns(keepCs, keepNs);
 
   vector<ID> init(eat->initialConditions());
-  if (squat->initialConditions.empty())
-    squat->initialConditions = init;
   eat->clearInitialConditions();
   for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
     ID var = ev->op(*it) == Expr::Not ? ev->apply(Expr::Not, *it) : *it;
@@ -994,7 +985,7 @@ void phaseAbstract(
     eat->addConstraint(vid, *it);
   }
   model.release(eat);
-  model.release(squat);
+  model.release(seat);
 }
 
 
@@ -1010,45 +1001,61 @@ void PhaseAbstractionAction::exec()
   if (verbosity > Options::Silent)
     cout << "Phase analysis of model " << _model.name() << endl;
 
-  ExprAttachment const * eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
   if (eat->constraints().size() > 0) {
     if (verbosity > Options::Terse)
       cout << "Model has transition constraints" << endl;
+    model().disablePp();
     return;
   }
   if (eat->justice().size() > 0) {
     if (verbosity > Options::Terse)
       cout << "Model has justice constraints" << endl;
+    model().disablePp();
     return;
   }
   if (eat->fairness().size() > 0) {
     if (verbosity > Options::Terse)
       cout << "Model has fairness constraints" << endl;
+    model().disablePp();
     return;
   }
   if (eat->outputFns().size() != 1) {
     if (verbosity > Options::Terse)
-      cout << "More has more than one output" << endl;
+      cout << "Model has more than one output" << endl;
+    model().disablePp();
     return;
   }
 
   Expr::Manager::View * ev = model().newView();
 
-  // Ternary simulation to find periodic and persistent signals.
-  bool allowWidening = _model.options().count("tv_narrow") == 0;
-  vecSeq lasso;
-  AIGAttachment const * aat = (AIGAttachment const *) model().constAttachment(Key::AIG);
-  vecSeq::size_type stem = ThreeValued::computeLasso(*ev, eat->initialConditions(), eat->outputFns(),
-                                                     aat, lasso, verbosity, allowWidening);
-  model().constRelease(aat);
-  
-  // Find (eventually) periodic and persistent signals.
+  PeriodicCardMap periodicMap;
   vector<ID> const & sv = eat->stateVars();
   PersistentCardMap persistentMap;
-  PeriodicCardMap periodicMap;
-  findInterestingSignals(lasso, sv, stem, persistentMap, periodicMap);
+  vecSeq lasso;
+  auto rat = model().attachment<RchAttachment>(Key::RCH);
+  if (rat->hasTvInfo() && !layered) {
+    //Grab periodic signal information from RchAttachment.
+    rat->filterDroppedPeriodicSignals();
+    periodicMap = *(rat->periodicMap());
+    model().release(rat);
+  } else {
+    model().release(rat);
+    // Ternary simulation to find periodic and persistent signals.
+    bool allowWidening = _model.options().count("tv_narrow") == 0;
+    vecSeq outputValues;
+    AIGAttachment const * const aat = (AIGAttachment const *) model().constAttachment(Key::AIG);
+    vecSeq::size_type stem = ThreeValued::computeLasso(*ev, eat->initialConditions(), eat->outputFns(),
+                                                       aat, lasso, outputValues,
+                                                       verbosity, allowWidening);
+    model().constRelease(aat);
+  
+    // Find (eventually) periodic and persistent signals.
+    findInterestingSignals(lasso, sv, stem, persistentMap, periodicMap);
 
-  printReport(verbosity, lasso, *ev, sv, persistentMap, periodicMap);
+    printReport(verbosity, lasso, *ev, sv, persistentMap, periodicMap);
+
+  }
 
   if (layered) {
     PhaseGroupVec phaseGroups;
@@ -1070,7 +1077,7 @@ void PhaseAbstractionAction::exec()
       }
 
       // Classify latches.
-      CNFAttachment const * cat = (CNFAttachment const *) model().constAttachment(Key::CNF);
+      CNFAttachment const * const cat = (CNFAttachment const *) model().constAttachment(Key::CNF);
       // Prepare constraints and add them as assumptions.
       ev->begin_local();
       SAT::Clauses constraints;
@@ -1164,7 +1171,7 @@ void PhaseAbstractionAction::exec()
       }
       model().constRelease(cat);
       ev->begin_local();
-      ev->end_local(true /* full */);
+      ev->end_local(/* true full */);
     }
     model().constRelease(eat);
 
@@ -1191,28 +1198,33 @@ void PhaseAbstractionAction::exec()
   } else {
     model().constRelease(eat);
     PeriodicCardMap periodicFZMap;
+    unsigned unrolling = 1;
+    unsigned max_period = model().options()["phase_max"].as<unsigned>();
     for(PeriodicCardMap::const_iterator it = periodicMap.begin(); it != periodicMap.end(); ++it) {
+      unsigned period = it->second.period;
       if (it->second.start == 0) {
         periodicFZMap.insert(PeriodicCardMap::value_type(it->first, it->second));
+        unrolling = Util::lcm(unrolling, period);
       }
     }
 
-    vecSeq::size_type unrolling = lasso.size() - stem;
     if (periodicFZMap.empty()) {
       if (verbosity > Options::Silent) 
         cout << "PhaseAbs: No periodic signals from time zero found. Abstraction not performed." << endl;
-    }
-    else if (unrolling > model().options()["phase_max"].as<unsigned>()) {
+      model().disablePp();
+    } else if (unrolling > max_period) {
       if (verbosity > Options::Silent) 
         cout << "PhaseAbs: Loop is too long (" << unrolling << "). Abstraction not performed." << endl;
-    }
-    else {
-      ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+    } else {
+      ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
+      auto seat = model().attachment<SeqAttachment>(Key::SEQ);
       if (verbosity > Options::Silent) 
         cout << "PhaseAbs: Unrolling " << unrolling << " times." << endl;
+      //ev->begin_local();
       vector<ID> roots(eat->nextStateFns());
       roots.insert(roots.end(), eat->outputFns().begin(), eat->outputFns().end());
       assert(eat->outputFns().size() == 1);
+      unsigned int oldSize = Expr::sizeOf(*ev, roots);
       //roots.insert(roots.end(), eat->constraintFns().begin(), eat->constraintFns().end());
       //roots.insert(roots.end(), eat->badFns().begin(), eat->badFns().end());
       //roots.insert(roots.end(), eat->fairnessFns().begin(), eat->fairnessFns().end());
@@ -1220,6 +1232,7 @@ void PhaseAbstractionAction::exec()
       const vector<ID> & nsfs(eat->nextStateFns());
       const vector<ID> & inputs(eat->inputs());
       vector<ID> newInputs;
+      unordered_map<ID, pair<ID, unsigned>> cycleInputs;
       Expr::IDMap sv2nsf;
       for (unsigned i = 0; i < latches.size(); ++i) {
         sv2nsf.insert(Expr::IDMap::value_type(latches[i], nsfs[i]));
@@ -1244,22 +1257,58 @@ void PhaseAbstractionAction::exec()
           ID newInput = ev->newVar(oss.str());
           newInputs.push_back(newInput);
           map.insert(Expr::IDMap::value_type(input, newInput));
+	  cycleInputs[newInput] = make_pair(input, cycle);
         }
         Expr::varSub(*ev, map, roots);
         if (cycle > 0)
           roots.push_back(eat->outputFns()[0]);
       }
-      //TODO: Generalize
-      eat->clearInputs();
-      eat->addInputs(newInputs);
-      vector<ID> outputs = eat->outputs();
-      eat->clearOutputFns();
-      vector<ID> phaseOutputs(roots.begin() + nsfs.size(), roots.end());
-      eat->setOutputFn(outputs[0], Expr::AIGOfExpr(*ev, ev->apply(Expr::Or, phaseOutputs)));
-      vector<ID> stateVars = eat->stateVars();
-      vector<ID> nnsfs(roots.begin(), roots.begin() + stateVars.size());
-      eat->setNextStateFns(stateVars, nnsfs);
-      model().release(eat);
+      model().constRelease(eat);
+      unsigned int newSize = Expr::sizeOf(*ev, roots);
+      double ratio = newSize / ((double) (unrolling * oldSize));
+      if (verbosity > Options::Silent) {
+        cout << "PhaseAbs: Unrolled circuit size: " << newSize << endl;
+        cout << "PhaseAbc: metric value: " << ratio << endl;
+      }
+#ifndef NOTCOMP
+      if (newSize >= oldSize && (newSize > 500000 || ratio > 0.6)) {
+        if (verbosity > Options::Silent)
+          cout << "PhaseAbs: Unrolled circuit size too big. Abstraction not performed." << endl;
+        model().disablePp();
+      }
+      else {
+#endif
+        auto eat = model().attachment<ExprAttachment>(Key::EXPR);
+        //TODO: Generalize
+        eat->clearInputs();
+        eat->addInputs(newInputs);
+        vector<ID> outputs = eat->outputs();
+        eat->clearOutputFns();
+        vector<ID> phaseOutputs(roots.begin() + nsfs.size(), roots.end());
+        eat->setOutputFn(outputs[0], Expr::AIGOfExpr(*ev, ev->apply(Expr::Or, phaseOutputs)));
+        vector<ID> stateVars = eat->stateVars();
+        vector<ID> nnsfs(roots.begin(), roots.begin() + stateVars.size());
+        eat->setNextStateFns(stateVars, nnsfs);
+	assert(seat->unrollings == 1); // for now, phaseAbstraction can be called only once
+	seat->unrollings = unrolling;
+	seat->outputToCycleOutputs[outputs[0]] = phaseOutputs;
+        //eat->global(ev);
+        for (unordered_map<ID, pair<ID, unsigned> >::const_iterator cit = cycleInputs.begin();
+             cit != cycleInputs.end(); ++cit) {
+          //ID newId = ev->global(cit->first);
+          ID newId = cit->first;
+          seat->cycleInputs.insert(unordered_map<ID, pair<ID, unsigned> >::value_type(newId,cit->second));
+        }
+        model().release(eat);
+	auto rat = model().attachment<RchAttachment>(Key::RCH);
+	unsigned newLb = rat->cexLowerBound() / unrolling;
+	rat->setCexLowerBound(newLb);
+	model().release(rat);
+#ifndef NOTCOMP
+      }
+#endif
+      //ev->end_local();
+      model().release(seat);
     }
   }
 

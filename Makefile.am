@@ -9,6 +9,7 @@ bin_PROGRAMS = iimc
 ## Each included file adds to these variables as it sees fit. 
 iimc_SOURCES =
 AM_CPPFLAGS = @AM_CPPFLAGS@
+AM_LDFLAGS =
 check_PROGRAMS =
 check_SCRIPTS =
 EXTRA_DIST = LICENSE LICENSE.zchaff examples/aig19 examples/dimacs examples/ctl
@@ -20,7 +21,8 @@ dist-hook:
 	$(foreach i,$(DIST_SOURCES),sed -i -e '/^LICENSE/r $(top_srcdir)/LICENSE' -e '/^LICENSE/d' $(distdir)/$(i);)
 	rm -rf `find $(distdir)/examples -name .svn`
 
-LDADD = $(BOOST_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_REGEX_LIB)\
+LDADD = $(BOOST_LDFLAGS) $(BOOST_SYSTEM_LIB) \
+  $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_REGEX_LIB) $(BOOST_THREAD_LIB) \
   src/cudd/libobj.a src/cudd/libcudd.a src/cudd/libepd.a \
   src/cudd/libmtr.a src/cudd/libst.a src/cudd/libutil.a
 

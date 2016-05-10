@@ -42,6 +42,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 #include "ExprAttachment.h"
 #include "CNFAttachment.h"
+#include "RchAttachment.h"
 #include "SeqAttachment.h"
 #include "options.h"
 
@@ -51,9 +52,11 @@ public:
     SeqAttachment::Factory seqFactory;
     ExprAttachment::Factory expFactory;
     AIGAttachment::Factory aigFactory;
+    RchAttachment::Factory rchFactory;
     requires(Key::SEQ, &seqFactory);
     requires(Key::EXPR, &expFactory);
     requires(Key::AIG, &aigFactory);
+    requires(Key::RCH, &rchFactory);
     if (model.options().count("phase_layered")) {
       CNFAttachment::Factory cnfFactory;
       requires(Key::CNF, &cnfFactory);

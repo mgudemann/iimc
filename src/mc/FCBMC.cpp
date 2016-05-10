@@ -49,6 +49,7 @@ FCBMC::FCBMC(Model & m, const FCBMCOptions & _opts) :
       model.constAttachment(Key::EXPR);
 
   ev = model.newView();
+  ev->begin_local();
 
   SAT::Manager * satMan = model.newSATManager();
   if (m.verbosity() > Options::Terse)
@@ -85,9 +86,17 @@ FCBMC::FCBMC(Model & m, const FCBMCOptions & _opts) :
   model.constRelease(cat);
 
   addVarsAt(0);
+
+  if (verbosity > Options::Terse)
+    cout << "FCBMC: Done initializing" << endl;
+  if (m.defaultMode() == Model::Mode::mFAIR) {
+    promise<void>& fcbmcPromise = model.getFcbmcPromise();
+    fcbmcPromise.set_value();
+  }
 }
 
 FCBMC::~FCBMC() {
+  ev->end_local();
   SAT::Manager * satMan = &(satView->manager());
   delete satView;
   delete satMan;
@@ -164,9 +173,9 @@ void FCBMC::extractCex(Lasso & cex) {
   model.constRelease(eat);
 }
 
-MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex) {
+MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex, long memlimit) {
 
-  int64_t stime = Util::get_user_cpu_time();
+  int64_t stime = Util::get_thread_cpu_time();
   
   if(verbosity > Options::Silent)
     cout << "Fair Cycle BMC: Checking from " << k << endl;
@@ -178,12 +187,13 @@ MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex) {
 
   for(; k <= bound; ++k) {
 
+    ostringstream oss;
     if(verbosity > Options::Informative)
-      cout << "FCBMC: K = " << k << ", " ;
+      oss << "FCBMC: K = " << k << ", " ;
 
     //Check for timeout
     if(timeout > 0) {
-      int64_t sofar = Util::get_user_cpu_time() - stime;
+      int64_t sofar = Util::get_thread_cpu_time() - stime;
       if(sofar / 1000000 >= timeout) {
         if(verbosity > Options::Silent) 
           cout << "FCBMC: timeout" << endl;
@@ -192,6 +202,26 @@ MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex) {
       }
       double rem = (double) (timeout - sofar / 1000000);
       satView->timeout(rem);
+    }
+    //Check if future is ready
+      if (opts.action && opts.action->futureReady()) {
+        rv.returnType = MC::Unknown;
+        throw Termination("FCBMC: terminated");
+      }
+    long rsize = Util::get_maximum_resident_size();
+    if (verbosity > Options::Informative) {
+      ostringstream oss;
+      oss << "FCBMC: resident memory = " << rsize << endl;
+      cout << oss.str();
+    }
+    if (memlimit > 0  && rsize > memlimit) {
+      if (verbosity > Options::Terse) {
+        ostringstream oss;
+        oss << "FCBMC: memory limit exceeded " << memlimit << endl;
+        cout << oss.str();
+      }
+      rv.returnType = MC::Unknown;
+      break;
     }
 
     addVarsAt(k);
@@ -229,13 +259,15 @@ MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex) {
     SAT::Clauses fairCycle;
     Expr::wilson(*ev, ev->apply(Expr::Or, disj), fairCycle);
     cnfSize += fairCycle.size();
-    if(verbosity > Options::Informative)
-      cout << "CNF Size = " << cnfSize << " clauses" << endl;
+    if(verbosity > Options::Informative) {
+      oss << "CNF Size = " << cnfSize << " clauses" << endl;
+      cout << oss.str();
+    }
     SAT::GID gid = satView->newGID();
     try {
       satView->add(fairCycle, gid);
     }
-    catch(SAT::Trivial tr) {
+    catch(SAT::Trivial const & tr) {
       satView->remove(gid);
       continue;
     }
@@ -245,7 +277,7 @@ MC::ReturnValue FCBMC::check(int timeout, int bound, Lasso * cex) {
     try {
       sat = satView->sat(NULL, &asgn);
     }
-    catch(Timeout) {
+    catch(Timeout const &) {
       satView->remove(gid);
       if(verbosity > Options::Silent) 
         cout << "FCBMC: timeout" << endl;

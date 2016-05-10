@@ -42,7 +42,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
 
 using namespace std;
 
@@ -71,22 +71,19 @@ namespace SAT {
   }
 
 
-  Manager::Manager(Expr::Manager & _man, bool track_time) : 
-    exprMan(_man), tt(track_time) {}
+  Manager::Manager(Expr::Manager &, bool track_time) : 
+    tt(track_time) {}
   Manager::~Manager() {
     assert (views.size() == 0);
   }
 
   bool Manager::add(Clause & clause) throw(Trivial) {
-#ifdef MTHREADS
-    MMuxType::scoped_lock lock(mux);
-#endif
     bool trivial = false;
     try {
       for (vector<View *>::iterator it = views.begin(); it != views.end(); it++)
         (*it)->add(clause);
     }
-    catch (Trivial tv) {
+    catch (Trivial const & tv) {
       if (!tv.value())
         throw tv;
       trivial = true;
@@ -102,11 +99,9 @@ namespace SAT {
   }
 
   Manager::View * Manager::newView(Expr::Manager::View & exprView, Solver solver) {
-#ifdef MTHREADS
-    MMuxType::scoped_lock lock(mux);
-#endif
 
 #ifdef DISABLE_ZCHAFF
+    (void) solver; // prevent unused parameter warning
     View * v = new MinisatView(*this, exprView);
 #else
     View * v;
@@ -126,9 +121,6 @@ namespace SAT {
 
 
   Manager::View::~View() {
-#ifdef MTHREADS
-    MMuxType::scoped_lock lock(man.mux);
-#endif
     for (vector<Manager::View *>::iterator it = man.views.begin();
          it != man.views.end();
          it++)
@@ -143,7 +135,7 @@ namespace SAT {
       try {
         add(*it, gid);
       }
-      catch (Trivial tv) {
+      catch (Trivial const & tv) {
         if (!tv.value())
           throw tv;
       }

@@ -1,0 +1,260 @@
+-- Flattened Boolean FSM model  generated from counter.smv
+-- Dumped layers are: model model_bool determ determ_bool __TempLayer_2 
+
+MODULE main
+-- Input variables from layer 'model'
+-- Input variables from layer 'model_bool'
+-- Input variables from layer 'determ'
+-- Input variables from layer 'determ_bool'
+-- Input variables from layer '__TempLayer_2'
+-- State variables from layer 'model'
+
+-- State variables from layer 'model_bool'
+VAR
+counter.9 : boolean;
+counter.8 : boolean;
+counter.7 : boolean;
+counter.6 : boolean;
+counter.5 : boolean;
+counter.4 : boolean;
+counter.3 : boolean;
+counter.2 : boolean;
+counter.1 : boolean;
+counter.0 : boolean;
+
+-- State variables from layer 'determ'
+-- State variables from layer 'determ_bool'
+-- State variables from layer '__TempLayer_2'
+-- Frozen variables from layer 'model'
+-- Frozen variables from layer 'model_bool'
+-- Frozen variables from layer 'determ'
+-- Frozen variables from layer 'determ_bool'
+-- Frozen variables from layer '__TempLayer_2'
+INIT
+ __expr70
+
+INIT
+ !counter.4
+
+INIT
+ !counter.3
+
+INIT
+ !counter.2
+
+INIT
+ __expr71
+
+INIT
+ !counter.1
+
+INIT
+ !counter.6
+
+INIT
+ !counter.7
+
+INIT
+ !counter.8
+
+INIT
+ !counter.9
+
+
+INVAR
+ case
+(counter.9 | (counter.8 | counter.7)) : case
+counter.6 : __expr72;
+TRUE : __expr73;
+esac;
+TRUE : __expr73;
+esac
+
+
+TRANS
+ case
+__expr74 : case
+counter.9 : (__expr75 & case
+counter.8 : (__expr76 & case
+counter.7 : (__expr77 & case
+counter.6 : (__expr78 & case
+counter.5 : (__expr79 & case
+counter.4 : (__expr80 & case
+counter.3 : (__expr81 & case
+counter.2 : (__expr82 & case
+counter.1 : (next(counter.0) & __expr83);
+TRUE : __expr85;
+esac);
+TRUE : __expr88;
+esac);
+TRUE : __expr91;
+esac);
+TRUE : __expr94;
+esac);
+TRUE : __expr97;
+esac);
+TRUE : __expr99;
+esac);
+TRUE : __expr102;
+esac);
+TRUE : __expr104;
+esac);
+TRUE : (next(counter.9) & case
+counter.8 : __expr104;
+TRUE : (__expr76 & case
+counter.7 : __expr102;
+TRUE : (__expr77 & case
+counter.6 : (next(counter.6) & case
+counter.5 : __expr97;
+TRUE : (__expr79 & case
+counter.4 : (next(counter.4) & case
+counter.3 : (next(counter.3) & case
+counter.2 : (next(counter.2) & case
+counter.1 : (next(counter.1) & __expr71);
+TRUE : __expr86;
+esac);
+TRUE : __expr89;
+esac);
+TRUE : __expr92;
+esac);
+TRUE : __expr95;
+esac);
+esac);
+TRUE : __expr100;
+esac);
+esac);
+esac);
+esac;
+(!counter.9 & (!counter.8 & (!counter.7 & (counter.6 & (__expr70 & (counter.4 & (counter.3 & (counter.2 & (counter.1 & counter.0))))))))) : case
+counter.9 : (next(counter.9) & case
+counter.8 : __expr104;
+TRUE : (__expr103 & __expr76);
+esac);
+TRUE : (case
+counter.8 : __expr104;
+TRUE : (__expr76 & case
+counter.7 : __expr102;
+TRUE : (__expr77 & case
+counter.6 : __expr99;
+TRUE : __expr100;
+esac);
+esac);
+esac & __expr75);
+esac;
+esac
+
+
+
+CTLSPEC
+AG __expr74
+
+-- Symbols introduced by the dumper:
+DEFINE __expr88 := (next(counter.2) & __expr87) ;
+
+DEFINE __expr104 := (next(counter.8) & __expr103) ;
+
+DEFINE __expr79 := !next(counter.5) ;
+
+DEFINE __expr87 := case
+counter.1 : __expr85;
+TRUE : __expr86;
+esac ;
+
+DEFINE __expr75 := !next(counter.9) ;
+
+DEFINE __expr101 := case
+counter.6 : (next(counter.6) & case
+counter.5 : __expr97;
+TRUE : (__expr96 & __expr79);
+esac);
+TRUE : __expr100;
+esac ;
+
+DEFINE __expr93 := case
+counter.3 : __expr91;
+TRUE : __expr92;
+esac ;
+
+DEFINE __expr78 := !next(counter.6) ;
+
+DEFINE __expr86 := (__expr84 & __expr83) ;
+
+DEFINE __expr72 := ((((__expr71 | !counter.1) | !counter.2) | !counter.3) | !counter.4) ;
+
+DEFINE __expr92 := (__expr90 & __expr81) ;
+
+DEFINE __expr76 := !next(counter.8) ;
+
+DEFINE __expr96 := case
+counter.4 : (next(counter.4) & case
+counter.3 : (next(counter.3) & case
+counter.2 : (next(counter.2) & case
+counter.1 : next(counter.1);
+TRUE : __expr86;
+esac);
+TRUE : __expr89;
+esac);
+TRUE : __expr92;
+esac);
+TRUE : __expr95;
+esac ;
+
+DEFINE __expr82 := !next(counter.2) ;
+
+DEFINE __expr102 := (next(counter.7) & __expr101) ;
+
+DEFINE __expr80 := !next(counter.4) ;
+
+DEFINE __expr85 := (next(counter.1) & __expr84) ;
+
+DEFINE __expr100 := (__expr98 & __expr78) ;
+
+DEFINE __expr91 := (next(counter.3) & __expr90) ;
+
+DEFINE __expr74 := (counter.9 | (counter.8 | (counter.7 | (!counter.6 | (counter.5 | __expr72))))) ;
+
+DEFINE __expr70 := !counter.5 ;
+
+DEFINE __expr84 := case
+counter.0 : next(counter.0);
+TRUE : !next(counter.0);
+esac ;
+
+DEFINE __expr94 := (next(counter.4) & __expr93) ;
+
+DEFINE __expr90 := case
+counter.2 : __expr88;
+TRUE : __expr89;
+esac ;
+
+DEFINE __expr103 := case
+counter.7 : __expr102;
+TRUE : (__expr101 & __expr77);
+esac ;
+
+DEFINE __expr97 := (next(counter.5) & __expr96) ;
+
+DEFINE __expr71 := !counter.0 ;
+
+DEFINE __expr89 := (__expr87 & __expr82) ;
+
+DEFINE __expr77 := !next(counter.7) ;
+
+DEFINE __expr95 := (__expr93 & __expr80) ;
+
+DEFINE __expr98 := case
+counter.5 : __expr97;
+TRUE : (__expr79 & case
+counter.4 : __expr94;
+TRUE : __expr95;
+esac);
+esac ;
+
+DEFINE __expr73 := (__expr72 | __expr70) ;
+
+DEFINE __expr83 := !next(counter.1) ;
+
+DEFINE __expr99 := (next(counter.6) & __expr98) ;
+
+DEFINE __expr81 := !next(counter.3) ;
+

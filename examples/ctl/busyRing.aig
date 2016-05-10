@@ -1,0 +1,149 @@
+aig 207 17 30 18 160 0 0 0 13
+112
+2
+142
+154
+4
+164
+8
+182
+10
+212
+224
+12
+16
+234
+252
+18
+282
+294
+20
+304
+24
+322
+26
+352
+364
+28
+374
+32
+384
+34
+415
+42
+56
+70
+84
+92
+386
+388
+392
+398
+46
+62
+74
+88
+36
+50
+64
+78
+48
+38
+44
+60
+52
+58
+76
+66
+72
+90
+80
+86
+94
+53bB=G.sP."-#/{Nm&z™pq zu|±ˆƒ…ˆ¹†£.²"×¨©Þ²­·¶ïÀ½¿Â÷¾Ý2ê(•àáœêåïî­øõ÷úµö•8¢.Ó›:¦2ÛÔ
+Æ¾
+¶
+
+
+i0 cell0.c.nd
+i1 cell0.m.nd1
+i2 cell0.m.nd2
+i3 user0.nd
+i4 cell1.c.nd
+i5 cell1.m.nd1
+i6 cell1.m.nd2
+i7 user1.nd
+i8 cell2.c.nd
+i9 cell2.m.nd1
+i10 cell2.m.nd2
+i11 user2.nd
+i12 cell3.c.nd
+i13 cell3.m.nd1
+i14 cell3.m.nd2
+i15 user3.nd
+i16 inv0.nd
+l0 u_ack<0>
+l1 fair<1>
+l2 cell0.ack<1>
+l3 cell0.ack<0>
+l4 fair<2>
+l5 u_req<0>
+l6 fair<0>
+l7 u_ack<1>
+l8 fair<4>
+l9 cell1.ack<1>
+l10 cell1.ack<0>
+l11 fair<5>
+l12 fair<3>
+l13 u_req<1>
+l14 u_ack<2>
+l15 fair<7>
+l16 cell2.ack<1>
+l17 cell2.ack<0>
+l18 fair<8>
+l19 u_req<2>
+l20 fair<6>
+l21 u_ack<3>
+l22 fair<10>
+l23 cell3.ack<1>
+l24 cell3.ack<0>
+l25 fair<11>
+l26 u_req<3>
+l27 fair<9>
+l28 token<4>
+l29 fair<12>
+o0 bad
+o1 token<0>
+o2 token<1>
+o3 token<2>
+o4 token<3>
+o5 token<4>
+o6 in_cs<0>
+o7 in_cs<1>
+o8 in_cs<2>
+o9 in_cs<3>
+o10 u_req<0>
+o11 u_req<1>
+o12 u_req<2>
+o13 u_req<3>
+o14 u_ack<0>
+o15 u_ack<1>
+o16 u_ack<2>
+o17 u_ack<3>
+f0 fair<0>0
+f1 fair<1>0
+f2 fair<2>0
+f3 fair<3>0
+f4 fair<4>0
+f5 fair<5>0
+f6 fair<6>0
+f7 fair<7>0
+f8 fair<8>0
+f9 fair<9>0
+f10 fair<10>0
+f11 fair<11>0
+f12 fair<12>0
+c
+bliftoaig
+1.9
+busyRing.blif

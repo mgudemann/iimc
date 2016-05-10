@@ -38,7 +38,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "zchaff/SAT_C.h"
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
 
 using namespace std;
 
@@ -58,35 +58,29 @@ namespace SAT {
   bool ZchaffView::add(Clause & clause, GID gid) throw(Trivial) {
     View::cleanClause(clause);
 
-#ifdef MTHREADS
-    { VMuxType::scoped_lock lock(mux);
-#endif
-      int i = 0;
-      vector<int> lits(clause.size());
-      for (Clause::iterator it = clause.begin(); it != clause.end(); ++i, it++) {
-        ID v = *it;
-        bool pos = true;
-        if (exprView.op(v) != Expr::Var) {
-          int _n;
-          const ID * const _args = exprView.arguments(v, &_n);
-          v = _args[0];
-          pos = false;
-        }
-        VMap::iterator mapIt = vmap.find(v);
-        if (mapIt == vmap.end()) {
-          int vi = SAT_AddVariable(satMan);
-          pair<VMap::iterator, bool> rv = vmap.insert(VMap::value_type(v, vi));
-          mapIt = rv.first;
-          ivmap.insert(IVMap::value_type(vi, v));
-        }
-        int sv = mapIt->second;
-        lits[i] = 2*sv + (pos ? 0 : 1);
+    int i = 0;
+    vector<int> lits(clause.size());
+    for (Clause::iterator it = clause.begin(); it != clause.end(); ++i, it++) {
+      ID v = *it;
+      bool pos = true;
+      if (exprView.op(v) != Expr::Var) {
+        int _n;
+        const ID * const _args = exprView.arguments(v, &_n);
+        v = _args[0];
+        pos = false;
       }
-      SAT_AddClause(satMan, &lits[0], clause.size(), gid ? *(int *) gid : 0);
-      return true;
-#ifdef MTHREADS
+      VMap::iterator mapIt = vmap.find(v);
+      if (mapIt == vmap.end()) {
+        int vi = SAT_AddVariable(satMan);
+        pair<VMap::iterator, bool> rv = vmap.insert(VMap::value_type(v, vi));
+        mapIt = rv.first;
+        ivmap.insert(IVMap::value_type(vi, v));
+      }
+      int sv = mapIt->second;
+      lits[i] = 2*sv + (pos ? 0 : 1);
     }
-#endif
+    SAT_AddClause(satMan, &lits[0], clause.size(), gid ? *(int *) gid : 0);
+    return true;
   }
 
   GID ZchaffView::newGID() {
@@ -119,9 +113,9 @@ namespace SAT {
     }
 
     bool result = false;
-    int64_t stime = View::tt() ? Util::get_user_cpu_time() : 0;
+    int64_t stime = View::tt() ? Util::get_thread_cpu_time() : 0;
     int status = SAT_Solve(satMan, full_init);
-    int64_t etime = View::tt() ? Util::get_user_cpu_time() : 0;
+    int64_t etime = View::tt() ? Util::get_thread_cpu_time() : 0;
     View::satTime() += (etime - stime);
     View::satCount()++;
     if (status == UNSATISFIABLE) {

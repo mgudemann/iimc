@@ -34,6 +34,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "Error.h"
 #include "ExprAttachment.h"
+#include "RchAttachment.h"
 #include "BddAttachment.h"
 #include "BddTrAttachment.h"
 
@@ -103,7 +104,7 @@ void BddTrAttachment::build()
   Options::Verbosity verbosity = _model.verbosity();
   if (verbosity > Options::Silent)
     cout << "Computing transition relation for model " << _model.name() << endl;
-  BddAttachment const * bat = 
+  BddAttachment const * const bat = 
     (BddAttachment const *) _model.constAttachment(Key::BDD);
   assert(bat != 0);
   // The BDD attachment may not have BDDs because of a timeout.
@@ -113,7 +114,7 @@ void BddTrAttachment::build()
   }
   if (hasBdds())
     return;
-  ExprAttachment const * eat =
+  ExprAttachment const * const eat =
     (ExprAttachment *) _model.constAttachment(Key::EXPR);
   Expr::Manager::View *v = _model.newView();
   resetBddManager("bdd_tr_timeout");
@@ -129,6 +130,7 @@ void BddTrAttachment::build()
     BDD inputCube = bddManager().bddOne();
     for (vector<ID>::const_iterator i = iv.begin(); i != iv.end(); ++i) {
       BDD w = bat->bdd(*i);
+      _ivars.push_back(w);
       inputCube &= w;
     }
     BDD fwAbsCube = bddManager().bddOne();
@@ -200,12 +202,16 @@ void BddTrAttachment::build()
       for (vector<BDD>::iterator i = _constr.begin(); i != _constr.end(); ++i)
         of &= *i;
       composeAuxiliaryFunctions(bat, of, index2id);
+      _of.push_back(of);
       // Finally, remove primary inputs.
+      BDD qof;
       if (_model.defaultMode() != Model::mFAIR) {
-        of = of.ExistAbstract(inputCube);
+        qof = of.ExistAbstract(inputCube);
+      } else {
+        qof = of;
       }
-      _inv.push_back(of);
-      reportBDD("Output function", of, _xvars.size(), verbosity,
+      _inv.push_back(qof);
+      reportBDD("Output function", qof, _xvars.size(), verbosity,
                 Options::Terse);
     }
 
@@ -218,7 +224,8 @@ void BddTrAttachment::build()
     assert(sortedConjuncts.size() == 0);
     inputCube = quantifyLocalInputs(clusteredConjuncts, inputCube,
                                     clusterLimit, verbosity);
-    computeSchedule(clusteredConjuncts, inputCube);
+    computeSchedule(clusteredConjuncts, inputCube, index2id,
+                    _tr, _prequantx, _prequanty);
 
     // Build initial condition.
     const vector<ID> ini = eat->initialConditions();
@@ -229,12 +236,12 @@ void BddTrAttachment::build()
     }
     reportBDD("Initial condition", _init, _xvars.size(), verbosity,
               Options::Terse);
-  } catch (Timeout& e) {
+  } catch (Timeout const & e) {
+    if (verbosity > Options::Silent)
+      cout << e.what() << endl;
     bddManager().ClearErrorCode();
     bddManager().UnsetTimeLimit();
     bddManager().ResetStartTime();
-    if (verbosity > Options::Silent)
-      std::cout << e.what() << std::endl;
     _tr.clear();
     _xvars.clear();
     _yvars.clear();
@@ -249,18 +256,172 @@ void BddTrAttachment::build()
 
   bddManager().UpdateTimeLimit();
 
+  if (verbosity > Options::Terse)
+    cout << "BDD transition relation built" << endl;
+  if (_model.defaultMode() == Model::Mode::mFAIR) {
+    promise<void>& gshPromise = _model.getGshPromise();
+    gshPromise.set_value();
+  }
+
 } // BddTrAttachment::build
+
+
+/**
+ * Builds the transition relation for cycle detection, which is constrained
+ * by the persistence information.
+ */
+bool BddTrAttachment::buildGSHTR()
+{
+  Options::Verbosity verbosity = model().verbosity();
+  if (verbosity > Options::Terse)
+    cout << "Computing GSH transition relation for model " << model().name() << endl;
+  BddAttachment const * const bat = 
+    (BddAttachment const *) model().constAttachment(Key::BDD);
+  assert(bat != 0);
+  // The BDD attachment may not have BDDs because of a timeout.
+  if (bat->hasBdds() == false) {
+    model().constRelease(bat);
+    return false;
+  }
+  // We assume that the standard transition relation has been already built.
+  if (!hasBdds())
+    return false;
+  ExprAttachment const * const eat =
+    (ExprAttachment *) model().constAttachment(Key::EXPR);
+  Expr::Manager::View *v = model().newView();
+  v->begin_local();
+  try {
+    // Gather the conjuncts of the transition relation and initial condition.
+    const vector<ID> sv = eat->stateVars();
+    const vector<ID> iv = eat->inputs();
+    const unordered_map<ID, int>& auxVar = bat->auxiliaryVars();
+    int nvars = 2 * sv.size() + iv.size() + auxVar.size();
+    if (verbosity > Options::Terse)
+      cout << "number of variables = " << nvars << endl;
+    BDD inputCube = bddManager().bddOne();
+    for (vector<BDD>::const_iterator i = _ivars.begin(); i != _ivars.end(); ++i) {
+      inputCube &= *i;
+    }
+    BDD fwAbsCube = bddManager().bddOne();
+    BDD bwAbsCube = bddManager().bddOne();
+    vector<BDD> conjuncts;
+    for (vector<ID>::const_iterator i = sv.begin(); i != sv.end(); ++i) {
+      BDD x = bat->bdd(*i);
+      fwAbsCube &= x;
+      ID nsv = v->prime(*i);
+      BDD y = bat->bdd(nsv);
+      bwAbsCube &= y;
+      ID nsf = eat->nextStateFnOf(*i);
+      BDD f = bat->bdd(nsf);
+      if (verbosity > Options::Informative)
+        if (f.IsVar())
+          cout << "Found a variable next-state function" << endl; 
+      BDD t = y.Xnor(f);
+      if (verbosity > Options::Verbose)
+        reportBDD(stringOf(*v, nsv) + " <-> " + stringOf(*v, nsf),
+                  t, nvars, verbosity, Options::Verbose);
+      conjuncts.push_back(t);
+    }
+
+    // Process auxiliary variables.
+    vector<BDD> conjAux;
+    for (unordered_map<ID, int>::const_iterator it = auxVar.begin();
+         it != auxVar.end(); ++it) {
+      BDD f = bat->bdd(it->first);
+      BDD v = bddManager().bddVar(it->second);
+      BDD t = v.Xnor(f);
+      conjAux.push_back(t);
+      inputCube &= v;
+    }
+    conjuncts.insert(conjuncts.end(), conjAux.begin(), conjAux.end());
+    // Build map from BDD variable indices to expression IDs.
+    unordered_map<int, ID> index2id;
+    for (unordered_map<ID, int>::const_iterator it = auxVar.begin();
+         it != auxVar.end(); ++it) {
+      index2id[it->second] = it->first;
+    }
+
+    unsigned int clusterLimit = 2500;
+    if (model().options().count("bdd_tr_cluster")) {
+      clusterLimit = model().options()["bdd_tr_cluster"].as<unsigned int>();
+    }
+
+    // Add persistence constraints.
+    auto rat = model().attachment<RchAttachment>(Key::RCH);
+    rat->filterDroppedPersistentSignals();
+    unordered_map<ID, pair<bool,bool> > const persistent =
+      rat->persistentSignals();
+    if (!persistent.empty()) {
+      vector<BDD> persConstr;
+      for (unordered_map<ID, pair<bool,bool> >::const_iterator
+             pit = persistent.begin(); pit != persistent.end(); ++pit) {
+        ID pid = pit->first;
+        bool complement = v->op(pid) == Expr::Not;
+        ID var = complement ? v->apply(Expr::Not, pid) : pid;
+        if (verbosity > Options::Verbose) {
+          ostringstream oss;
+          oss << "Persistent signal ";
+          shortStringOfID(*v, pid, oss);
+          oss << " (" << pid << ")" << endl;
+          cout << oss.str();
+        }
+        pair<bool,bool> flags = pit->second;
+        BDD x = bat->bdd(var);
+        BDD y = bat->bdd(v->prime(var));
+        if (flags.first) {
+          // for persistent p, FG p holds
+          persConstr.push_back(complement ? !x & !y : x & y);
+        }
+        if (flags.second) {
+          persConstr.push_back(complement ? x & y : !x & !y);
+        }
+        if (!flags.first && !flags.second) {
+          persConstr.push_back(x.Xnor(y));
+        }
+      }
+      conjuncts.insert(conjuncts.end(), persConstr.begin(), persConstr.end());
+    }
+
+    // Build the transition relation from the conjuncts.
+    vector<BDD> sortedConjuncts = linearArrangement(conjuncts);
+    assert(sortedConjuncts.size() == conjuncts.size());
+    conjuncts.clear();
+    vector<BDD> clusteredConjuncts =
+      clusterConjuncts(sortedConjuncts, inputCube, clusterLimit, verbosity);
+    assert(sortedConjuncts.size() == 0);
+    inputCube = quantifyLocalInputs(clusteredConjuncts, inputCube,
+                                    clusterLimit, verbosity);
+    computeSchedule(clusteredConjuncts, inputCube, index2id,
+                    _trGSH, _prequantxGSH, _prequantyGSH);
+
+  } catch (Timeout const & e) {
+    bddManager().ClearErrorCode();
+    bddManager().UnsetTimeLimit();
+    bddManager().ResetStartTime();
+    if (verbosity > Options::Silent)
+      std::cout << e.what() << std::endl;
+    _trGSH.clear();
+    _prequantx = bddManager().bddOne();
+    _prequanty = bddManager().bddOne();
+  }
+  v->end_local();
+  delete v;
+  model().constRelease(eat);
+  model().constRelease(bat);
+  return true;
+
+} // BddTrAttachment::buildGSHTR
 
 
 /**
  * Compute the image of a set of states.
  */
-BDD BddTrAttachment::img(const BDD& from) const
+BDD BddTrAttachment::img(const BDD& from, bool keepPi) const
 {
   BDD imgy = from.ExistAbstract(_prequantx);
   for (vector< RelPart >::const_iterator it = _tr.begin();
        it != _tr.end(); ++it) {
-    imgy = imgy.AndAbstract(it->part(), it->fwQuantCube());
+    imgy = imgy.AndAbstract(it->part(), it->fwQuantCube(keepPi));
   }
   BDD imgx = imgy.SwapVariables(_xvars,_yvars);
   return imgx;
@@ -271,17 +432,33 @@ BDD BddTrAttachment::img(const BDD& from) const
 /**
  * Compute the preimage of a set of states.
  */
-BDD BddTrAttachment::preimg(const BDD& from) const
+BDD BddTrAttachment::preimg(const BDD& from, bool keepPi) const
 {
   BDD preimgx = from.SwapVariables(_yvars,_xvars);
   preimgx = preimgx.ExistAbstract(_prequanty);
   for (vector< RelPart >::const_iterator it = _tr.begin();
        it != _tr.end(); ++it) {
-    preimgx = preimgx.AndAbstract(it->part(), it->bwQuantCube());
+    preimgx = preimgx.AndAbstract(it->part(), it->bwQuantCube(keepPi));
   }
   return preimgx;
 
 } // BddTrAttachment::preimg
+
+
+/**
+ * Compute the preimage of a set of states using the GSH transition relation.
+ */
+BDD BddTrAttachment::preimgGSH(const BDD& from, bool keepPi) const
+{
+  BDD preimgx = from.SwapVariables(_yvars,_xvars);
+  preimgx = preimgx.ExistAbstract(_prequantyGSH);
+  for (vector< RelPart >::const_iterator it = _trGSH.begin();
+       it != _trGSH.end(); ++it) {
+    preimgx = preimgx.AndAbstract(it->part(), it->bwQuantCube(keepPi));
+  }
+  return preimgx;
+
+} // BddTrAttachment::preimgGSH
 
 
 /**
@@ -413,19 +590,24 @@ vector<BDD> BddTrAttachment::clusterConjuncts(
   // j points to the conjuncts that is being added to the cluster.
   int j = i - 1;
   // k points to the candidates for quantification
+#if 0
   vector<VarRec>::size_type k = 0;
+#endif
   while (j >= 0) {
     reportBDD("conjunct", conjuncts[j], numvars, verbosity, Options::Informative);
     // Find variables that are local to cluster.  A variable is local to
     // the current cluster if its lifespan is entirely contained between
     // i and j.
     BDD qcube = bddManager().bddOne();
+    // Temporary while working on counterexamples.
+#if 0
     while (k < candidate.size() && candidate[k].latest() > (int) i)
       k++;
     while (k < candidate.size() && candidate[k].earliest() >= (int) j) {
       qcube &= bddManager().bddVar(candidate[k].index());
       k++;
     }
+#endif
     BDD tmp = cluster.AndAbstract(conjuncts[j], qcube, limit);
     if (tmp && (unsigned int) tmp.nodeCount() <= 2*limit) {
       cluster = tmp;
@@ -451,7 +633,7 @@ vector<BDD> BddTrAttachment::clusterConjuncts(
 BDD BddTrAttachment::quantifyLocalInputs(
   vector<BDD>& conjuncts,
   const BDD& qcube,
-  unsigned int limit,
+  unsigned int,
   Options::Verbosity verbosity) const
 {
   // A -1 means "not yet seen."
@@ -476,17 +658,17 @@ BDD BddTrAttachment::quantifyLocalInputs(
     unsigned int index = qvars[i];
     BDD bvar = bddManager().bddVar(qvars[i]);
     int ws = whereSeen[index];
-    if (ws >= 0) {
+    if (/* ws >= */0) {
       int currentLimit = conjuncts[ws].nodeCount();
       BDD tmp = conjuncts[ws].ExistAbstract(bvar, currentLimit);
       if (tmp && tmp.nodeCount() <= currentLimit) {
         conjuncts[ws] = tmp;
-#if 0
+#if 1
         cout << "Eliminated local variable " << index 
              << " from conjunct " << ws << endl;
 #endif
       } else {
-#if 0
+#if 1
         cout << "Failed to eliminate local variable " << index 
              << " from conjunct " << ws << endl;
 #endif
@@ -512,15 +694,22 @@ BDD BddTrAttachment::quantifyLocalInputs(
  */
 void BddTrAttachment::computeSchedule(
   const vector<BDD>& conjuncts,
-  const BDD& wCube)
+  const BDD& wCube,
+  unordered_map<int, ID> index2id,
+  vector<RelPart> & tr,
+  BDD & prequantx,
+  BDD & prequanty)
 {
   vector<BDD> fwSchedule, bwSchedule;
+  vector<BDD> fwSchedNoPi, bwSchedNoPi;
   for (vector<BDD>::size_type i = 0; i != conjuncts.size(); ++i) {
     fwSchedule.push_back(bddManager().bddOne());
+    fwSchedNoPi.push_back(bddManager().bddOne());
     bwSchedule.push_back(bddManager().bddOne());
+    bwSchedNoPi.push_back(bddManager().bddOne());
   }
-  _prequantx = bddManager().bddOne();
-  _prequanty = bddManager().bddOne();
+  prequantx = bddManager().bddOne();
+  prequanty = bddManager().bddOne();
 
   // For each variable appearing in the conjuncts find the last
   // conjunct in which it appears.
@@ -544,6 +733,10 @@ void BddTrAttachment::computeSchedule(
       BDD var = bddManager().bddVar(index);
       fwSchedule[ls] &= var;
       bwSchedule[ls] &= var;
+      if (index2id.find(index) != index2id.end()) {
+        fwSchedNoPi[ls] &= var;
+        bwSchedNoPi[ls] &= var;
+      }
     }
   }
 
@@ -552,8 +745,9 @@ void BddTrAttachment::computeSchedule(
     int ls = lastSeen[index];
     if (ls >= 0) {
       fwSchedule[ls] &= _xvars[i];
+      fwSchedNoPi[ls] &= _xvars[i];
     } else {
-      _prequantx &= _xvars[i];
+      prequantx &= _xvars[i];
     }
   }
 
@@ -562,13 +756,14 @@ void BddTrAttachment::computeSchedule(
     int ls = lastSeen[index];
     if (ls >= 0) {
       bwSchedule[ls] &= _yvars[i];
+      bwSchedNoPi[ls] &= _yvars[i];
     } else {
-      _prequanty &= _yvars[i];
+      prequanty &= _yvars[i];
     }
   }
 
   for (vector<BDD>::size_type i = 0; i != conjuncts.size(); ++i) {
-    _tr.push_back(RelPart(conjuncts[i], fwSchedule[i], bwSchedule[i]));
+    tr.push_back(RelPart(conjuncts[i], fwSchedule[i], fwSchedNoPi[i], bwSchedule[i], bwSchedNoPi[i]));
   }
 
 } // BddTrAttachment::computeSchedule

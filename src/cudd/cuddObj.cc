@@ -12,7 +12,7 @@
 
   Author      [Fabio Somenzi]
 
-  Copyright   [Copyright (c) 1995-2004, Regents of the University of Colorado
+  Copyright   [Copyright (c) 1995-2012, Regents of the University of Colorado
 
   All rights reserved.
 
@@ -49,11 +49,13 @@
 #include <sstream>
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
 #include <algorithm>
 #include "cuddObj.hh"
 
 using std::cout;
 using std::cerr;
+using std::ostream;
 using std::endl;
 using std::hex;
 using std::string;
@@ -65,7 +67,7 @@ using std::sort;
 // ---------------------------------------------------------------------------
 
 #ifndef lint
-static char rcsid[] UNUSED = "$Id: cuddObj.cc,v 1.13 2009/02/21 19:41:38 fabio Exp fabio $";
+static char rcsid[] UNUSED = "$Id: cuddObj.cc,v 1.17 2015/01/05 13:24:42 fabio Exp fabio $";
 #endif
 
 // ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ DD::checkSameManager(
 
 inline void
 DD::checkReturnValue(
-  const DdNode *result) const
+  const void *result) const
 {
     if (result == 0) {
 	DdManager *mgr = p->manager;
@@ -152,6 +154,13 @@ DD::checkReturnValue(
                 p->timeoutHandler(msg.str());
             }
 	    break;
+        case CUDD_TERMINATION:
+            {
+                std::ostringstream msg;
+                msg << "Terminated.\n";
+                p->terminationHandler(msg.str());
+            }
+            break;
 	case CUDD_INVALID_ARG:
 	    p->errorHandler("Invalid argument.");
 	    break;
@@ -194,6 +203,13 @@ DD::checkReturnValue(
                 p->timeoutHandler(msg.str());
             }
 	    break;
+        case CUDD_TERMINATION:
+            {
+                std::ostringstream msg;
+                msg << "Terminated.\n";
+                p->terminationHandler(msg.str());
+            }
+            break;
 	case CUDD_INVALID_ARG:
 	    p->errorHandler("Invalid argument.");
 	    break;
@@ -308,7 +324,9 @@ ABDD::print(
 {
     cout.flush();
     int retval = Cudd_PrintDebug(p->manager,node,nvars,verbosity);
-    if (retval == 0) p->errorHandler("print failed");
+    fflush(Cudd_ReadStdout(p->manager));
+    checkReturnValue(retval);
+    //if (retval == 0) p->errorHandler("print failed");
 
 } // ABDD::print
 
@@ -563,6 +581,21 @@ BDD::operator-=(
     return *this;
 
 } // BDD::operator-=
+
+
+ostream & operator<<(ostream & os, BDD const & f)
+{
+    DdManager *mgr = f.p->manager;
+    vector<char *> const & vn = f.p->varnames;
+    char const * const *inames = vn.size() == Cudd_ReadSize(mgr) ?
+        &vn[0] : 0;
+    char * str = Cudd_FactoredFormString(mgr, f.node, inames);
+    f.checkReturnValue(str);
+    os << string(str);
+    free(str);
+    return os;
+
+} // operator<<
 
 
 bool
@@ -922,6 +955,7 @@ ZDD::print(
 {
     cout.flush();
     int retval = Cudd_zddPrintDebug(p->manager,node,nvars,verbosity);
+    fflush(Cudd_ReadStdout(p->manager));
     if (retval == 0) p->errorHandler("print failed");
 
 } // ZDD::print
@@ -1078,6 +1112,7 @@ Cudd::Cudd(
     p->manager = Cudd_Init(numVars,numVarsZ,numSlots,cacheSize,maxMemory);
     p->errorHandler = defaultError;
     p->timeoutHandler = defaultError;
+    p->terminationHandler = defaultError;
     p->verbose = 0;		// initially terse
     p->ref = 1;
 
@@ -1106,6 +1141,10 @@ Cudd::~Cudd()
 	    cerr << "All went well" << endl;
 	}
 #endif
+        for (vector<char *>::iterator it = p->varnames.begin();
+             it != p->varnames.end(); ++it) {
+            delete [] *it;
+        }   
 	Cudd_Quit(p->manager);
 	delete p;
     }
@@ -1172,6 +1211,48 @@ Cudd::getTimeoutHandler() const
 } // Cudd::getTimeourHandler
 
 
+PFC
+Cudd::setTerminationHandler(
+  PFC newHandler) const
+{
+    PFC oldHandler = p->terminationHandler;
+    p->terminationHandler = newHandler;
+    return oldHandler;
+
+} // Cudd::setTerminationHandler
+
+
+PFC
+Cudd::getTerminationHandler() const
+{
+    return p->terminationHandler;
+
+} // Cudd::getTerminationHandler
+
+
+void
+Cudd::pushVariableName(std::string s)
+{
+    char * cstr = new char[s.length() + 1];
+    strcpy(cstr, s.c_str());
+    p->varnames.push_back(cstr);
+}
+
+
+void
+Cudd::clearVariableNames(void)
+{
+    p->varnames.clear();
+}
+
+
+std::string
+Cudd::getVariableName(size_t i)
+{
+    return std::string(p->varnames.at(i));
+}
+
+
 inline void
 Cudd::checkReturnValue(
   const DdNode *result) const
@@ -1190,6 +1271,10 @@ Cudd::checkReturnValue(
                 Cudd_ReadElapsedTime(mgr) - Cudd_ReadTimeLimit(mgr);
             msg << "Timeout expired.  Lag = " << lag << " ms.\n";
             p->timeoutHandler(msg.str());
+        } else if (Cudd_ReadErrorCode(p->manager) == CUDD_TERMINATION) {
+            std::ostringstream msg;
+            msg << "Terminated.\n";
+            p->terminationHandler(msg.str());
         } else if (Cudd_ReadErrorCode(p->manager) == CUDD_INVALID_ARG) {
             p->errorHandler("Invalid argument.");
 	} else if (Cudd_ReadErrorCode(p->manager) == CUDD_INTERNAL_ERROR) {
@@ -1220,6 +1305,10 @@ Cudd::checkReturnValue(
                 Cudd_ReadElapsedTime(mgr) - Cudd_ReadTimeLimit(mgr);
             msg << "Timeout expired.  Lag = " << lag << " ms.\n";
             p->timeoutHandler(msg.str());
+        } else if (Cudd_ReadErrorCode(p->manager) == CUDD_TERMINATION) {
+            std::ostringstream msg;
+            msg << "Terminated.\n";
+            p->terminationHandler(msg.str());
         } else if (Cudd_ReadErrorCode(p->manager) == CUDD_INVALID_ARG) {
             p->errorHandler("Invalid argument.");
 	} else if (Cudd_ReadErrorCode(p->manager) == CUDD_INTERNAL_ERROR) {
@@ -1516,6 +1605,24 @@ Cudd::TimeLimited() const
     return Cudd_TimeLimited(p->manager);
 
 } // Cudd::TimeLimited
+
+
+void
+Cudd::RegisterTerminationCallback(
+  DD_THFP callback,
+  void * callback_arg) const
+{
+    Cudd_RegisterTerminationCallback(p->manager, callback, callback_arg);
+
+} // Cudd::RegisterTerminationCallback
+
+
+void
+Cudd::UnregisterTerminationCallback() const
+{
+    Cudd_UnregisterTerminationCallback(p->manager);
+
+} // Cudd::UnregisterTerminationCallback
 
 
 void
@@ -3801,8 +3908,8 @@ ABDD::PrintTwoLiteralClauses(
 void
 Cudd::DumpBlif(
   const vector<BDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   char * mname,
   FILE * fp,
   int mv) const
@@ -3817,14 +3924,14 @@ Cudd::DumpBlif(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<BDD>::DumpBlif
+} // Cudd::DumpBlif
 
 
 void
 Cudd::DumpDot(
   const vector<BDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3837,14 +3944,14 @@ Cudd::DumpDot(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<BDD>::DumpDot
+} // Cudd::DumpDot
 
 
 void
 Cudd::DumpDot(
   const vector<ADD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3857,14 +3964,14 @@ Cudd::DumpDot(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<ADD>::DumpDot
+} // Cudd::DumpDot
 
 
 void
 Cudd::DumpDaVinci(
   const vector<BDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3877,14 +3984,14 @@ Cudd::DumpDaVinci(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<BDD>::DumpDaVinci
+} // Cudd::DumpDaVinci
 
 
 void
 Cudd::DumpDaVinci(
   const vector<ADD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3897,14 +4004,14 @@ Cudd::DumpDaVinci(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<ADD>::DumpDaVinci
+} // Cudd::DumpDaVinci
 
 
 void
 Cudd::DumpDDcal(
   const vector<BDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3917,14 +4024,14 @@ Cudd::DumpDDcal(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<BDD>::DumpDDcal
+} // Cudd::DumpDDcal
 
 
 void
 Cudd::DumpFactoredForm(
   const vector<BDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
@@ -3937,7 +4044,34 @@ Cudd::DumpFactoredForm(
     delete [] F;
     checkReturnValue(result);
 
-} // vector<BDD>::DumpFactoredForm
+} // Cudd::DumpFactoredForm
+
+
+void
+BDD::PrintFactoredForm(
+  char const * const * inames,
+  FILE * fp) const
+{
+    DdManager *mgr = p->manager;
+    DdNode *f = node;
+    int result = Cudd_DumpFactoredForm(mgr, 0, &f, inames, 0, fp);
+    checkReturnValue(result);
+
+} // BDD::PrintFactoredForm
+
+
+string
+BDD::FactoredFormString(char const * const * inames) const
+{
+    DdManager *mgr = p->manager;
+    DdNode *f = node;
+    char *cstr = Cudd_FactoredFormString(mgr, f, inames);
+    checkReturnValue(cstr);
+    string str(cstr);
+    free(cstr);
+    return str;
+
+} // BDD::FactoredFormString
 
 
 BDD
@@ -5096,7 +5230,7 @@ Cudd::nodeCount(const vector<BDD>& roots) const
     checkReturnValue(result > 0);
     return result;
 
-} // vector<BDD>::nodeCount
+} // Cudd::nodeCount
 
 
 BDD
@@ -5113,7 +5247,7 @@ Cudd::VectorSupport(const vector<ADD>& roots) const
     checkReturnValue(result);
     return BDD(p, result);
 
-} // vector<ADD>::VectorSupport
+} // Cudd::VectorSupport
 
 
 int
@@ -5130,7 +5264,7 @@ Cudd::VectorSupportSize(const vector<BDD>& roots) const
     checkReturnValue(result != CUDD_OUT_OF_MEM);
     return result;
 
-} // vector<BDD>::VectorSupportSize
+} // Cudd::VectorSupportSize
 
 
 int
@@ -5147,7 +5281,7 @@ Cudd::VectorSupportSize(const vector<ADD>& roots) const
     checkReturnValue(result != CUDD_OUT_OF_MEM);
     return result;
 
-} // vector<ADD>::VectorSupportSize
+} // Cudd::VectorSupportSize
 
 
 void
@@ -5711,8 +5845,8 @@ ZDD::Support() const
 void
 Cudd::DumpDot(
   const vector<ZDD>& nodes,
-  char ** inames,
-  char ** onames,
+  char const * const * inames,
+  char const * const * onames,
   FILE * fp) const
 {
     DdManager *mgr = p->manager;

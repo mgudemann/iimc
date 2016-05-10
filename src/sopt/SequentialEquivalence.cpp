@@ -32,9 +32,11 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
+#include "Util.h"
 #include "ExprUtil.h"
 #include "SequentialEquivalence.h"
 #include "Sim.h"
+#include "Random.h"
 
 #include <set>
 #include <unordered_map>
@@ -53,7 +55,7 @@ namespace {
   public:
     SimRefine(Model & m, Expr::Manager::View * _ev, Partition & _parts,
               FMap & _fmap) : ev(_ev), parts(_parts), fmap(_fmap) {
-      ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+      ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
       const vector<ID> & latches = eat->stateVars();
       for (unsigned int i = 0; i < latches.size(); ++i)
         latchOrder.insert(OMap::value_type(latches[i], i));
@@ -61,7 +63,7 @@ namespace {
     }
 
     virtual bool operator()(vector<uint64_t>::const_iterator stateBegin,
-                            vector<uint64_t>::const_iterator stateEnd) {
+                            vector<uint64_t>::const_iterator) {
       Partition newParts;
       for (Partition::iterator it = parts.begin(); it != parts.end(); ++it) {
         ID rep;
@@ -151,7 +153,7 @@ namespace {
 
   class SATEq : public EqualFn {
   public:
-    SATEq(Model & model, Expr::Manager::View & ev) : model(model), ev(ev) {
+    SATEq(Model & model, Expr::Manager::View & ev) : ev(ev) {
       sman = model.newSATManager();
     }
     ~SATEq() {
@@ -169,7 +171,6 @@ namespace {
       return !rv;
     }
   private:
-    Model & model;
     Expr::Manager::View & ev;
     SAT::Manager * sman;
   };
@@ -228,7 +229,7 @@ namespace {
     }
   }
 
-  void iterate(Expr::Manager::View * ev, ExprAttachment * const eat, Partition & parts, FMap & fmap, const IDIDSetMap & nsfSupport, CacheMap & cache) {
+  void iterate(Expr::Manager::View * ev, ExprAttachment const * const, Partition & parts, FMap & fmap, const IDIDSetMap & nsfSupport, CacheMap & cache) {
     // 1. map each latch to its EC's representative
     FMap lmap;
     for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
@@ -280,15 +281,17 @@ namespace {
 }
 
 void SequentialEquivalenceAction::exec() {
+  int64_t startTime = Util::get_user_cpu_time();
   TrivialEq teq;
   vector<EqualFn *> eqs;
   eqs.push_back(&teq);
 
   int rseed = model().options()["rand"].as<int>();
   if(rseed != -1)
-    srand(rseed);
+    Random::srand(rseed);
+  int timeout = model().options()["se_timeout"].as<int>();
 
-  ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
 
   Expr::Manager::View * ev = model().newView();
 
@@ -344,6 +347,7 @@ void SequentialEquivalenceAction::exec() {
   sequentialSimulateRandom64(model(), 100, simRefine);
 
   CacheMap cache;
+  bool timedOut = false;
   ev->begin_local();
   for (vector<EqualFn *>::iterator eq = eqs.begin(); eq != eqs.end(); ++eq) {
     for (;;) {
@@ -373,125 +377,135 @@ void SequentialEquivalenceAction::exec() {
         }
         break;
       }
+      if (timeout != -1) {
+        int64_t currTime = Util::get_user_cpu_time();
+        if (currTime - startTime > timeout * 1000000) {
+          timedOut = true;
+          if (model().verbosity() > Options::Silent) {
+            cout << "Sequential equivalence: timed out" << endl;
+          }
+          break;
+        }
+      }
     }
   }
   ev->end_local();
   model().constRelease(eat);
 
-  //Add latches that were dropped from ECs
-  for (vector<ID>::const_iterator it = vars.begin(); it != vars.end(); ++it) {
-    if (fmap.find(*it) == fmap.end())
-      singletonLatches.insert(FMap::value_type(*it, eat->nextStateFnOf(*it)));
-  }
-
-
   bool changed = false;
-  for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it)
-    if (it->size() > 1) {
-      changed = true;
-      break;
+  if (!timedOut) {
+    //Add latches that were dropped from ECs
+    for (vector<ID>::const_iterator it = vars.begin(); it != vars.end(); ++it) {
+      if (fmap.find(*it) == fmap.end())
+        singletonLatches.insert(FMap::value_type(*it, eat->nextStateFnOf(*it)));
     }
-  if (changed) {
-    SeqAttachment * seqat = (SeqAttachment *) model().attachment(Key::SEQ);
-    ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
 
-    FMap lmap;
-    if(seqat->stateVars.empty()) {
-      seqat->stateVars = eat->stateVars();
-      seqat->nextStateFns = eat->nextStateFns();
-    }
-    eat->clearNextStateFns();
-    map<ID, ID> latchToNsf;
-    for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
-      // set next state function
-      set<ID>::const_iterator rep = it->begin();
-      if (*rep != ev->bfalse() && *rep != ev->btrue()) {
-        FMap::const_iterator rit = fmap.find(*rep);
-        latchToNsf.insert(map<ID, ID>::value_type(*rep, rit->second));
+
+    for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it)
+      if (it->size() > 1) {
+        changed = true;
+        break;
       }
-      // build map of latch to representative latch
-      set<ID>::const_iterator pit = rep;
-      for (++pit; pit != it->end(); ++pit) {
-        lmap.insert(FMap::value_type(*pit, *rep));
-        seqat->optimized.insert(unordered_map<ID, ID>::value_type(*pit, *rep));
+    if (changed) {
+      auto seat = model().attachment<SeqAttachment>(Key::SEQ);
+      auto eat = model().attachment<ExprAttachment>(Key::EXPR);
+
+      FMap lmap;
+      eat->clearNextStateFns();
+      map<ID, ID> latchToNsf;
+      for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
+        // set next state function
+        set<ID>::const_iterator rep = it->begin();
+        if (*rep != ev->bfalse() && *rep != ev->btrue()) {
+          FMap::const_iterator rit = fmap.find(*rep);
+          latchToNsf.insert(map<ID, ID>::value_type(*rep, rit->second));
+        }
+        // build map of latch to representative latch
+        set<ID>::const_iterator pit = rep;
+        for (++pit; pit != it->end(); ++pit) {
+          lmap.insert(FMap::value_type(*pit, *rep));
+          seat->optimized.insert(unordered_map<ID, ID>::value_type(*pit, *rep));
+        }
       }
-    }
-    for(FMap::const_iterator it = singletonLatches.begin();
-        it != singletonLatches.end(); ++it) {
-      ID nsf = Expr::varSub(*ev, lmap, it->second);
-      latchToNsf.insert(map<ID, ID>::value_type(it->first, nsf));
-    }
-    for (map<ID, ID>::const_iterator it = latchToNsf.begin();
-        it != latchToNsf.end(); ++it) {
-      eat->setNextStateFn(it->first, it->second);
-    }
-    ev->keep(eat->nextStateFnOf(eat->stateVars()));
+      for(FMap::const_iterator it = singletonLatches.begin();
+          it != singletonLatches.end(); ++it) {
+        ID nsf = Expr::varSub(*ev, lmap, it->second);
+        latchToNsf.insert(map<ID, ID>::value_type(it->first, nsf));
+      }
+      for (map<ID, ID>::const_iterator it = latchToNsf.begin();
+           it != latchToNsf.end(); ++it) {
+        eat->setNextStateFn(it->first, it->second);
+      }
+      ev->keep(eat->nextStateFnOf(eat->stateVars()));
 
-    if (model().verbosity() > Options::Silent)
-      cout << "SequentialEquivalence: Final # latches = " << eat->stateVars().size() << endl;
+      if (model().verbosity() > Options::Silent)
+        cout << "SequentialEquivalence: Final # latches = " << eat->stateVars().size() << endl;
 
-    vector<ID> init(eat->initialConditions());
-    if(seqat->initialConditions.empty())
-      seqat->initialConditions = init;
-    eat->clearInitialConditions();
-    for (vector<ID>::iterator it = init.begin(); it != init.end(); ++it)
-      if (Expr::varSub(*ev, lmap, *it) == *it)
-        eat->addInitialCondition(*it);
+      vector<ID> init(eat->initialConditions());
+      eat->clearInitialConditions();
+      for (vector<ID>::iterator it = init.begin(); it != init.end(); ++it)
+        if (Expr::varSub(*ev, lmap, *it) == *it)
+          eat->addInitialCondition(*it);
 
-    vector<ID> constraints(eat->constraints());
-    vector<ID> constraintFns(eat->constraintFns());
-    eat->clearConstraints();
-    for (vector<ID>::size_type i = 0; i != constraintFns.size(); ++i) {
-      //Changed by Zyad 11/08/2011
-      //if (Expr::varSub(*ev, lmap, *it) == *it)
+      vector<ID> constraints(eat->constraints());
+      vector<ID> constraintFns(eat->constraintFns());
+      eat->clearConstraints();
+      for (vector<ID>::size_type i = 0; i != constraintFns.size(); ++i) {
+        //Changed by Zyad 11/08/2011
+        //if (Expr::varSub(*ev, lmap, *it) == *it)
         //eat->addConstraint(*it);
-      ID f = Expr::varSub(*ev, lmap, constraintFns[i]);
-      eat->addConstraint(constraints[i], f);
+        ID f = Expr::varSub(*ev, lmap, constraintFns[i]);
+        eat->addConstraint(constraints[i], f);
+      }
+      ev->keep(eat->constraintFns());
+
+      vector<ID> outputs(eat->outputs());
+      vector<ID> outputFns(eat->outputFnOf(outputs));
+      eat->clearOutputFns();
+      Expr::varSub(*ev, lmap, outputFns);
+      eat->setOutputFns(outputs, outputFns);
+      ev->keep(outputFns);
+
+      vector<ID> bad(eat->bad());
+      vector<ID> badFns(eat->badFnOf(bad));
+      eat->clearBadFns();
+      Expr::varSub(*ev, lmap, badFns);
+      eat->setBadFns(bad, badFns);
+      ev->keep(badFns);
+
+      vector<ID> fairness(eat->fairness());
+      vector<ID> fairnessFns(eat->fairnessFnOf(fairness));
+      eat->clearFairnessFns();
+      Expr::varSub(*ev, lmap, fairnessFns);
+      eat->setFairnessFns(fairness, fairnessFns);
+      ev->keep(fairnessFns);
+
+      vector<ID> justice(eat->justice());
+      vector< vector<ID> > justiceS(eat->justiceSets());
+      eat->clearJusticeSets();
+      for (size_t i = 0; i < justiceS.size(); ++i) {
+        Expr::varSub(*ev, lmap, justiceS[i]);
+        eat->setJusticeSet(justice[i], justiceS[i]);
+        ev->keep(justiceS[i]);
+      }
+
+      vector<ID> ctlProps(eat->ctlProperties());
+      eat->clearCtlProperties();
+      Expr::varSub(*ev, lmap, ctlProps);
+      eat->addCtlProperties(ctlProps);
+
+      model().release(eat);
+      model().release(seat);
     }
-    ev->keep(eat->constraintFns());
-
-    vector<ID> outputs(eat->outputs());
-    vector<ID> outputFns(eat->outputFnOf(outputs));
-    eat->clearOutputFns();
-    Expr::varSub(*ev, lmap, outputFns);
-    eat->setOutputFns(outputs, outputFns);
-    ev->keep(outputFns);
-
-    vector<ID> bad(eat->bad());
-    vector<ID> badFns(eat->badFnOf(bad));
-    eat->clearBadFns();
-    Expr::varSub(*ev, lmap, badFns);
-    eat->setBadFns(bad, badFns);
-    ev->keep(badFns);
-
-    vector<ID> fairness(eat->fairness());
-    vector<ID> fairnessFns(eat->fairnessFnOf(fairness));
-    eat->clearFairnessFns();
-    Expr::varSub(*ev, lmap, fairnessFns);
-    eat->setFairnessFns(fairness, fairnessFns);
-    ev->keep(fairnessFns);
-
-    vector<ID> justice(eat->justice());
-    vector< vector<ID> > justiceS(eat->justiceSets());
-    eat->clearJusticeSets();
-    for (size_t i = 0; i < justiceS.size(); ++i) {
-      Expr::varSub(*ev, lmap, justiceS[i]);
-      eat->setJusticeSet(justice[i], justiceS[i]);
-      ev->keep(justiceS[i]);
-    }
-
-    vector<ID> ctlProps(eat->ctlProperties());
-    eat->clearCtlProperties();
-    Expr::varSub(*ev, lmap, ctlProps);
-    eat->addCtlProperties(ctlProps);
-
-    model().release(eat);
-    model().release(seqat);
   }
-  else {
+  if (timedOut || !changed) {
     if (model().verbosity() > Options::Silent)
       cout << "SequentialEquivalence: Final # latches = " << vars.size() << endl;
   }
-
   delete ev;
+
+  int64_t endTime = Util::get_user_cpu_time();
+  if (model().verbosity() > Options::Silent)
+    cout << "Sequential equivalence completed in "
+         << ((endTime - startTime) / 1000000.0) << " s" << endl;
 }

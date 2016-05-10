@@ -39,6 +39,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BddAttachment.h"
 #include "SeqAttachment.h"
 #include "Util.h"
+#include "Random.h"
 
 #include <fstream>
 #include <string>
@@ -52,9 +53,9 @@ using namespace std;
 string BddAttachment::string(bool includeDetails) const {
   if (includeDetails) {
     ostringstream ret;
-    ret << "BDD (Timestamp = " << _ts 
-	<< "):\n  manager, map, and variable order\n  "
-	<< _order.size() << " variables and " << _map.size() << " BDDs";
+    ret << "BDD (Timestamp = " << _ts
+        << "):\n  manager, map, and variable order\n  "
+        << _order.size() << " variables and " << _map.size() << " BDDs";
     return ret.str();
   } else {
     return "BDD: manager, map, and variable order";
@@ -111,17 +112,12 @@ void BddAttachment::build() {
   }
   Expr::Manager::View *v = _model.newView();
   bool sweep = _model.options().count("bdd_sweeping") > 0;
-  CombAttachment const *cat = 
+  CombAttachment const * const cat =
     (CombAttachment const *) _model.constAttachment(Key::COMB);
   if (cat->simplificationEffort() == CombAttachment::Complete)
     sweep = false;
   _model.constRelease(cat);
-  ExprAttachment *eat;
-  if (sweep) {
-    eat = (ExprAttachment *) _model.attachment(Key::EXPR);
-  } else {
-    eat = (ExprAttachment *) _model.constAttachment(Key::EXPR);
-  }
+  ExprAttachment const * const eat = (ExprAttachment *) _model.constAttachment(Key::EXPR);
 
   unordered_map<ID, int> orderMap;
   buildVariableOrder(v, eat, orderMap);
@@ -135,6 +131,8 @@ void BddAttachment::build() {
   vector<ID> roots;
   collectRoots(eat, roots);
 
+  _model.constRelease(eat);
+
   unsigned int auxLimit = 2000;
   if (_model.options().count("bdd_threshold")) {
     auxLimit = _model.options()["bdd_threshold"].as<unsigned int>();
@@ -144,30 +142,32 @@ void BddAttachment::build() {
 
   if (verbosity > Options::Terse) {
     vector<BDD> bv;
+    ostringstream oss;
     for (Expr::IdBddMap::const_iterator i = _map.begin(); i != _map.end(); ++i)
       bv.push_back(i->second);
-    cout << bddManager().SharingSize(bv) << " BDD nodes" << endl;
-    cout << _auxVar.size() << " auxiliary variable" 
-              << (_auxVar.size() != 1 ? "s" : "") << endl;
+    oss << bddManager().SharingSize(bv) << " BDD nodes" << endl;
+    oss << _auxVar.size() << " auxiliary variable"
+        << (_auxVar.size() != 1 ? "s" : "") << endl;
+    cout << oss.str();
   }
 
   delete v;
+
   if (sweep) {
-    updateExprAttachment(eat, roots);
+    auto eat = _model.attachment<ExprAttachment>(Key::EXPR);
+    updateExprAttachment(eat.operator->(), roots);
     _model.release(eat);
-  } else {
-    _model.constRelease(eat);
   }
   if (_model.options().count("bdd_info")) {
     bddManager().info();
-    cout << "CPU time since BDD manager reset = " 
+    cout << "CPU time since BDD manager reset = "
          << ((double) bddManager().ReadElapsedTime()/1000.0)
          << " s" << endl;
   }
 
   bddManager().UpdateTimeLimit();
 
-} // BddAttachment::build 
+} // BddAttachment::build
 
 
 /**
@@ -264,6 +264,12 @@ namespace {
   void BddAttachmentHandler(string message) {
     throw Timeout(message);
   }
+  /**
+   * Termination handler to be installed in the Cudd manager.
+   */
+  void BddTerminationHandler(string message) {
+    throw Termination(message);
+  }
 }
 
 
@@ -272,10 +278,15 @@ namespace {
  */
 void BddAttachment::configureBddManager(bool sweep) const
 {
+  // Set termination handler.  This does not enable the
+  // termination check: it only allows CUDD to throw the right
+  // exception if termination is enabled and detected.
+  bddManager().setTerminationHandler(BddTerminationHandler);
+
   bddManager().Reserve(_order.size());
   // Enable dynamic variable reordering if so instructed.
   bool groupSift = _model.options().count("bdd_group") > 0;
-  Cudd_ReorderingType reordType = 
+  Cudd_ReorderingType reordType =
     groupSift ? CUDD_REORDER_GROUP_SIFT: CUDD_REORDER_SIFT;
   unsigned int firstReordering =
     max(8 * (unsigned int) _order.size(),
@@ -283,7 +294,7 @@ void BddAttachment::configureBddManager(bool sweep) const
   bddManager().SetNextReordering(firstReordering);
   if ((!sweep && _model.options().count("bdd_reorderings")) ||
       (sweep && _model.options().count("bdd_sw_reorderings"))) {
-    unsigned int numReorderings = sweep 
+    unsigned int numReorderings = sweep
       ? _model.options()["bdd_sw_reorderings"].as<unsigned int>()
       : _model.options()["bdd_reorderings"].as<unsigned int>();
     if (numReorderings > 0) {
@@ -313,7 +324,7 @@ void BddAttachment::configureBddManager(bool sweep) const
   // Set timeout if so instructed.
   if ((!sweep && _model.options().count("bdd_timeout")) ||
       (sweep && _model.options().count("bdd_sw_timeout"))) {
-    unsigned long timeout = 1000 * 
+    unsigned long timeout = 1000 *
       (sweep ? _model.options()["bdd_sw_timeout"].as<unsigned long>()
        : _model.options()["bdd_timeout"].as<unsigned long>());
     bddManager().setTimeoutHandler(BddAttachmentHandler);
@@ -407,7 +418,7 @@ void BddAttachment::updateExprAttachment(ExprAttachment *eat,
     cout << " " << *it;
   cout << endl;
   vector<ID>::iterator new_end = unique(temp.begin(), temp.end());
-  cout << new_end - temp.begin() << " unique state variables out of " 
+  cout << new_end - temp.begin() << " unique state variables out of "
        << eat->nextStateFns().size() << endl;
 #endif
 
@@ -505,7 +516,7 @@ void BddAttachment::countStates(const vector< vector<ID> > & cnf, Expr::Manager:
   assert(hasBdds());
 
   BDD cnfBdd = cnfToBdd(cnf, _view);
-  ExprAttachment const * eat = (ExprAttachment *) _model.constAttachment(Key::EXPR);
+  ExprAttachment const * const eat = (ExprAttachment const *) _model.constAttachment(Key::EXPR);
   int numSV = eat->stateVars().size();
   _model.constRelease(eat);
 
@@ -520,20 +531,26 @@ void BddAttachment::countStates(const vector< vector<ID> > & cnf, Expr::Manager:
  * and nothing else.
  */
 vector<ID> BddAttachment::readOrder(
-  Expr::Manager::View &v, 
-  const std::string& filename, 
+  Expr::Manager::View &v,
+  const std::string& filename,
   unordered_map<ID, bool> leaves)
 {
   ifstream ifs(filename.c_str());
   if (!ifs.good())
     throw InputError("Cannot open order file.");
   // Build set of leaves that have been removed by optimizations (e.g., COI).
-  SeqAttachment const *seat =
+  ExprAttachment const * const eat =
+    (ExprAttachment const *) _model.constAttachment(Key::EXPR);
+  unordered_set<ID> original(eat->originalInputs().begin(), eat->originalInputs().end());
+  _model.constRelease(eat);
+  SeqAttachment const * const seat =
     (SeqAttachment const *) _model.constAttachment(Key::SEQ);
-  unordered_set<ID> original(seat->inputs.begin(), seat->inputs.end());
-  for (unordered_map<ID, ID>::const_iterator it = seat->optimized.begin(); it != seat->optimized.end(); ++it)
-    original.insert(it->first);
-  _model.constRelease(seat);
+  if (seat) {
+    for (unordered_map<ID, ID>::const_iterator it = seat->optimized.begin();
+         it != seat->optimized.end(); ++it)
+      original.insert(it->first);
+    _model.constRelease(seat);
+  }
   // Read order file.
   vector<ID> gateList;
   unordered_set<ID> seen;
@@ -567,13 +584,14 @@ void BddSweepAction::exec() {
   if (verbosity > Options::Silent)
     cout << "BDD sweeping of model " << _model.name() << endl;
 
-  CombAttachment const *cat = 
+  CombAttachment const *cat =
     (CombAttachment const *) _model.constAttachment(Key::COMB);
   if (cat->simplificationEffort() == CombAttachment::Complete) {
     _model.constRelease(cat);
     return;
   }
 
+  Random::save_state();
   int64_t startTime = Util::get_user_cpu_time();
 
   // Use a temporary manager for sweeping because sweeping
@@ -582,11 +600,10 @@ void BddSweepAction::exec() {
 
   BddAttachment *bat = new BddAttachment(_model);
   Expr::Manager::View *v = _model.newView();
-  ExprAttachment *eat = 
-    (ExprAttachment *) _model.attachment(Key::EXPR);
+  auto eat = _model.attachment<ExprAttachment>(Key::EXPR);
 
   unordered_map<ID, int> orderMap;
-  bat->buildVariableOrder(v, eat, orderMap, true);
+  bat->buildVariableOrder(v, eat.operator->(), orderMap, true);
   if (verbosity > Options::Informative)
     cout << "Order: " << bat->orderString();
 
@@ -595,7 +612,7 @@ void BddSweepAction::exec() {
 
   // Collect the roots and build their BDDs in one go.
   vector<ID> roots;
-  bat->collectRoots(eat, roots);
+  bat->collectRoots(eat.operator->(), roots);
 
   unsigned int auxLimit = 250;
   if (_model.options().count("bdd_sw_threshold")) {
@@ -610,29 +627,29 @@ void BddSweepAction::exec() {
     for (Expr::IdBddMap::const_iterator i = bat->_map.begin(); i != bat->_map.end(); ++i)
       bv.push_back(i->second);
     cout << bddManager().SharingSize(bv) << " BDD nodes" << endl;
-    cout << bat->_auxVar.size() << " auxiliary variable" 
+    cout << bat->_auxVar.size() << " auxiliary variable"
               << (bat->_auxVar.size() != 1 ? "s" : "") << endl;
   }
 
   delete v;
 
-  int64_t endTime = Util::get_user_cpu_time(); 
+  int64_t endTime = Util::get_user_cpu_time();
 
   if (verbosity > Options::Terse) {
     cout << "BDD Sweeping: " << ((endTime - startTime) / 1000000.0)
          << "s spent in sweeping" << endl;
   }
 
-  bat->updateExprAttachment(eat, roots);
+  bat->updateExprAttachment(eat.operator->(), roots);
   _model.release(eat);
   delete bat;
   if (_model.options().count("bdd_info")) {
     bddManager().info();
-    cout << "CPU time since BDD manager reset = " 
+    cout << "CPU time since BDD manager reset = "
          << ((double) bddManager().ReadElapsedTime()/1000.0)
          << " s" << endl;
   }
 
   (void) _model.newBddManager(saveBddMgr);
-
+  Random::restore_state();
 } // BddSweepAction::exec

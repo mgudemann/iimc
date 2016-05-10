@@ -79,13 +79,15 @@ void parseDIMACS(const string &fn, Expr::Manager::View &v, SAT::Clauses &clauses
 {
   // Check if input file is valid.
   ifstream ifs(fn.c_str());
-  if (!ifs.good()) throw InputError("Cannot open input file.");
+  if (!ifs.good())
+    throw InputError(string("Cannot open input file ") + fn.c_str() + ".");
   string p;
   ifs >> p;
   while (p == "c") { skip_until_newline(ifs); ifs >> p; }
   string f;
   ifs >> f;
-  if (p != "p" || f != "cnf") throw InputError("Bad input format.");
+  if (p != "p" || f != "cnf")
+    throw InputError(string("Bad input format: ") + f + ".");
   // Number of variables and clauses.
   size_t nvar, ncla;
   ifs >> nvar >> ncla;

@@ -347,6 +347,11 @@ cuddZddSymmSifting(
             table->autoDynZ = 0; /* prevent further reordering */
             break;
         }
+        if (table->terminationCallback != NULL &&
+            table->terminationCallback(table->tcbArg)) {
+            table->autoDynZ = 0; /* prevent further reordering */
+            break;
+        }
 	x = table->permZ[var[i]];
 #ifdef DD_STATS
 	previousSize = table->keysZ;
@@ -478,6 +483,11 @@ cuddZddSymmSiftingConv(
             table->autoDynZ = 0; /* prevent further reordering */
             break;
         }
+        if (table->terminationCallback != NULL &&
+            table->terminationCallback(table->tcbArg)) {
+            table->autoDynZ = 0; /* prevent further reordering */
+            break;
+        }
 	x = table->permZ[var[i]];
 	if (x < lower || x > upper) continue;
 	/* Only sift if not in symmetry group already. */
@@ -533,6 +543,11 @@ cuddZddSymmSiftingConv(
             if (util_cpu_time() - table->startTime > table->timeLimit) {
               table->autoDynZ = 0; /* prevent further reordering */
               break;
+            }
+            if (table->terminationCallback != NULL &&
+                table->terminationCallback(table->tcbArg)) {
+                table->autoDynZ = 0; /* prevent further reordering */
+                break;
             }
 	    x = table->permZ[var[i]];
 	    if ((unsigned) x >= table->subtableZ[x].next) {

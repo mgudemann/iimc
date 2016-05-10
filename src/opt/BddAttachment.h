@@ -58,23 +58,9 @@ public:
     requires(Key::COMB, &cf);
   }
   /** Copy constructor. */
-  BddAttachment(const BddAttachment& from) : 
-    Model::Attachment(from),
-    _map(from._map),
-    _order(from._order)
+  BddAttachment(const BddAttachment& from, Model & model) :
+    Model::Attachment(from, model)
   {}
-  BddAttachment& operator=(BddAttachment& rhs) {
-    if (&rhs != this) {
-      _model = rhs._model;
-      if (rhs._ts == 0)
-	_ts = 0;
-      else
-	_ts = Model::newTimestamp();
-      _map = rhs._map;
-      _order = rhs._order;
-    }
-    return *this;
-  }
   /** Return the key of this type of attachment. */
   Key::Type key() const { return Key::BDD; }
   std::string string(bool includeDetails = false) const;
@@ -98,9 +84,9 @@ public:
   };
 
 protected:
-  BddAttachment* clone() const { return new BddAttachment(*this); }
+  BddAttachment* clone(Model & model) const { return new BddAttachment(*this, model); }
 private:
-  void buildVariableOrder(Expr::Manager::View *v, ExprAttachment const *eat, 
+  void buildVariableOrder(Expr::Manager::View *v, ExprAttachment const *eat,
                           std::unordered_map<ID, int>& orderMap,
                           bool noNsVars = false);
   void configureBddManager(bool sweep = false) const;

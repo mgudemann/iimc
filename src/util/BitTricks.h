@@ -134,7 +134,7 @@ namespace Util
     template<typename T>
     struct pattern_get<T, -1>
     {
-      static inline T getPattern(const int i)
+      static inline T getPattern(const int)
       {
         assert(false);
       }
