@@ -68,15 +68,17 @@ namespace FSIS {
       requires(Key::CNF, &cnfaf);
     }
     virtual void exec() {
-      IC3::IC3Options opts(options(), false);
+      IC3::IC3Options opts(options(), false, false, this);
       opts.ctgs = 0;
       MC::ReturnValue rv;
       std::vector<Transition> cex;
       std::vector< std::vector<ID> > proof;
       rv = FSIS::check(model(), opts, opts.printCex ? &cex : NULL,
           opts.printProof ? &proof : NULL);
-      ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+      auto pat = model().attachment<ProofAttachment>(Key::PROOF);
       if (rv.returnType != MC::Unknown) {
+        if (model().verbosity() > Options::Silent)
+          std::cout << "Conclusion found by FSIS." << std::endl;
         if (rv.returnType == MC::Proof) {
           pat->setConclusion(0);
           if(opts.printProof) {
@@ -84,10 +86,10 @@ namespace FSIS {
           }
         }
         else if (rv.returnType == MC::CEX) {
-          pat->setConclusion(1);
           if(opts.printCex) {
             pat->setCex(cex);
           }
+          pat->setConclusion(1);
         }
       }
       model().release(pat);

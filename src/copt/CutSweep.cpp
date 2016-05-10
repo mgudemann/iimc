@@ -58,7 +58,7 @@ public:
     if (m.options().count("cutsweep_cutMax"))
       n = m.options()["cutsweep_cutMax"].as<int>();
 
-    const CombAttachment *cat = (CombAttachment *)m.constAttachment(Key::COMB);
+    const CombAttachment * const cat = (CombAttachment const *)m.constAttachment(Key::COMB);
 
     if (m.options().count("cutsweep_timeout")) {
       int64_t to = m.options()["cutsweep_timeout"].as<int>() * 1000000,
@@ -373,7 +373,7 @@ namespace Opt
 
 void cutSweep(Model &model)
 {
-  AIGAttachment *aat = (AIGAttachment *)model.attachment(Key::AIG);
+  auto aat = model.attachment<AIGAttachment>(Key::AIG);
 
   State st(model, aat->aig);
 
@@ -391,14 +391,14 @@ void cutSweep(Model &model)
 
   enumerate(st);
 
-  if (st.nMerged > 0) aat->aig.update(model);
+  if (st.nMerged > 0) aat->aig.update(aat.operator->());
 
   if (st.verbosity > Options::Silent)
     std::cout << "Cut Sweeping: new AIG has " << nodeCount(aat->aig) << " nodes" << std::endl;
 
   model.release(aat);
 
-  CombAttachment *cat = (CombAttachment *)model.attachment(Key::COMB);
+  auto cat = model.attachment<CombAttachment>(Key::COMB);
 
   cat->numEquivalences() += st.nMerged;
   if (st.timeout != 0) {

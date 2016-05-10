@@ -35,8 +35,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "config.h"
 #include <iostream>
 #include <vector>
+#include <csignal>
 
 #include "options.h"
+#include "Dispatch.h"
 #include "CutSweep.h"
 #include "BddReach.h"
 #include "BMC.h"
@@ -50,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "FCBMC.h"
 #include "FSIS.h"
 #include "BddGSH.h"
+#include "KLive.h"
 #include "SAT.h"
 #include "SATSweep.h"
 #include "SequentialEquivalence.h"
@@ -64,44 +67,52 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "DIMACSAction.h"
 #include "TacticMisc.h"
 #include "IIC.h"
+#include "Persist.h"
+
+#if SIZEOF_VOID_P==8
+#define VERY_LARGE 13958643712
+#else
+#define VERY_LARGE 2147483648
+#endif
 
 using namespace std;
 using namespace boost::program_options;
 
 //Proof Engines
 namespace IIC {
-ActionRegistrar IIC::IICAction::action("check", "Competition tactic");
+  ActionRegistrar IIC::IICAction::action("check", "Competition tactic");
 }
 namespace BMC {
-ActionRegistrar BMC::BMCAction::action("bmc", "Bounded Model Checker");
+  ActionRegistrar BMC::BMCAction::action("bmc", "Bounded Model Checker");
 }
 ActionRegistrar BddFwReachAction::action("bdd_fw_reach", "BDD Forward Reachability");
 ActionRegistrar BddBwReachAction::action("bdd_bw_reach", "BDD Backward Reachability");
 ActionRegistrar BddGSHAction::action("gsh", "BDD Cycle Detection");
 namespace IC3 {
-ActionRegistrar IC3Action::action("ic3", "IC3");
-ActionRegistrar IC3Action::actionRev("ic3r", "Reverse IC3");
-ActionRegistrar IC3Action::actionLR("ic3lr", "Localization Reduction IC3");
+  ActionRegistrar IC3Action::action("ic3", "IC3");
+  ActionRegistrar IC3Action::actionRev("ic3r", "Reverse IC3");
+  ActionRegistrar IC3Action::actionLR("ic3lr", "Localization Reduction IC3");
 }
 namespace FSIS {
-ActionRegistrar FSISAction::action("fsis", "FSIS");
+  ActionRegistrar FSISAction::action("fsis", "FSIS");
 }
 namespace Fair {
-ActionRegistrar FairAction::action("fair", "Fair");
+  ActionRegistrar FairAction::action("fair", "Fair");
 }
 namespace IICTL {
-ActionRegistrar IICTLAction::action("iictl", "Incremental Inductive CTL Model Checker");
+  ActionRegistrar IICTLAction::action("iictl", "Incremental Inductive CTL Model Checker");
 }
 namespace FCBMC {
-ActionRegistrar FCBMCAction::action("fcbmc", "Fair-Cycle Bounded Model Checker");
+  ActionRegistrar FCBMCAction::action("fcbmc", "Fair-Cycle Bounded Model Checker");
 }
+ActionRegistrar KLiveAction::action("klive", "k-Liveness Fair-Cycle Checker");
 //Proof Engines
 
 //Simplification Engines
 ActionRegistrar BddSweepAction::action("bddsweep", "BDD Sweeping");
 namespace Action {
-ActionRegistrar CutSweepAction::action("cutsweep", "Cut Sweeping");
-ActionRegistrar SATSweepAction::action("satsweep", "SAT Sweeping");
+  ActionRegistrar CutSweepAction::action("cutsweep", "Cut Sweeping");
+  ActionRegistrar SATSweepAction::action("satsweep", "SAT Sweeping");
 }
 ActionRegistrar COIAction::action("coi", "Cone-Of-Influence Reduction");
 ActionRegistrar SequentialEquivalenceAction::action("se", "Latch Sequential Equivalence");
@@ -130,16 +141,29 @@ ActionRegistrar PrintExprSize::action("print_expr_size", "Print the number of ex
 ActionRegistrar PrintOutputExpressions::action("print_outputs", "Print output expressions");
 ActionRegistrar PrintStateGraph::action("print_state_graph", "Print state graph");
 namespace CNF {
-ActionRegistrar DIMACSAction::action("dimacs", "Print CNF in DIMACS format");
+  ActionRegistrar DIMACSAction::action("dimacs", "Print CNF in DIMACS format");
 }
 
 //Other
 ActionRegistrar BddBuildAction::action("bdd_build", "Build BDDs");
 namespace IIC {
-ActionRegistrar FixRoots::action("fixroots", "Fix the roots of the model");
+  ActionRegistrar FixRoots::action("fixroots", "Fix the roots of the model");
+ActionRegistrar IIC::StandardOptionsAction::action("std_opt", "Set options for standard tactics");
+}
+ActionRegistrar PersistentSignalsAction::action("persist", "Compute persistent signals.");
+namespace Dispatch {
+  ActionRegistrar Fork::action("fork", "execute tactic sequence in parallel");
+  ActionRegistrar Join::action("join", "close sequence opened by fork");
+  ActionRegistrar Begin::action("begin", "execute tactic sequence in series");
+  ActionRegistrar End::action("end", "close sequence opened by begin");
 }
 
 namespace {
+
+  void alarm_handler(int) {
+    Util::printSystemInfo();
+    exit(1);
+  }
 
   enum Filetype { AIGER };
 
@@ -191,6 +215,15 @@ namespace Options {
       ("print_cex",
        "Print counterexample trace if property fails")
 
+      ("cex_aiger",
+       "Print counterexample in AIGER format")
+
+      ("pre",
+       "Take the precondition of the output as the target. Only works if the output is a function of state variables only.")
+
+      ("degen",
+       "Convert multiple fairness constraints into one.")
+
       ("cex_file",
        value<string>(),
        "File to print counterexample trace to. If option not specified, counterexample is printed to stdout")
@@ -221,8 +254,16 @@ namespace Options {
        getActionsHelp().c_str())
        //"Specify a tactic sequence")
 
+      ("min_threads",
+       value<unsigned long>()->default_value(1),
+       "Minimum hardware concurrency to run standard tactic multi-threaded.")
+
+      ("thread_limit",
+       value<unsigned long>()->default_value(8),
+       "Maximum number of threads when running standard multi-threaded tactic.")
+
       ("bmc_bound",
-       value<unsigned int>()->default_value(1000),
+       value<unsigned int>()->default_value(8191),
        "BMC option: set bound for k")
 
       ("bmc_isim",
@@ -231,6 +272,11 @@ namespace Options {
       ("bmc_timeout",
        value<int>()->default_value(30),
        "BMC option: set timeout")
+
+      ("bmc_memlimit",
+       // 5GB limit on process, checked in BMC engine
+       value<long>()->default_value(VERY_LARGE),
+       "BMC option: set memory limit (bytes)")
 
       ("bmc_backend",
        value<string>()->default_value("minisat"),
@@ -243,6 +289,9 @@ namespace Options {
       ("ic3_verify",
        "IC3 option: verify IC3's proof")
 
+      ("ic3_verify_cex",
+       "IC3 option: verify IC3's counterexample")
+ 
       ("ic3_nRuns",
        value<unsigned int>()->default_value(20),
        "IC3 option: number of simulation runs for equivalence")
@@ -510,7 +559,7 @@ namespace Options {
        "Time limit for BDD-based backward analysis (in s)")
 
       ("gsh_timeout",
-       value<unsigned long>(),
+       value<unsigned long>()->default_value(900),
        "Time limit for BDD-based cycle detection (in s)")
 
       ("bdd_tr_cluster",
@@ -535,6 +584,9 @@ namespace Options {
       ("gsh_fw",
        "Use forward operators in GSH.")
 
+      ("gsh_slice",
+       "Use sliced transition relation in backward GSH.")
+
       ("bdd_info",
        "Add BDD info to summary")
 
@@ -547,7 +599,7 @@ namespace Options {
        "Maximum number of dynamic BDD variable reordering during sweeping")
 
       ("bdd_sw_timeout",
-       value<unsigned long>(),
+       value<unsigned long>()->default_value(30),
        "Time limit for BDD sweeping (in s)")
 
       ("check_bdd_max",
@@ -583,7 +635,9 @@ namespace Options {
 
       ("fair_weakenPfEfrt", value<int>()->default_value(0), "fair option: 0 disables joining-like behavior in proof weakening")
 
-      ("fair_pp_timeout", value<int>()->default_value(-1), "fair option: timeout for proof strengthening/weakening")
+      ("fair_pp_timeout", value<int>()->default_value(10), "fair option: timeout for proof strengthening/weakening")
+
+      ("fair_phase", "try phase abstraction before running fair")
 
       ("fcbmc_timeout", value<int>()->default_value(60), "FCBMC: set timeout") 
 
@@ -597,9 +651,24 @@ namespace Options {
        "FCBMC option: select SAT solver (Available options: \"zchaff\", \"minisat\")")
 #endif
 
+      ("fcbmc_memlimit",
+       // 5GB limit on process, checked in FCBMC engine
+       value<long>()->default_value(VERY_LARGE),
+       "FCBMC option: set memory limit (bytes)")
+
+      ("klive_timeout", value<int>()->default_value(-1), "KLive option: set timeout")
+
+      ("klive_bound", value<int>()->default_value(-1), "KLive option: set bound for k")
+
       ("tv_narrow", "No widening in ternary simulation")
 
       ("tv_nocheck", "No output check in ternary simulation")
+
+      ("tv_timeout", value<int>()->default_value(-1), "Timeout for ternary simulation")
+
+      ("se_timeout", value<int>()->default_value(-1), "Timeout for sequential equivalence")
+
+      ("absint_timeout", value<int>()->default_value(-1), "Timeout for abstract interpreter")
 
       ("phase_max", value<unsigned>()->default_value(64), "PhaseAbs: set maximum number of phases")
 
@@ -630,7 +699,7 @@ namespace Options {
       store(command_line_parser(argc, argv).options(
       cmdline_options).positional(posOpt).run(), varMap);
     }
-    catch(exception& e) {
+    catch(exception const & e) {
       cout << e.what() << endl;
       return 1;
     }
@@ -677,6 +746,13 @@ namespace Options {
       return 1;
     }
 
+    string fcbmc_backend = varMap["fcbmc_backend"].as<string>();
+    if (!SAT::isValidBackend(fcbmc_backend)) {
+      cout << "Unknown backend " << fcbmc_backend << endl;
+      return 1;
+    }
+
+
     if (varMap.count("improve_proof")) {
       int type = varMap["improve_proof"].as<int>();
       if (type < 0 || type > 2) {
@@ -692,6 +768,10 @@ namespace Options {
              << ") out of range (0-4)" << endl;
         ret |= 1;
       }
+    }
+
+    if (varMap.count("print_info")) {
+      std::signal(SIGINT, alarm_handler);
     }
 
     if(varMap.count("input-file")) {
@@ -725,7 +805,7 @@ namespace Options {
         if      (*it == "bmc")             t = new BMC::BMCAction(model);
         else if (*it == "ic3")             t = new IC3::IC3Action(model);
         else if (*it == "ic3r")            t = new IC3::IC3Action(model, true);
-        else if (*it == "ic3lr")            t = new IC3::IC3Action(model, false, true);
+        else if (*it == "ic3lr")           t = new IC3::IC3Action(model, false, true);
         else if (*it == "fsis")            t = new FSIS::FSISAction(model);
         else if (*it == "bdd_build")       t = new BddBuildAction(model);
         else if (*it == "bdd_fw_reach")    t = new BddFwReachAction(model);
@@ -766,6 +846,12 @@ namespace Options {
         else if (*it == "check")           t = new IIC::IICAction(model);
         else if (*it == "fcbmc")           t = new FCBMC::FCBMCAction(model);
         else if (*it == "gsh")             t = new BddGSHAction(model);
+        else if (*it == "fork")            t = new Dispatch::Fork(model);
+        else if (*it == "join")            t = new Dispatch::Join(model);
+        else if (*it == "begin")           t = new Dispatch::Begin(model);
+        else if (*it == "end")             t = new Dispatch::End(model);
+        else if (*it == "klive")           t = new KLiveAction(model);
+        else if (*it == "persist")         t = new PersistentSignalsAction(model);
         else if (*it == "standard")        standard = true;
         else {
           model.clearTactics();
@@ -778,8 +864,7 @@ namespace Options {
     else standard = true;
 
     if (standard) {
-      model.pushBackTactic(new IIC::PreProcessAction(model));
-      model.pushBackTactic(new IIC::IICAction(model));
+      model.pushBackTactic(new IIC::HwmccAction(model));
     }
 
     return 0;

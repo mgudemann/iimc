@@ -1,7 +1,46 @@
-IIMc 1.3.2
+IImc 2.0
 
-This is a bug-fixing release.  Notably, a problem with clang 3.5 has been
-fixed.
+New in this release:
+
+ - Multi-threaded execution.
+ - Bug fixes, code clean-up, and efficiency improvements.
+
+IImc 2.0 has been built on:
+
+ - Ubuntu 14.04 LTS and 14.10 with gcc and clang
+ - Red Hat Fedora 21 with gcc and clang
+ - Cygwin on Windows 7 and Vista, 32-bit, with gcc
+ - Cygwin on Windows 8.1, 64-bit, with gcc
+ - OS X 10.10.1 (yosemite) with clang
+
+The versions of gcc range from 4.8.2 to 4.9.2.  The versions of clang
+are 3.4 and 3.5.  At the time of this release, the distributed version
+of clang on cygwin (3.4) does not support thread-local storage, and
+therefore cannot be used to build IImc 2.0.
+
+----------------------------------------------------------------------
+IImc 1.4
+
+New in this release:
+
+ - Support for counterexample generation for safety properties
+    - Can use AIGER format or native format
+ - Reporting of lower bound on length of counterexample (if one exists)
+    - So-called u-lines
+ - k-liveness prototype
+ - More timeout options for preprocessing tactics
+ - Includes CUDD 2.5.1
+ - Several bug fixes and efficiency improvements
+
+IImc 1.4 has been built on:
+
+ - Ubuntu 14.04 LTS and 14.10 with gcc and clang
+ - Red Hat Fedora 21 with gcc and clang
+ - Cygwin on Windows 7 and Vista, 32-bit, with gcc and clang
+ - OS X 10.9.5 (mavericks) and 10.10.1 (yosemite) with clang
+
+The versions of gcc range from 4.8.2 to 4.9.2.  The versions of clang
+are 3.4 and 3.5.
 
 ----------------------------------------------------------------------
 IImc 1.3.1

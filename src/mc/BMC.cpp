@@ -40,9 +40,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 #include "SAT.h"
 #include "Sim.h"
-#include "SimUtil.h"
 #include "ThreeValuedSimulation.h"
 #include "Util.h"
+#include "Random.h"
 
 #include <deque>
 #include <set>
@@ -64,9 +64,15 @@ namespace {
     State(Model & m, const Clauses & _cnf, const Clauses & _pcnf,
           const BMC::BMCOptions & opts) : 
       m(m), opts(opts), _cnf(_cnf), _pcnf(_pcnf) {
-      v = opts.ev ? opts.ev : m.newView();
+      if (opts.ev) {
+        v = opts.ev;
+      }
+      else {
+        v = m.newView();
+        v->begin_local();
+      }
 
-      COIAttachment const * cat = (COIAttachment *) m.constAttachment(Key::COI);
+      COIAttachment const * const cat = (COIAttachment const *) m.constAttachment(Key::COI);
       coi = cat->coi();
       m.constRelease(cat);
 
@@ -77,7 +83,7 @@ namespace {
         init = opts.am->init;
       }
       else {
-        ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+        ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
         latches = eat->stateVars();
         functions = eat->nextStateFnOf(latches);
         init = eat->initialConditions();
@@ -105,7 +111,10 @@ namespace {
       litOccur(lito, _cnf);
     }
     ~State() {
-      if (!opts.ev) delete v;
+      if (!opts.ev) {
+        v->end_local();
+        delete v;
+      }
     }
 
     void nextFrontier() {
@@ -363,19 +372,22 @@ namespace BMC {
                         vector<Transition> * cexTrace,
                         vector< vector<ID> > * proofCNF,
                         SAT::Clauses * unrolling1, SAT::Clauses * unrolling2) {
-    if (m.verbosity() > Options::Silent && !opts.silent)
-      cout << "BMC: Checking up to " << *(opts.bound) << endl;
-    int rseed = m.options()["rand"].as<int>();
+    if (m.verbosity() > Options::Silent && !opts.silent) {
+      ostringstream oss;
+      oss << "BMC: Checking up to " << *(opts.bound) << endl;
+      cout << oss.str();
+    }
+    int rseed = opts.rseed;
     if(rseed != -1) {
-      srand(rseed);
-      Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(rseed));
+      Random::srand(rseed);
     }
 
     MC::ReturnValue rv;
 
     Expr::Manager::View * v = opts.ev ? opts.ev : m.newView();
+    if (!opts.ev) v->begin_local();
 
-    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) m.constAttachment(Key::EXPR);
     vector<ID> constraints(eat->constraintFns());
     vector<ID> init, latches, inputs;
     ID npi;
@@ -442,8 +454,11 @@ namespace BMC {
       }
     }
 
-    if (m.verbosity() > Options::Informative)
-      cout << "BMC: CNF size: " << cons_clauses.size() << endl;
+    if (m.verbosity() > Options::Informative) {
+      ostringstream oss;
+      oss << "BMC: CNF size: " << cons_clauses.size() << endl;
+      cout << oss.str();
+    }
 
     bool use_frontier = opts.useCOI;
     if (!opts.extra_pi.empty()) {
@@ -504,25 +519,52 @@ namespace BMC {
         unrolling1->insert(unrolling1->end(), ic_cnf.begin(), ic_cnf.end());
     }
 
-    int64_t stime = Util::get_user_cpu_time();
+    int64_t stime = Util::get_thread_cpu_time();
     unsigned int k = 0;
     SAT::Assignment asgn;
     for (; k <= *(opts.bound); ++k) {
-      int64_t sofar = Util::get_user_cpu_time() - stime;
+      int64_t sofar = Util::get_thread_cpu_time() - stime;
       if (opts.timeout > 0 && sofar / 1000000 >= opts.timeout) {
         if (m.verbosity() > Options::Terse)
           cout << "BMC: timeout (1)" << endl;
         rv.returnType = MC::Unknown;
         break;
       }
+      if (opts.action && opts.action->futureReady()) {
+        rv.returnType = MC::Unknown;
+        if (!opts.ev) {
+          v->end_local();
+          delete v;
+        }
+        delete sv;
+        delete sman;
+        throw Termination("BMC: terminated");
+      }
       if (opts.timeout > 0) {
         double rem = (double) (opts.timeout - sofar / 1000000);
         sv->timeout(rem);
       }
       if (m.verbosity() > Options::Informative) {
-        cout << "BMC: K = " << k;
-        if (k < opts.lo) cout << "*";
-        cout << endl;
+        ostringstream oss;
+        oss << "BMC: K = " << k;
+        if (k < opts.lo) oss << "*";
+        oss << endl;
+        cout << oss.str();
+      }
+      long rsize = Util::get_maximum_resident_size();
+      if (m.verbosity() > Options::Informative) {
+        ostringstream oss;
+        oss << "BMC: resident memory = " << rsize << endl;
+        cout << oss.str();
+      }
+      if (opts.memlimit > 0  && rsize > opts.memlimit) {
+	if (m.verbosity() > Options::Terse) {
+	  ostringstream oss;
+          oss << "BMC: memory limit exceeded " << opts.memlimit << endl;
+          cout << oss.str();
+        }
+	rv.returnType = MC::Unknown;
+	break;
       }
 
       // 1. add transition relation clauses
@@ -622,7 +664,7 @@ namespace BMC {
               unrolling2->insert(unrolling2->end(), new_cnf.begin(), new_cnf.end());
           }
         }
-        catch (SAT::Trivial tv) {
+        catch (SAT::Trivial const & tv) {
           if (!tv.value()) {
             if (m.verbosity() > Options::Terse)
               cout << "BMC: The property holds trivially. (2)" << endl;
@@ -667,7 +709,7 @@ namespace BMC {
         try {
           sv->add(curr_npi, tgid);
         }
-        catch (SAT::Trivial tv) {
+        catch (SAT::Trivial const & tv) {
           if (tv.value()) {
             if (m.verbosity() > Options::Terse)
               cout << "BMC: The property fails trivially. (1)" << endl;
@@ -686,7 +728,7 @@ namespace BMC {
           try {
             sv->add(constraint_clauses, tgid);
           }
-          catch (SAT::Trivial tv) {
+          catch (SAT::Trivial const & tv) {
             if (!tv.value()) {
               if (m.verbosity() > Options::Terse) {
                 cout << "BMC: The property holds trivially. (A constraint "
@@ -707,7 +749,7 @@ namespace BMC {
         try {
           sat = trivial ? false : sv->sat(NULL, &asgn);
         }
-        catch (Timeout e) {
+        catch (Timeout const & e) {
           if (m.verbosity() > Options::Terse)
             cout << "BMC: timeout (2)" << endl;
           rv.returnType = MC::Unknown;
@@ -754,6 +796,12 @@ namespace BMC {
           break;
         }
       }
+
+      //Update CEX lower bound
+      auto rat = m.attachment<RchAttachment>(Key::RCH);
+      rat->updateCexLowerBound(k + 1, string("BMC"));
+      m.release(rat);
+
       if (k == *(opts.bound))
         rv.returnType = MC::Unknown;
     }
@@ -766,8 +814,11 @@ namespace BMC {
         Expr::primeFormulas(*v, *i, -(*(opts.bound)-1));
 
     *(opts.bound) = k;
-
-    if (!opts.ev) delete v;
+    
+    if (!opts.ev) {
+      v->end_local();
+      delete v;
+    }
     delete sv;
     delete sman;
     return rv;
@@ -780,15 +831,19 @@ namespace BMC {
   void BMCAction::exec()  {
       BMC::BMCOptions opts;
 
+      opts.action = this;
       size_t k = 0;
       opts.bound = &k;
       if (options().count("bmc_bound"))
         k = options()["bmc_bound"].as<unsigned int>();
       if (options().count("bmc_timeout"))
         opts.timeout = options()["bmc_timeout"].as<int>();
+      if (options().count("bmc_memlimit"))
+        opts.memlimit = options()["bmc_memlimit"].as<long>();
 
-      RchAttachment const * rat = (RchAttachment *) model().constAttachment(Key::RCH);
+      RchAttachment const * const rat = (RchAttachment const *) model().constAttachment(Key::RCH);
       opts.lo = rat->cexLowerBound();
+      opts.rseed = (rseed != -1) ? rseed : options()["rand"].as<int>();
 
       Expr::Manager::View * ev = model().newView();
       SAT::Clauses fwd;
@@ -812,19 +867,27 @@ namespace BMC {
       vector<Transition> cex;
       MC::ReturnValue rv = BMC::check(model(), opts, opts.printCex ? &cex : NULL);
       if (rv.returnType != MC::Unknown) {
-        ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+        if (model().verbosity() > Options::Silent) {
+	  std::ostringstream oss;
+          oss << "Conclusion found by BMC";
+	  if (opts.rseed != options()["rand"].as<int>())
+	    oss << "-r" << opts.rseed;
+	  oss << "." << endl;
+	  cout << oss.str();
+	}
+        auto pat = model().attachment<ProofAttachment>(Key::PROOF);
         if (rv.returnType == MC::Proof)
           pat->setConclusion(0);
         else if (rv.returnType == MC::CEX) {
-          pat->setConclusion(1);
           if(opts.printCex)
             pat->setCex(cex);
+          pat->setConclusion(1);
         }
         model().release(pat);
       }
       else if (k > opts.lo) {
-        RchAttachment * rat = (RchAttachment *) model().attachment(Key::RCH);
-        rat->updateCexLowerBound(k);
+        auto rat = model().attachment<RchAttachment>(Key::RCH);
+        rat->updateCexLowerBound(k, string("BMC"));
         model().release(rat);
       }
   }

@@ -42,11 +42,22 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 
 /**
- * A class to share information between sequential-optimization modules.
+ * A class to store information required to reverse sequential
+ * optimizations.  This reversal is necessary when fleshing out a
+ * counterexample for the original model from a counterexample for
+ * the optimized model produced by some proof engine.
  */
 class SeqAttachment : public Model::Attachment {
 public:
-  SeqAttachment(Model& model) : Model::Attachment(model) { }
+  SeqAttachment(Model& model) :
+    Model::Attachment(model), unrollings(1), decoded(false) {
+    ExprAttachment::Factory ef;
+    requires(Key::EXPR, &ef);
+  }
+  SeqAttachment(const SeqAttachment& from, Model& model) : 
+    Model::Attachment(from, model), optimized(from.optimized),
+    unrollings(from.unrollings), decoded(from.decoded) {
+  }
   Key::Type key() const { return Key::SEQ; }
   void build() { 
     if (model().verbosity() > Options::Silent)
@@ -64,18 +75,38 @@ public:
   //action, and what they have been optimized to:
   //1) If latch dropped (COI reduction), the mapped value would be the same
   //2) If latch is constant (StuckAt detection), the mapped value would be
-  //trueID or falseID
+  //   trueID or falseID
   //3) If latch is equivalent to another, the mapped value would be the ID of
-  //the latch it is equivalent to
+  //   the latch it is equivalent to
+  // Every action that drops a latch must update this map.
+  // In theory this map could be used to save more complex dependencies for
+  // dropped latches.  Other parts of iimc are not prepared for this more
+  // complex use.
   std::unordered_map<ID, ID> optimized;
 
-  std::vector<ID> initialConditions;
-  std::vector<ID> inputs;
-  std::vector<ID> stateVars;
-  std::vector<ID> nextStateFns;
+  // Number of unrollings.  This number is 1 unless phase abstraction was
+  // performed.
+  int unrollings;
+  // Info to allow phase abstraction to be undone.
+  // maps each cycle input to a pair <original_input, cycle>
+  std::unordered_map<ID, std::pair<ID, unsigned int> > cycleInputs;
+  // Final cycle may overshoot bad-state. Must check cycle outputs to see 
+  // how far to unroll. TODO
+  std::unordered_map<ID, std::vector<ID> > outputToCycleOutputs;
+
+  // Information about the decoding.  Currently, only backward decoding is
+  // supported.
+  bool decoded; // false unless backward decoding took place.
+  // maps each mapped latch to the corresponding suppressed primary input
+  std::unordered_map<ID,ID> latchToInput;
+  std::vector<ID> decodedInputs;
+  std::vector<ID> decodedStateVars;
+  std::vector<ID> decodedInitialConditions;
+  std::vector<ID> decodedNextStateFns;
+  std::vector<ID> decodedConstraintFns;
 
 protected:
-  SeqAttachment* clone() const { return new SeqAttachment(*this); }
+  SeqAttachment* clone(Model & model) const { return new SeqAttachment(*this, model); }
 
 };
 

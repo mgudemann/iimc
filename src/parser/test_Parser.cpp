@@ -114,7 +114,7 @@ int main(int argc, char * argv[]) {
     po::store(po::command_line_parser(argc, argv).
               options(desc).positional(pos_opt).run(), vm);
   }
-  catch(exception & e) {
+  catch(exception const & e) {
     cerr << e.what() << endl;
     return 1;
   }
@@ -132,16 +132,22 @@ int main(int argc, char * argv[]) {
     format = vm["format"].as<size_t>();
   }
 
-  if (vm.count("file")) {
-    const string file = vm["file"].as<string>();
-    if (format == 0) test_AIGER(file,vm,verbosity);
-    else test_DIMACS(file,verbosity);
-  } else {
-    string srcdir = Util::get_env_var("srcdir");
-    const string file_0 = srcdir + default_file_0;
-    test_AIGER(file_0,vm,verbosity);
-    const string file_1 = srcdir + default_file_1;
-    test_DIMACS(file_1,verbosity);
+  try {
+    if (vm.count("file")) {
+      const string file = vm["file"].as<string>();
+      if (format == 0) test_AIGER(file,vm,verbosity);
+      else test_DIMACS(file,verbosity);
+    } else {
+      string srcdir = Util::get_env_var("srcdir");
+      const string file_0 = srcdir + default_file_0;
+      test_AIGER(file_0,vm,verbosity);
+      const string file_1 = srcdir + default_file_1;
+      test_DIMACS(file_1,verbosity);
+    }
+  }
+  catch(InputError const & e) {
+    cerr << e.what() << endl;
+    return 1;
   }
 
   return 0;

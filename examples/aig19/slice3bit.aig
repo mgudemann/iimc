@@ -1,0 +1,17 @@
+aig 14 0 4 1 10 0 0 1
+17
+23
+7
+29
+9
+1
+9
+	l0 cnt<2>
+l1 cnt<1>
+l2 cnt<0>
+l3 e
+o0 fair
+c
+bliftoaig
+1.9
+slice3bit.blif

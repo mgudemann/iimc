@@ -44,6 +44,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <set>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Expr {
   typedef std::unordered_map<ID, ID> IDMap;
@@ -86,6 +87,11 @@ namespace Expr {
   void variables(Manager::View & v, IDVector & ids, std::set<ID> & rv);
 
   /**
+   * Complement IDVector
+   */
+  void complement(Manager::View & v, const IDVector & ids, IDVector & rv);
+
+  /**
    * Applies n primes to the variables of expression id.
    */
   ID primeFormula(Manager::View & v, ID id, int n = 1);
@@ -94,8 +100,8 @@ namespace Expr {
   /**
    * Applies the variable-substitution map "sub" to expression id.
    */
-  ID varSub(Manager::View & v, const IDMap & sub, ID id);
-  void varSub(Manager::View & v, const IDMap & sub, IDVector & ids);
+  ID varSub(Manager::View & v, const IDMap & sub, ID id, IDMap * oldToNew = NULL);
+  void varSub(Manager::View & v, const IDMap & sub, IDVector & ids, IDMap * oldToNew = NULL);
 
   /**
    * Naively converts the expression id to CNF.  The clauses are

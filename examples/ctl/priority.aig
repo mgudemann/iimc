@@ -1,0 +1,118 @@
+aig 198 16 32 16 150
+222
+2
+368
+4
+370
+6
+372
+8
+374
+10
+376
+12
+378
+14
+380
+16
+382
+18
+384
+20
+386
+22
+388
+24
+390
+26
+392
+28
+394
+30
+397 1
+32
+34
+38
+42
+46
+50
+54
+58
+62
+66
+70
+74
+78
+82
+86
+90
+94
+
+"&*.26:>BFJNRVZ^bfjnrvzBFJNRVZ^bfjnrvz~ÇÜäéíñöû¢¶™Æ8;∏4C	ºI?L?M=íRW9†	Xa5Æ	^k1º	du- 	j)ÿ	pâ%Ê	vì!Ù	| ùÇ	Ç$ßê	à(±û	é,ª¨	î0≈∫	Éçâ	%/9CMWakuÜi0 req<15>
+i1 req<14>
+i2 req<13>
+i3 req<12>
+i4 req<11>
+i5 req<10>
+i6 req<9>
+i7 req<8>
+i8 req<7>
+i9 req<6>
+i10 req<5>
+i11 req<4>
+i12 req<3>
+i13 req<2>
+i14 req<1>
+i15 req<0>
+l0 chosen<15>
+l1 lreq<15>
+l2 chosen<14>
+l3 lreq<14>
+l4 chosen<13>
+l5 lreq<13>
+l6 chosen<12>
+l7 lreq<12>
+l8 chosen<11>
+l9 lreq<11>
+l10 chosen<10>
+l11 lreq<10>
+l12 chosen<9>
+l13 lreq<9>
+l14 chosen<8>
+l15 lreq<8>
+l16 chosen<7>
+l17 lreq<7>
+l18 chosen<6>
+l19 lreq<6>
+l20 chosen<5>
+l21 lreq<5>
+l22 chosen<4>
+l23 lreq<4>
+l24 chosen<3>
+l25 lreq<3>
+l26 chosen<2>
+l27 lreq<2>
+l28 chosen<1>
+l29 lreq<1>
+l30 chosen<0>
+l31 lreq<0>
+o0 chosen<15>
+o1 chosen<14>
+o2 chosen<13>
+o3 chosen<12>
+o4 chosen<11>
+o5 chosen<10>
+o6 chosen<9>
+o7 chosen<8>
+o8 chosen<7>
+o9 chosen<6>
+o10 chosen<5>
+o11 chosen<4>
+o12 chosen<3>
+o13 chosen<2>
+o14 chosen<1>
+o15 chosen<0>
+c
+bliftoaig
+1.9
+priority.blif

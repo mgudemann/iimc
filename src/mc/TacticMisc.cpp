@@ -39,7 +39,7 @@ using namespace std;
 
 void AnalyzeSccs::exec() {
   Expr::Manager::View *v = model().newView();
-  ExprAttachment const *eat = 
+  ExprAttachment const * const eat = 
     (ExprAttachment const *) model().constAttachment(Key::EXPR);
   vector<ID> const &nsfv = eat->nextStateFns();
   vector<ID> const &roots = eat->outputFns();
@@ -52,7 +52,7 @@ void AnalyzeSccs::exec() {
 
 void PrintCircuitSccGraph::exec() {
   Expr::Manager::View *v = model().newView();
-  ExprAttachment const *eat = 
+  ExprAttachment const * const eat = 
     (ExprAttachment const *) model().constAttachment(Key::EXPR);
   vector<ID> const &nsfv = eat->nextStateFns();
   vector<ID> const &roots = eat->outputFns();

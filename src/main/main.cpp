@@ -35,13 +35,20 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <fstream>
 #include <time.h>
+#ifndef NOTCOMP
+/*
+#include <sys/resource.h>
+*/
+#endif
 
 #include "Error.h"
 #include "Key.h"
 #include "options.h"
 #include "Model.h"
 #include "ProofAttachment.h"
-#include "SimUtil.h"
+#include "RchAttachment.h"
+#include "SeqAttachment.h"
+#include "Random.h"
 
 using namespace std;
 using namespace boost::program_options;
@@ -56,7 +63,7 @@ void dispatcher(Model & model) {
   while ((tactic = model.popTactic())) {
     tactic->make();
     delete tactic;
-    ProofAttachment * const pat = (ProofAttachment *) model.constAttachment(Key::PROOF);
+    ProofAttachment const * const pat = (ProofAttachment const *) model.constAttachment(Key::PROOF);
     bool done = pat && pat->hasConclusion();
     model.constRelease(pat);
     if (done) {
@@ -69,6 +76,29 @@ void dispatcher(Model & model) {
 }
 
 int main(int argc, char * argv[]) {
+
+#ifndef NOTCOMP
+  /*
+  rlimit rl;
+  int result;
+  result = getrlimit(RLIMIT_STACK, &rl);
+  //cout << "rlim_cur: " << rl.rlim_cur << endl;
+  //cout << "rlim_max: " << rl.rlim_max << endl;
+  assert(result == 0);
+  if (rl.rlim_cur == RLIM_INFINITY) {
+    rl.rlim_cur = 1073741824L;
+    result = setrlimit(RLIMIT_STACK, &rl);
+    assert(result == 0);
+    string call;
+    for (int i = 0; i != argc; ++i) {
+      call += argv[i];
+      call += " ";
+    }
+    int ret = system(call.c_str());
+    return ret;
+  }
+  */
+#endif
   CommandLineOptions options;
   Model model(options.options(), "main");
 
@@ -76,7 +106,7 @@ int main(int argc, char * argv[]) {
   try {
     status = options.parseCommandLineOptions(model, argc, argv);
   }
-  catch(InputError ie) {
+  catch(InputError const & ie) {
     cerr << ie.what() << endl;
     return 1;
   }
@@ -97,23 +127,28 @@ int main(int argc, char * argv[]) {
     return status;
 
   int rseed = options.options()["rand"].as<int>();
+  Random::register_thread();
   if (rseed == -1) {
-    srand(time(0));
-    Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(time(0)));
+    // sets initial random seed for all threads
+    Random::set_seed(time(0));
   }
 
   int ret = 1;
   try { 
     dispatcher(model);
     ret = 0;
-  } catch (Exception& e) {
+  } catch (Exception const & e) {
     cerr << e.what() << endl;
   } catch (...) {
   }
 
-  ProofAttachment * const pat = (ProofAttachment *) model.constAttachment(Key::PROOF);
+  auto pat = model.attachment<ProofAttachment>(Key::PROOF);
   if (pat) {
-    pat->printConclusion();
+    //Acquire RchAttachment in write-mode to lock out everybody else trying to
+    //write a u-line
+    auto rat = model.attachment<RchAttachment>(Key::RCH);
+    if(!(pat->conclusion() == 1 && options.options().count("print_cex")))
+      pat->printConclusion();
     if(pat->conclusion() == 0 && options.options().count("print_proof")) {
       pat->addEquivalenceInfo();
       if(options.options().count("proof_file")) {
@@ -127,20 +162,15 @@ int main(int argc, char * argv[]) {
       }
     }
     else if(pat->conclusion() == 1 && options.options().count("print_cex")) {
-      pat->restoreDroppedLatches();
-      if(options.options().count("cex_file")) {
-        string filename = options.options()["cex_file"].as<string>();
-        ofstream cexFile(filename.c_str());
-        pat->printCex(cexFile);
-        cexFile.close();
-      }
-      else {
-        pat->printCex();
-      }
+      pat->produceEvidenceForFailure();
     }
-
+    model.release(rat);
   }
-  model.constRelease(pat);
+  model.release(pat);
 
+#if 1
   return ret;
+#else
+  exit(ret);
+#endif
 }

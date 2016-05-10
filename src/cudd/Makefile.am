@@ -1,10 +1,10 @@
 AM_CFLAGS =
-AM_CXXFLAGS = $(AM_CFLAGS)
+AM_CXXFLAGS = -std=c++11 $(AM_CFLAGS)
 
 noinst_LIBRARIES = libutil.a libst.a libmtr.a libepd.a libcudd.a libobj.a
 
 libutil_a_SOURCES = cpu_stats.c cpu_time.c datalimit.c \
-  prtime.c safe_mem.c qsort.c util.h
+  prtime.c safe_mem.c qsort.c util.h cstringstream.c cstringstream.h
 
 libst_a_SOURCES = st.h st.c
 

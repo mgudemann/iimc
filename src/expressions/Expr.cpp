@@ -36,6 +36,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <vector>
 
+#include <iostream>
+
 #include "Expr.h"
 
 const uint64_t NMASK_ID = (static_cast<uint64_t>(1) << 16) - 1;
@@ -59,6 +61,10 @@ namespace Expr {
   Manager::View::~View() {
   }
 
+  Manager::View * Manager::View::clone() const {
+    return new View(*this);
+  }
+
   Manager & Manager::View::manager() {
     return *man;
   }
@@ -67,11 +73,7 @@ namespace Expr {
   ID Manager::View::bfalse() { return man->falseID; }
 
   ID Manager::View::newVar(const string & _name) {
-    string * name = new string(_name);
-    Expr * e = new Expr();
-    e->op = Var;
-    e->ext = false;
-    e->u.varName = name;
+    Expr * e = new Expr(_name);
     bool exists;
     ID id = add(e, &exists) << SH_ID;
     if (exists) delete e;
@@ -80,17 +82,12 @@ namespace Expr {
   const string & Manager::View::varName(ID id) {
     assert (op(id) == Var);
     Expr * e = get(id >> SH_ID);
-    return *(e->u.varName);
+    return e->u.varName;
   }
 
   bool Manager::View::varExists(const std::string & name) {
-    Expr e;
-    e.op = Var;
-    e.ext = false;
-    e.u.varName = (std::string *) &name;
-    bool result = exists(&e);
-    e.u.varName = (std::string *) 0;
-    return result;
+    Expr e(name);
+    return exists(&e);
   }
 
   Op Manager::View::op(ID id) {
@@ -113,10 +110,7 @@ namespace Expr {
     case G:
     case X: {
       //if (arg == btrue() || arg == bfalse()) return arg;
-      Expr * e = new Expr();
-      e->op = op;
-      e->ext = false;
-      e->u.args[0] = arg;
+      Expr * e = new Expr(op, arg);
       bool exists;
       ID id = add(e, &exists) << SH_ID;
       if (exists) delete e;
@@ -205,16 +199,12 @@ namespace Expr {
     default:
       assert (false);
     }
-  
-    Expr * e = new Expr();
-    e->op = op;
-    e->ext = false;
-    e->u.args[0] = arg0;
-    e->u.args[1] = arg1;
+
+    Expr * e = new Expr(op, arg0, arg1);
     bool exists;
     ID id = add(e, &exists) << SH_ID;
     if (exists) delete e;
-    if(positive)
+    if (positive)
       return id;
     else
       return apply(Not, id);
@@ -264,28 +254,28 @@ namespace Expr {
       if (_op == ITE) {
         assert (n == 3);
         // ite(1,f,g) =f
-        if (args[0] == btrue()) 
+        if (args[0] == btrue())
           return args[1];
         // ite(0,f,g) = g
-        if (args[0] == bfalse()) 
+        if (args[0] == bfalse())
           return args[2];
         // ite(f,1,0) = f
-        if (args[1] == btrue() && args[2] == bfalse()) 
+        if (args[1] == btrue() && args[2] == bfalse())
           return args[0];
         // ite(f,0,1) = !f
-        if (args[1] == bfalse() && args[2] == btrue()) 
+        if (args[1] == bfalse() && args[2] == btrue())
           return apply(Not, args[0]);
         // ite(f,g,g) = g
-        if (args[1] == args[2]) 
+        if (args[1] == args[2])
           return args[1];
         // ite(f,f,g) = ite(f,1,g) = f || g
-        if (args[0] == args[1] || args[1] == btrue()) 
+        if (args[0] == args[1] || args[1] == btrue())
           return apply(Or, args[0], args[2]);
         // ite(f,g,f) = ite(f,g,0) = f && g
-        if (args[0] == args[2] || args[2] == bfalse()) 
+        if (args[0] == args[2] || args[2] == bfalse())
           return apply(And, args[0], args[1]);
         // ite(f,!f,g) = ite(f,0,g) = !f && g
-        if (args[0] == apply(Not, args[1]) || args[1] == bfalse()) 
+        if (args[0] == apply(Not, args[1]) || args[1] == bfalse())
           return apply(And,apply(Not,args[0]), args[2]);
         // ite(f,g,!f) = ite(f,g,1) = !f || g
         if (args[0] == apply(Not, args[2]) || args[2] == btrue())
@@ -322,14 +312,7 @@ namespace Expr {
       }
     }
 
-    int n = args.size();
-    Expr * e = new Expr();
-    e->op = _op;
-    e->ext = true;
-    e->u.extendedArgs.n = n;
-    e->u.extendedArgs.args = new ID[n];
-    for (int i = 0; i < n; ++i)
-      e->u.extendedArgs.args[i] = args[i];
+    Expr * e = new Expr(_op, args);
     bool exists;
     ID id =add(e, &exists) << SH_ID;
     if (exists) delete e;
@@ -397,9 +380,14 @@ namespace Expr {
 
   void Manager::View::fold(Folder & _f, vector<ID> & ids) {
     fold_fold f(_f);
+#if 0
     ID2IDMap seen;
     for (vector<ID>::iterator it = ids.begin(); it != ids.end(); it++)
       *it = relevantHS(*it)->fold(this, f, *it, &seen);
+#endif
+    if (ids.empty())
+      return;
+    relevantHS(ids.at(0))->fold(this, f, ids);
   }
 
   void Manager::View::sort(vector<ID>::iterator begin, vector<ID>::iterator end) {
@@ -412,7 +400,7 @@ namespace Expr {
     if (MASK_NEG & id)
       return MASK_NEG ^ args[0];
     if (e->op == Var)
-      return modifyID(newVar(*(e->u.varName)), id);
+      return modifyID(newVar(e->u.varName), id);
     if (e->ext) {
       vector<ID> vargs;
       assert (n == e->u.extendedArgs.n);
@@ -427,8 +415,7 @@ namespace Expr {
   ID Manager::View::modifyID(ID id, ID by) { return (MASK_ID & id) | (~MASK_ID & by); }
 
   Manager::Manager() : HSManager<Expr>() {
-    Expr * e = new Expr();
-    e->op = True;
+    Expr * e = new Expr(True);
     trueID = global->add(e) << SH_ID;
     falseID = MASK_NEG ^ trueID;
     View v(this);

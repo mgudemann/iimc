@@ -114,7 +114,7 @@ namespace CNF
     }
 
     template<typename MapIterator, typename TT>
-    TT toTruthTable_map(const MapIterator& begin, const MapIterator& end, const TT& t, const TT& f) const
+    TT toTruthTable_map(const MapIterator& begin, const MapIterator&, const TT& t, const TT& f) const
     {
       TT res = f;
       std::set<std::set<long> >::iterator i = value.begin();
@@ -142,7 +142,7 @@ namespace CNF
     {
       for(std::set<std::set<long> >::iterator i = value.begin(); i != value.end(); ++i) {
         for(std::set<long>::iterator j = i->begin(); j != i->end(); ++j) {
-          *result = abs(*j);
+          *result = labs(*j);
           ++result;
         }
       }

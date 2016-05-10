@@ -47,14 +47,14 @@ void StuckAtAction::exec() {
   if (model().verbosity() > Options::Terse)
     cout << "StuckAtAction starting" << endl;
 
-  ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
-  AIGAttachment * const aat = (AIGAttachment *) model().constAttachment(Key::AIG);
+  ExprAttachment const * const eat = (ExprAttachment const *) model().constAttachment(Key::EXPR);
+  AIGAttachment const * const aat = (AIGAttachment const *) model().constAttachment(Key::AIG);
   AIGTVSim tvsim(aat);
-  Opt::RefIDMap & idOfAigRef = aat->ref2id;
+  Opt::RefIDMap const & idOfAigRef = aat->ref2id;
 
   Expr::Manager::View * v = model().newView();
 
-  // assumes AIGER 1.9
+  // assumes AIGER 1.9: every initial condition is specific to a latch
   vector<ID> init(eat->initialConditions());
   tvsim.reset(*v, init);
 
@@ -87,22 +87,22 @@ void StuckAtAction::exec() {
   for (unsigned i = 0; i < latchTVs.size(); ++i)
     if (latchTVs[i] != TVX) {
       reduce = true;
-      ID latchID = idOfAigRef[Opt::refOf(i + 1 + aat->aig.numInputs(), false)];
+      ID latchID = idOfAigRef.at(Opt::refOf(i + 1 + aat->aig.numInputs(), false));
       sub.insert(Expr::IDMap::value_type(latchID, latchTVs[i] == TVFalse ? 
                                                   v->bfalse() : v->btrue()));
     }
   if (reduce) {
-    SeqAttachment * seqat = (SeqAttachment *) model().attachment(Key::SEQ);
-    ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
+    auto seat = model().attachment<SeqAttachment>(Key::SEQ);
+    auto eat = model().attachment<ExprAttachment>(Key::EXPR);
 
     int cnt = 0;
     vector<ID> toSub;
     for (unsigned int i = 0; i < latchTVs.size(); ++i) {
-      ID latchID = idOfAigRef[Opt::refOf(i + 1 + aat->aig.numInputs(), false)];
+      ID latchID = idOfAigRef.at(Opt::refOf(i + 1 + aat->aig.numInputs(), false));
       if (latchTVs[i] != TVX) {
         ++cnt;
         eat->setNextStateFn(latchID, latchTVs[i] == TVTrue ? v->btrue() : v->bfalse());
-        seqat->optimized.insert(unordered_map<ID, ID>::value_type(latchID,
+        seat->optimized.insert(unordered_map<ID, ID>::value_type(latchID,
             latchTVs[i] == TVTrue ? v->btrue() : v->bfalse()));
       }
       else {
@@ -157,7 +157,7 @@ void StuckAtAction::exec() {
     }
 
     model().release(eat);
-    model().release(seqat);
+    model().release(seat);
   }
   else if (model().verbosity() > Options::Silent)
     cout << "StuckAt: Found 0 stuck-at latches" << endl;

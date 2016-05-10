@@ -119,7 +119,7 @@ public:
    */
   std::vector<ID>::size_type count() const { return kCOI_.size(); }
 
-  void build(Expr::Manager::View & v, ExprAttachment * const eat, std::vector<ID> props, bool internal, Options::Verbosity vrb);
+  void build(Expr::Manager::View & v, ExprAttachment const * const eat, std::vector<ID> props, bool internal, Options::Verbosity vrb);
 
 
 private:
@@ -136,14 +136,18 @@ public:
     requires(Key::EXPR, &eaf);
   }
 
+  COIAttachment(const COIAttachment & from, Model & model) :
+    Model::Attachment(from, model) { }
+
   virtual void build();
 
   const COI & coi() const { return _coi; }
 
   virtual Key::Type key() const { return Key::COI; }
-  virtual std::string string(bool includeDetails = false) const { return "COIAttachment"; }
-  virtual COIAttachment * clone() const {
-    COIAttachment * cat = new COIAttachment(model());
+  virtual std::string string(bool) const { return "COIAttachment"; }
+  virtual std::string string(void) const { return "COIAttachment"; }
+  virtual COIAttachment * clone(Model & model) const {
+    COIAttachment * cat = new COIAttachment(*this, model);
     cat->_coi = _coi;
     return cat;
   }

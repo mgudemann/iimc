@@ -25,7 +25,9 @@ argslist="\
 --ctl ${ctldir}/gcd.ctl ${ctldir}/gcd.aig --pi 1,0:\
 -t coi -t check --ctl ${ctldir}/simple4.ctl ${ctldir}/simple4.aig --pi 7,0:\
 -t sr -t fcbmc ${aigdir}/hanoi4.aig,1:\
--t pp -t gsh ${aigdir}/hanoi4.aig --pi 1,1"
+-t pp -t gsh ${aigdir}/hanoi4.aig --pi 1,1:\
+-t check --thread_limit 5 ${aigdir}/ChandyMisraAuto.aig,0:\
+-t check --thread_limit 4 ${aigdir}/cudmei3.aig --pi 4,1"
 
 verbosity=0
 

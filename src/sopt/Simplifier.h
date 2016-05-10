@@ -168,6 +168,14 @@ void findInterestingSignals(
   PersistentCardMap & persistentMap,
   PeriodicCardMap & periodicMap);
 
+int checkFairnessConstraints(
+  ThreeValued::vecSeq const & outputValues,
+  std::vector<ID> const & outputFns,
+  ThreeValued::vecSeq::size_type stem,
+  std::vector<ID> & satisfiedFairness,
+  Expr::Manager::View & v,
+  Options::Verbosity verbosity);
+
 void printSimulationWaves(
   Expr::Manager::View & v, ThreeValued::vecSeq const & lasso,
   std::vector<ID> const & sv, PersistentCardMap const & pmap,
@@ -179,7 +187,8 @@ void printReport(
   Expr::Manager::View & ev,
   std::vector<ID> const & sv,
   PersistentCardMap const & persistentMap,
-  PeriodicCardMap const & periodicMap);
+  PeriodicCardMap const & periodicMap,
+  bool reportOutputs = false);
 
 void findImplications(
   Expr::Manager::View & ev,
@@ -218,6 +227,10 @@ void simplifyTV(
   std::vector<ID> & outputFns,
   std::vector<ID> const & init,
   std::unordered_map<ID,ID> const & assignments,
+  ThreeValued::vecSeq & lasso,
+  PersistentCardMap & persistentMap,
+  PeriodicCardMap & periodicMap,
+  std::vector<ID> & satisfiedFairness,
   Options::Verbosity verbosity = Options::Silent,
   bool allowWidening = true,
   int * pconclusion = 0,
@@ -225,7 +238,8 @@ void simplifyTV(
   unsigned int * ploopLength = 0,
   unsigned int * pstabilized = 0,
   unsigned int * pfirstNonzero = 0,
-  bool * pwidened = 0);
+  bool * pwidened = 0,
+  int finalTime = -1);
 
 
 class TvSimplifierAction : public Model::Action {

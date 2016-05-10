@@ -113,7 +113,7 @@ public:
    * Print circuit graph in dot format.
    */
   void exec() {
-    ExprAttachment const *eat = 
+    ExprAttachment const * const eat = 
       (ExprAttachment const *) _model.constAttachment(Key::EXPR);
     assert(eat != 0);
     std::cout << eat->circuitGraph();
@@ -193,7 +193,7 @@ public:
       else
         filename = "test.aig";
       model().AIGER(filename);
-    } catch (std::runtime_error& e) {
+    } catch (std::runtime_error const & e) {
       std::cout << "print_aiger failed: " << e.what() << std::endl;
     }
   }
@@ -306,7 +306,7 @@ public:
   }
   void exec()
   {
-    ExprAttachment const *eat = (ExprAttachment *)model().constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *)model().constAttachment(Key::EXPR);
     eat->info();
     model().constRelease(eat);
   }

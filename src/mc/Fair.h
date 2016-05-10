@@ -39,14 +39,22 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** @file Fair.h **/
 
+#include "AbsInt.h"
+#include "BddAttachment.h"
 #include "CNFAttachment.h"
 #include "COI.h"
 #include "ExprAttachment.h"
 #include "IC3.h"
+#include "IIC.h"
 #include "MC.h"
 #include "Model.h"
+#include "PhaseAbstraction.h"
 #include "ProofAttachment.h"
 #include "RchAttachment.h"
+#include "SATSweep.h"
+#include "SequentialEquivalence.h"
+#include "Simplifier.h"
+#include "StuckAt.h"
 
 #include <ostream>
 #include <boost/program_options.hpp>
@@ -66,6 +74,7 @@ namespace Fair {
       global_last = false;
       iictl = false;
       timeout = opts["fair_timeout"].as<int>();
+      doPhase = opts.count("fair_phase") > 0;
     }
     IC3::IC3Options ic3_opts;
     int k;
@@ -76,6 +85,7 @@ namespace Fair {
     bool global_last;
     bool iictl;
     int timeout;
+    bool doPhase;
   };
 
   MC::ReturnValue check(Model & m, FairOptions & opts, Lasso * lasso = NULL,
@@ -106,9 +116,51 @@ namespace Fair {
       FairOptions opts(options());
       if (_opts) opts = *_opts;
 
-      MC::ReturnValue rv = check(model(), opts);
+      MC::ReturnValue rv;
+      if (opts.doPhase){
+	Model fairModel(model());
+	(void) fairModel.newBddManager(Cudd());
+	//fairModel.setView(fairModel.newView());
+	PhaseAbstractionAction(fairModel).make();
+        SeqAttachment const * const seat = (SeqAttachment const *)
+          fairModel.constAttachment(Key::SEQ);
+        bool unrolled = seat->unrollings > 1;
+        fairModel.constRelease(seat);
+        if (!unrolled)
+          return;
+        COIAction(fairModel).make();
+        StuckAtAction(fairModel).make();
+        SequentialEquivalenceAction(fairModel).make();
+        COIAction(fairModel).make();
+        BddSweepAction(fairModel).make();
+        ::Action::SATSweepAction(fairModel).make();
+        COIAction(fairModel).make();
+	TvSimplifierAction fairTvs(fairModel);
+	fairTvs.makeDeps();
+        fairTvs.make();
+        ProofAttachment const * const fpat = (ProofAttachment const *)
+          fairModel.constAttachment(Key::PROOF);
+        if (fpat->hasConclusion()) {
+          int conclusion = fpat->conclusion();
+          fairModel.constRelease(fpat);
+          rv.returnType = (conclusion == 0) ? MC::Proof : MC::CEX;
+        } else {
+          fairModel.constRelease(fpat);
+          COIAction(fairModel).make();
+          AbsIntAction(fairModel).make();
+          COIAction(fairModel).make();
+          FairAction fairAction(fairModel);
+          fairAction.makeDeps();
+          rv = check(fairModel, opts);
+        }
+      }
+      else{
+        rv = check(model(), opts);
+      }
       if (rv.returnType != MC::Unknown) {
-        ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+        if (model().verbosity() > Options::Silent)
+          std::cout << "Conclusion found by Fair." << std::endl;
+        auto pat = model().attachment<ProofAttachment>(Key::PROOF);
         if (rv.returnType == MC::Proof)
           pat->setConclusion(0);
         else if (rv.returnType == MC::CEX)

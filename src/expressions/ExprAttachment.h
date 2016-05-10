@@ -59,39 +59,40 @@ public:
     prefer(Key::AIG, &f);
     toNothing();
   }
-  ExprAttachment(const ExprAttachment& from);
+  ExprAttachment(const ExprAttachment& from); //Is probably no longer needed
+  ExprAttachment(const ExprAttachment& from, Model & model);
   ExprAttachment& operator=(ExprAttachment& rhs);
-  ~ExprAttachment() {}
+  ~ExprAttachment(void) {}
 
   /** Return the key of this type of attachment. */
-  Key::Type key() const { return Key::EXPR; }
+  Key::Type key(void) const { return Key::EXPR; }
   /** Build the model when necessary. */
-  void build();
+  void build(void);
 
   /** Add an input variable to the model. */
   void addInput(const ID);
   /** Add input variables to the model. */
   void addInputs(const std::vector<ID>&);
   /** Discard the current inputs of the model. */
-  void clearInputs();
+  void clearInputs(void);
   /** Mark an existing state variable as an automaton state variable. */
   void addAutStateVar(const ID);
   /** Mark existing state variables as automaton state variables. */
   void addAutStateVars(const std::vector<ID>&);
   /** Clear all marked automaton state variables. */
-  void clearAutStateVars();
+  void clearAutStateVars(void);
   /** Add a state variable and its update function to the model. */
   void setNextStateFn(const ID, const ID);
   /** Add state variables and their update functions to the model. */
   void setNextStateFns(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current next state functions of the model. */
-  void clearNextStateFns();
+  void clearNextStateFns(void);
   /** Add an output variable and its defining function to the model. */
   void setOutputFn(const ID, const ID);
   /** Add output variables and their defining functions to the model. */
   void setOutputFns(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current output functions of the model. */
-  void clearOutputFns();
+  void clearOutputFns(void);
   /**
    * Add one expression to the list of initial conditions.
    *
@@ -105,74 +106,82 @@ public:
    */
   void addInitialConditions(const std::vector<ID>&);
   /** Discard the current initial conditions of the model. */
-  void clearInitialConditions();
+  void clearInitialConditions(void);
   /** Add one expression to the list of constraints. */
   void addConstraint(const ID, const ID);
   /** Add expressions to the list of constraints. */
   void addConstraints(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current relational constraints of the model. */
-  void clearConstraints();
+  void clearConstraints(void);
   /** Add bad variable and its defining function to the model. */
   void setBadFn(const ID, const ID);
   /** Add bad variables and their defining functions to the model. */
   void setBadFns(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current bad assertions. */
-  void clearBadFns();
+  void clearBadFns(void);
   /** Add Buechi fairness variable and its defining function to the model. */
   void setFairnessFn(const ID, const ID);
   /** Add Buechi fairness variables and their defining function to the model. */
   void setFairnessFns(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current Buechi constraints of the model. */
-  void clearFairnessFns();
+  void clearFairnessFns(void);
   /** Deprecated */
   void addFairnessConstraint(const ID);
-  void clearFairnessConstraints() { clearFairnessFns(); }
+  void clearFairnessConstraints(void) { clearFairnessFns(); }
   /** Add one justice set. */
   void setJusticeSet(const ID, const std::vector<ID> &);
   /** Discard the current justice constraints of the model. */
-  void clearJusticeSets();
+  void clearJusticeSets(void);
   /** Add one CTL property */
   void addCtlProperty(const ID);
   /** Add CTL properties */
   void addCtlProperties(const std::vector<ID> &);
   /** Discard the current CTL properties of the model. */
-  void clearCtlProperties();
+  void clearCtlProperties(void);
   /** Add one automaton */
   void addAutomaton(const Automaton &);
   /** Add automata */
   void addAutomata(const std::vector<Automaton> &);
   /** Discard the current automata of the model. */
-  void clearAutomata();
+  void clearAutomata(void);
+  /** Add an expression to the list of invariants */
+  void addInvariant(const ID);
+  /** Add expressions to the list of invariants */
+  void addInvariants(const std::vector<ID>&);
+  /** Discard the current invariants of the model. */
+  void clearInvariants(void);
+  /** Saves initial model info. */
+  void saveInitialModelInfo(void);
   /** Return a vector with the input variables of the model. */
-  const std::vector<ID>& inputs() const { return _inputs; }
+  const std::vector<ID>& inputs(void) const { return _inputs; }
   /** Return a vector with the state variables of the automaton. */
-  const std::vector<ID>& autStateVars() const { return _aut_state_vars; }
+  const std::vector<ID>& autStateVars(void) const { return _aut_state_vars; }
   /** Return a vector with the state variables of the model. */
-  const std::vector<ID>& stateVars() const { return _state_vars; }
+  const std::vector<ID>& stateVars(void) const { return _state_vars; }
   /** Return a vector with the next state functionss of the model. */
-  const std::vector<ID>& nextStateFns() const { return _next_state_fns; }
+  const std::vector<ID>& nextStateFns(void) const { return _next_state_fns; }
   /** Return a vector with the output variables of the model. */
-  const std::vector<ID>& outputs() const { return _outputs; }
+  const std::vector<ID>& outputs(void) const { return _outputs; }
   /** Return a vector with the output variables of the model. */
-  const std::vector<ID>& outputFns() const { return _output_fns; }
+  const std::vector<ID>& outputFns(void) const { return _output_fns; }
   /** Return a vector with the bad variables of the model. */
-  const std::vector<ID>& bad() const { return _bad; }
+  const std::vector<ID>& bad(void) const { return _bad; }
   /** Return a vector with the bad functions of the model. */
-  const std::vector<ID>& badFns() const { return _bad_fns; }
+  const std::vector<ID>& badFns(void) const { return _bad_fns; }
   /** Return a vector with the justice variables of the model. */
-  const std::vector<ID>& constraints() const { return _constraints; }
+  const std::vector<ID>& constraints(void) const { return _constraints; }
   /** Return a vector with the invariant constraints. */
-  const std::vector<ID>& constraintFns() const { return _constraint_fns; }
+  const std::vector<ID>& constraintFns(void) const { return _constraint_fns; }
   /** Return a vector with the justice variables of the model. */
-  const std::vector<ID>& justice() const { return _justice; }
+  const std::vector<ID>& justice(void) const { return _justice; }
   /** Return a vector with the justice sets of the model. */
-  const std::vector< std::vector<ID> >& justiceSets() const { return _justice_fn_sets; }
+  const std::vector< std::vector<ID> >& justiceSets(void) const { return _justice_fn_sets; }
   /** Return a vector with the fairness variables of the model. */
-  const std::vector<ID>& fairness() const { return _fairness; }
+  const std::vector<ID>& fairness(void) const { return _fairness; }
   /** Return a vector with the fairness functions of the model. */
-  const std::vector<ID>& fairnessFns() const { return _fairness_fns; }
+  const std::vector<ID>& fairnessFns(void) const { return _fairness_fns; }
   /** Return a vector with the initial conditions of the model. */
-  const std::vector<ID>& initialConditions() const { return _initial_cond; }
+  const std::vector<ID>& initialConditions(void) const { return _initial_cond; }
   /** Look up the function associated with the given state variable. */
   ID nextStateFnOf(const ID varId) const;
   /** Vectorized "nextStateFnOf(ID)". */
@@ -194,13 +203,15 @@ public:
   /** Vectorized "fairnessFnOf(ID)". */
   std::vector<ID> fairnessFnOf(const std::vector<ID>&) const;
   /** Deprecated */
-  std::vector<ID> fairnessConstraints() const;
+  std::vector<ID> fairnessConstraints(void) const;
   /** Look up the function associated with the given justice variable. */
   const std::vector<ID> & justiceSetOf(const ID varId) const;
   /** Return a vector with the CTL properties. */
-  const std::vector<ID>& ctlProperties() const { return _ctl_properties; }
+  const std::vector<ID>& ctlProperties(void) const { return _ctl_properties; }
   /** Return a vector with the automata. */
-  const std::vector<Automaton>& automata() const { return _automata; }
+  const std::vector<Automaton>& automata(void) const { return _automata; }
+  /** Return a vector with the invariants of the model. */
+  const std::vector<ID>& invariants(void) const { return _invariants; }
   /** True if id is an input, output, or state variable of the model. */
   bool isVariable(const ID id) const;
   /** True if id is an input of the model. */
@@ -226,9 +237,9 @@ public:
   /** Describes a model's circuit graph in dot format. */
   std::string circuitGraph(bool terse = true) const;
   /** Describes a model in Verilog. */
-  std::string verilog() const;
+  std::string verilog(void) const;
   /** Describes a model in Blif-MV. */
-  std::string blifMv() const;
+  std::string blifMv(void) const;
   /** Describes a model in AIGER. */
   void AIGER(std::string filename) const;
   /** Output status information of a model **/
@@ -239,6 +250,14 @@ public:
   /** Return the set of latches + internal nodes in the support of an expression **/
   void supportNodes(Expr::Manager::View & v, ID id, std::set<ID> & intNodes) const;
   void supportNodes(Expr::Manager::View & v, std::vector<ID> ids, std::set<ID> & intNodes) const;
+  /** Return a vector with the original input variables of the model. */
+  const std::vector<ID>& originalInputs(void) const { return _original_inputs; }
+  /** Return a vector with the original state variables of the model. */
+  const std::vector<ID>& originalStateVars(void) const { return _original_state_vars; }
+  /** Return a vector with the original next state functionss of the model. */
+  const std::vector<ID>& originalNextStateFns(void) const { return _original_next_state_fns; }
+  /** Return a vector with the original initial conditions of the model. */
+  const std::vector<ID>& originalInitialConditions(void) const { return _original_initial_cond; }
 
   class Factory : public Model::AttachmentFactory {
   public:
@@ -248,7 +267,7 @@ public:
   };
 
 protected:
-  ExprAttachment* clone() const { return new ExprAttachment(*this); }
+  ExprAttachment* clone(Model & model) const { return new ExprAttachment(*this, model); }
 private:
   typedef std::vector<ID> mod_vec;
   typedef mod_vec::iterator v_iter;
@@ -264,7 +283,7 @@ private:
       var_folder(Expr::Manager::View & v, const mod_map & vars_map,
           std::set<ID> & vars) : 
         Expr::Manager::View::Folder(v), _vars_map(vars_map), _vars(vars) {}
-      virtual ID fold(ID id, int n, const ID * const args) {
+      virtual ID fold(ID id, int, const ID * const) {
         if (view().op(id) == Expr::Var && _vars_map.find(id) != _vars_map.end())
           _vars.insert(id);
         return id;
@@ -280,7 +299,7 @@ private:
     public:
       node_folder(Expr::Manager::View & v, std::set<ID> & nodes) : 
         Expr::Manager::View::Folder(v),  _nodes(nodes) {}
-      virtual ID fold(ID id, int n, const ID * const args) {
+      virtual ID fold(ID id, int, const ID * const) {
         if (view().op(id) != Expr::Not && view().op(id) != Expr::True)
           _nodes.insert(id);
         return id;
@@ -321,6 +340,11 @@ private:
   mod_map _justice_var_to_fn_set;
   mod_map _fairness_var_to_fn;
   std::vector<Automaton> _automata;
+  mod_vec _invariants;
+  mod_vec _original_inputs;
+  mod_vec _original_state_vars;
+  mod_vec _original_next_state_fns;
+  mod_vec _original_initial_cond;
 };
 
 #endif // _ExprAttachment_

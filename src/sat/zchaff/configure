@@ -3151,11 +3151,11 @@ ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
-# If -std=c++0x is added to CXXFLAGS instead of CPPFLAGS, the tests that
+# If -std=c++11 is added to CXXFLAGS instead of CPPFLAGS, the tests that
 # run the preprocessor do not use this flag.  However, the linker does not
-# use CPPFLAGS.  Hence, we add -std=c++0x to LDFLAGS as well.
-: ${AM_CPPFLAGS="-std=c++0x"}
-: ${AM_LDFLAGS="-std=c++0x"}
+# use CPPFLAGS.  Hence, we add -std=c++11 to LDFLAGS as well.
+: ${AM_CPPFLAGS="-std=c++11"}
+: ${AM_LDFLAGS="-std=c++11"}
 
 # Distribute additional compiler flags to Makefiles.
 

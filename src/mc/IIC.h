@@ -90,11 +90,50 @@ namespace IIC {
 
 
   /**
+   * Executes the reduced preprocessing tactic sequence.
+   */
+  class HalfPreProcessAction : public Model::Action {
+  public:
+    HalfPreProcessAction(Model & m) : Model::Action(m) {
+    }
+    void exec();
+  private:
+    static ActionRegistrar action;
+  };
+
+
+  /**
    * Executes the sequential reduction tactic sequence.
    */
   class SequentialReductionAction : public Model::Action {
   public:
     SequentialReductionAction(Model & m) : Model::Action(m) {
+    }
+    void exec();
+  private:
+    static ActionRegistrar action;
+  };
+
+
+  /**
+   * Executes the "HWMCC" tactic sequence.
+   */
+  class HwmccAction : public Model::Action {
+  public:
+    HwmccAction(Model & m) : Model::Action(m) {
+    }
+    void exec();
+  private:
+    static ActionRegistrar action;
+  };
+
+
+  /**
+   * Sets global options for the "standard" tactic sequence.
+   */
+  class StandardOptionsAction : public Model::Action {
+  public:
+    StandardOptionsAction(Model & m) : Model::Action(m) {
     }
     void exec();
   private:

@@ -24,7 +24,11 @@ mc_MC_sources = \
   src/mc/IIC.h \
   src/mc/IIC.cpp \
   src/mc/BddGSH.h \
-  src/mc/BddGSH.cpp
+  src/mc/BddGSH.cpp \
+  src/mc/Persist.h \
+  src/mc/Persist.cpp \
+  src/mc/KLive.h \
+  src/mc/KLive.cpp
 
 iimc_SOURCES += $(mc_MC_sources)
 

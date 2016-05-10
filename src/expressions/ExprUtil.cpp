@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <stack>
 #include <climits>
+#include <iostream>
 
 using namespace std;
 
@@ -131,6 +132,7 @@ namespace Expr {
   }
 
   string stringOf(Manager::View & v, ID id, int indent) {
+
     class print_folder : public Manager::View::Folder {
     public:
       print_folder(Manager::View & v, ID bid, int _indent) : Manager::View::Folder(v), buf(), bid(bid) {
@@ -165,7 +167,7 @@ namespace Expr {
         //  buf << endl;
         return id;
       }
-      string out() { 
+      string out() {
         return buf.str();
       }
     private:
@@ -197,7 +199,7 @@ namespace Expr {
   public:
     var_folder(Manager::View & v, set<ID> & vset) : Manager::View::Folder(v), vset(vset) {}
 
-    virtual ID fold(ID id, int n, const ID * const args) {
+    virtual ID fold(ID id, int, const ID * const) {
       if (view().op(id) == Var)
         vset.insert(id);
       return id;
@@ -217,9 +219,15 @@ namespace Expr {
     v.fold(vf, ids);
   }
 
+  void complement(Manager::View & v, const vector<ID> & ids, vector<ID> & rv) {
+    for (vector<ID>::const_iterator it = ids.begin(); it != ids.end(); ++it) {
+      rv.push_back(v.apply(Not, *it));
+    }
+  }
+
   class prime_folder : public Manager::View::Folder {
   public:
-    prime_folder(Manager::View & v, int n) : Manager::View::Folder(v) { 
+    prime_folder(Manager::View & v, int n) : Manager::View::Folder(v) {
       this->nprimes = n;
     }
     virtual ID fold(ID id, int n, const ID * const args) {
@@ -247,31 +255,39 @@ namespace Expr {
 
   class sub_folder : public Manager::View::Folder {
   public:
-    sub_folder(Manager:: View & v, const IDMap & _sub) : Manager::View::Folder(v), sub(_sub) {}
+    sub_folder(Manager:: View & v, const IDMap & _sub, IDMap * oldToNew) : Manager::View::Folder(v), sub(_sub), o2n(oldToNew) {}
 
     virtual ID fold(ID id, int n, const ID * const args) {
       if (view().op(id) == Var) {
         IDMap::const_iterator it = sub.find(id);
-        if (it != sub.end())
+        if (it != sub.end()) {
+          if (o2n)
+            o2n->insert(IDMap::value_type(id, it->second));
           return it->second;
+        }
         else
           return id;
       }
-      else
-        return Manager::View::Folder::fold(id, n, args);
+      else {
+        ID newId = Manager::View::Folder::fold(id, n, args);
+        if (o2n)
+          o2n->insert(IDMap::value_type(id, newId));
+        return newId;
+      }
     }
 
   private:
     const IDMap & sub;
+    IDMap * o2n;
   };
 
-  ID varSub(Manager::View & v, const IDMap & sub, ID id) {
-    sub_folder sf(v, sub);
+  ID varSub(Manager::View & v, const IDMap & sub, ID id, IDMap * oldToNew) {
+    sub_folder sf(v, sub, oldToNew);
     return v.fold(sf, id);
   }
 
-  void varSub(Manager::View & v, const IDMap & sub, IDVector & ids) {
-    sub_folder sf(v, sub);
+  void varSub(Manager::View & v, const IDMap & sub, IDVector & ids, IDMap * oldToNew) {
+    sub_folder sf(v, sub, oldToNew);
     v.fold(sf, ids);
   }
 
@@ -314,6 +330,14 @@ namespace Expr {
         clauses.push_back(or3(nr, na, b));
         clauses.push_back(or3(r, na, nb));
         clauses.push_back(or3(r, a, b));
+        break;
+      }
+      case Implies: {
+        assert(n == 2);
+        ID a = args[0], b = args[1];
+        clauses.push_back(or2(a, r));
+        clauses.push_back(or2(view().apply(Not, b), r));
+        clauses.push_back(or3(view().apply(Not, a), b, nr));
         break;
       }
       case ITE: {
@@ -604,7 +628,7 @@ namespace Expr {
   void parents(Manager::View & v, ID id, IDMMap & map) {
     class parents_folder : public Manager::View::Folder {
     public:
-      parents_folder(Manager::View & v, IDMMap & _map) : 
+      parents_folder(Manager::View & v, IDMMap & _map) :
         Manager::View::Folder(v), map(_map) {}
       virtual ID fold(ID id, int n, const ID * const args) {
         for (int i = 0; i < n; ++i)
@@ -698,11 +722,11 @@ namespace Expr {
       case Equiv: {
         ID id0 = args[0];
         ID id1 = args[1];
-        return view().apply(Not, 
-                            view().apply(And, 
+        return view().apply(Not,
+                            view().apply(And,
                                          view().apply(Not, view().apply(And, id0, id1)),
-                                         view().apply(Not, view().apply(And, 
-                                                                        view().apply(Not, id0), 
+                                         view().apply(Not, view().apply(And,
+                                                                        view().apply(Not, id0),
                                                                         view().apply(Not, id1)))));
       }
       case Implies:
@@ -714,8 +738,8 @@ namespace Expr {
         ID b = args[2];
         return view().apply(Not, view().apply(And,
                                               view().apply(Not, view().apply(And, c, a)),
-                                              view().apply(Not, view().apply(And, 
-                                                                             view().apply(Not, c), 
+                                              view().apply(Not, view().apply(And,
+                                                                             view().apply(Not, c),
                                                                              view().apply(Not, b)))));
       }
       case TITE:
@@ -842,7 +866,7 @@ namespace Expr {
         if (!_terse)
           _buf << ":" << id;
         _buf << "\"];\n";
-        for (int i = 0; i != n; ++i) { 
+        for (int i = 0; i != n; ++i) {
           _buf << id << " -> " << args[i] << ";\n";
         }
       }
@@ -855,10 +879,10 @@ namespace Expr {
     ostringstream _buf;
   };
 
-  std::string dotOf(Manager::View & v, 
-                    ID id, 
-                    const string name, 
-                    bool terse, 
+  std::string dotOf(Manager::View & v,
+                    ID id,
+                    const string name,
+                    bool terse,
                     bool subgraph)
   {
     std::vector<ID> idv;
@@ -870,7 +894,7 @@ namespace Expr {
                     vector<ID>& idv,
                     const string name,
                     bool terse,
-                    bool subgraph) 
+                    bool subgraph)
   {
     dot_folder dotf(v, terse);
     if (subgraph)
@@ -941,7 +965,7 @@ namespace Expr {
                              vector<ID>& idv,
                              const string name,
                              bool terse,
-                             bool subgraph) 
+                             bool subgraph)
   {
     cg_folder cgf(v, terse);
     if (subgraph)
@@ -967,7 +991,7 @@ namespace Expr {
     /**
      * Increment count.
      */
-    ID fold(ID id, int n, const ID * const args) {
+    ID fold(ID id, int, const ID * const) {
       Op op = view().op(id);
       if (op != Not)
         _count++;
@@ -1170,14 +1194,14 @@ namespace Expr {
   vector< vector< vector<ID> > >
   sortStateVarsBySccHeight(Manager::View & v, vector<ID> const & roots,
                           vector<ID> const & leaves, vector<ID> const & nsfv) {
-    assert(leaves.size() == nsfv.size());  
+    assert(leaves.size() == nsfv.size());
     vector< vector<ID> > sccs = sccsOf(v, roots, leaves, nsfv);
 
     unordered_map<ID, ID> lmap;
     for(unsigned i = 0; i < leaves.size(); ++i) {
       lmap.insert(unordered_map<ID, ID>::value_type(leaves[i], nsfv[i]));
     }
- 
+
     //Build set of state variables
     unordered_set<ID> vars(leaves.begin(), leaves.end());
 
@@ -1252,7 +1276,7 @@ namespace Expr {
 
     /*
     for(unordered_map<unsigned, unsigned>::const_iterator it = seqSCCDepths.begin();
-        it != seqSCCDepths.end(); ++it){ 
+        it != seqSCCDepths.end(); ++it){
       cout << it->second << " ";
       vector<ID> const &component = sccs[it->first];
       for(vector<ID>::const_iterator j = component.begin();
@@ -1275,7 +1299,7 @@ namespace Expr {
     }
 
     vector< vector< vector<ID> > > rv;
-    pair<multimap<unsigned, unsigned>::const_iterator, 
+    pair<multimap<unsigned, unsigned>::const_iterator,
          multimap<unsigned, unsigned>::const_iterator> ret;
     for(set<unsigned>::const_iterator it = depths.begin(); it != depths.end();
         ++it) {
@@ -1321,7 +1345,7 @@ namespace Expr {
     for(unsigned i = 0; i < leaves.size(); ++i) {
       lmap.insert(unordered_map<ID, ID>::value_type(leaves[i], nsfv[i]));
     }
- 
+
     //Build set of state variables
     unordered_set<ID> vars(leaves.begin(), leaves.end());
 
@@ -1411,7 +1435,7 @@ namespace Expr {
     }
 
     vector< vector< vector<ID> > > rv;
-    pair<unordered_multimap<unsigned, unsigned>::const_iterator, 
+    pair<unordered_multimap<unsigned, unsigned>::const_iterator,
          unordered_multimap<unsigned, unsigned>::const_iterator> ret;
     for(set<unsigned>::const_iterator it = depths.begin(); it != depths.end();
         ++it) {
@@ -1447,7 +1471,7 @@ namespace Expr {
   }
 
   string printSccQuotientGraph(Manager::View & v, vector<ID> const & roots,
-                               vector<ID> const & leaves, 
+                               vector<ID> const & leaves,
                                vector<ID> const & nsfv) {
 
     assert(leaves.size() == nsfv.size());
@@ -1457,7 +1481,7 @@ namespace Expr {
     for(unsigned i = 0; i < leaves.size(); ++i) {
       lmap.insert(unordered_map<ID, ID>::value_type(leaves[i], nsfv[i]));
     }
-    
+
     //Build set of state variables
     unordered_set<ID> vars(leaves.begin(), leaves.end());
 

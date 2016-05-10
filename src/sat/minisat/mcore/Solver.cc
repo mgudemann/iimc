@@ -25,6 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/utils/System.h"
 #include "minisat/mcore/Solver.h"
 
+namespace Random
+{
+  extern void check_future();
+}
+
 using namespace Minisat;
 
 //=================================================================================================
@@ -249,7 +254,7 @@ void Solver::cancelUntil(int level) {
 Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
-
+    Random::check_future();
     // Random decision:
     if (drand(random_seed) < random_var_freq && !order_heap.empty()){
         next = order_heap[irand(random_seed,order_heap.size())];

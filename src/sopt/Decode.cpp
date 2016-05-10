@@ -323,6 +323,10 @@ namespace Expr {
      */
     bool isRelEncoded(void);
 
+    /** Check whether the model has init and valid bits.
+     */
+    bool hasInitAndValid(void);
+
 #if 0
     /** Replace the extracted equalities with true in the AND tree
      * of the transition relation. */
@@ -793,7 +797,7 @@ namespace Expr {
   }
 
   bool PatternMatch::isEquivStruct(
-    ID id,
+    ID,
     ID const * args,
     ID const ** args0,
     ID const ** args1)
@@ -1202,38 +1206,64 @@ namespace Expr {
 
 
   /** Find the valid latch and its inputs.  This pattern matcher is quite
-   *  inflexible at this point.
+   *  inflexible.
    */
   void PatternMatch::findValid(void)
   {
     hasValid = false;
     if (!hasInit)
       return;
+    // The output should be the AND of valid and something else (lst).
     if (view().op(output) != And)
       return;
     int numArgs;
     ID const * args = view().arguments(output, &numArgs);
     if (numArgs != 2)
       return;
+    // Find which of the two inputs is valid.  We initially assume that valid
+    // is the first input; if this fails, we check the other input.
     ID candidate, lst;
+    bool second = false;
     if (view().op(args[0]) == Var) {
       candidate = args[0];
       lst = args[1];
     } else if (view().op(args[1]) == Var) {
       candidate = args[1];
       lst = args[0];
+      second = true;
     } else {
       return;
     }
     // candidate is a var: is it a latch or an input?
     unordered_map<ID,ID>::const_iterator lit = latchmap.find(candidate);
-    if (lit == latchmap.end())
-      return;
+    if (lit == latchmap.end()) {
+      if (second || view().op(args[1]) != Var)
+        return;
+      // try the other candidate
+      candidate = args[1];
+      lst = args[0];
+      second = true;
+      lit = latchmap.find(candidate);
+      if (lit == latchmap.end())
+        return;
+    }
     // Is it really valid or some other latch?  Examine the next-state function.
     ID ncandidate = lit->second;
     // Match multiplexer controlled by initialized.
-    if (view().op(ncandidate) != And)
-      return;
+    if (view().op(ncandidate) != And) {
+      if (second || view().op(args[1]) != Var)
+        return;
+      // try the other candidate
+      candidate = args[1];
+      lst = args[0];
+      second = true;
+      lit = latchmap.find(candidate);
+      if (lit == latchmap.end())
+        return;
+      ncandidate = lit->second;
+      if (view().op(ncandidate) != And)
+        return;
+    }
     args = view().arguments(ncandidate, &numArgs);
     if (numArgs != 2)
       return;
@@ -1847,6 +1877,11 @@ namespace Expr {
     return view().apply(And, view().apply(Not, a0), view().apply(Not, a1));
   }
 
+  bool PatternMatch::hasInitAndValid(void)
+  {
+    return hasInit && hasValid;
+  }
+
 } // namespace Expr
 
 
@@ -1868,13 +1903,13 @@ void decode(
     cout << "Simplified valid: " << stringOf(ev, root) << endl;
 #endif
 
-  // Make next state functions the inputs to the corresponding latches
-  // and remove initialization from latches. (Make sure they are all
-  // initialized to 0.)
-
   if (verbosity > Options::Terse)
     cout << (forward ? "Forward" : "Backward")
          << " relational encoding" << endl;
+
+  // Make next state functions the inputs to the corresponding latches
+  // and remove initialization from latches. (Make sure they are all
+  // initialized to 0.)
 
   unordered_map<ID,ID> const & ilmap = pm.inputLatchMap();
 
@@ -1936,7 +1971,10 @@ void decode(
     cand = ev.apply(Expr::And, cand, *it);
   }
   cand = Expr::varSub(ev, ilmap, cand);
-  cand = ev.apply(Expr::Or, cand, final);
+  //cand = cand | final
+  cand = ev.apply(Expr::Not, ev.apply(Expr::And, 
+            ev.apply(Expr::Not, cand),
+            ev.apply(Expr::Not, final)));
   ID var = ev.newVar("c0");
   eat->addConstraint(var, cand);
 }
@@ -1968,7 +2006,7 @@ ID makeMux(
 
 void solveInitEqns(
   Expr::Manager::View & ev,
-  ExprAttachment * eat,
+  ExprAttachment *,
   Expr::PatternMatch & pm,
   vector<ID> & initRel,
   unordered_map<ID,ID> & ismap,
@@ -2166,7 +2204,7 @@ void solveInitEqns(
 
 void solveTrelEqns(
   Expr::Manager::View & ev,
-  ExprAttachment * eat,
+  ExprAttachment *,
   Expr::PatternMatch & pm,
   vector<ID> & trueRel,
   unordered_map<ID,ID> & nsmap,
@@ -2753,11 +2791,31 @@ void decodeRel(
 }
 
 
+void updateSeqAttachment(
+  Expr::PatternMatch const & pm,
+  SeqAttachment * seat,
+  ExprAttachment const * const eat,
+  Options::Verbosity verbosity)
+{
+  if (verbosity > Options::Verbose)
+    cout << "Updating sequential attachment with decoding information" << endl;
+  seat->decoded = true;
+  seat->latchToInput = pm.latchInputMap();
+  seat->decodedInputs = eat->inputs();
+  seat->decodedStateVars = eat->stateVars();
+  seat->decodedInitialConditions = eat->initialConditions();
+  seat->decodedNextStateFns = eat->nextStateFns();
+  seat->decodedConstraintFns = eat->constraintFns();
+}
+
+
 bool match(
   Expr::Manager::View & ev,
   ExprAttachment * eat,
+  SeqAttachment * seat,
   Options::Verbosity verbosity)
 {
+  // Check for cases we don't deal with.
   if (eat->constraints().size() > 0) {
     if (verbosity > Options::Terse)
       cout << "Model has transition constraints" << endl;
@@ -2776,9 +2834,10 @@ bool match(
   vector<ID> outputFns(eat->outputFns());
   if (outputFns.size() != 1) {
     if (verbosity > Options::Terse)
-      cout << "More has more than one output" << endl;
+      cout << "Model does not have exactly one output" << endl;
     return false;
   }
+  // Plain old model: we can give it a try.  Collect info.
   vector<ID> inputs(eat->inputs());
   vector<ID> stateVars(eat->stateVars());
   vector<ID> nextStateFns(eat->nextStateFns());
@@ -2788,14 +2847,42 @@ bool match(
   // Check for backward encoding.
   if (pm.isEncoded(/* backward */ false)) {
     decode(ev, eat, pm, false, verbosity);
+    updateSeqAttachment(pm, seat, eat, verbosity);
     return true;
   }
+#ifdef NOTCOMP
   if (verbosity > Options::Terse)
     cout << "Checking forward relational encoding" << endl;
   if (pm.isRelEncoded()) {
     if (verbosity > Options::Terse)
       cout << "Full relational encoding" << endl;
     decodeRel(ev, eat, pm, verbosity);
+    return true;
+  }
+#endif
+  return false;
+}
+
+
+bool minimalMatch(
+  Expr::Manager::View & ev,
+  ExprAttachment const * eat,
+  RchAttachment * rat,
+  Options::Verbosity verbosity)
+{
+  vector<ID> inputs(eat->inputs());
+  vector<ID> stateVars(eat->stateVars());
+  vector<ID> nextStateFns(eat->nextStateFns());
+  vector<ID> outputFns(eat->outputFns());
+  Expr::PatternMatch pm(ev, inputs, stateVars, nextStateFns,
+                        outputFns[0], verbosity);
+
+  // Check for minimal encoding.
+  if (pm.hasInitAndValid()) {
+    rat->addPersistentSignal(pm.initialized(), true, false);
+    rat->addPersistentSignal(ev.apply(Expr::Not, pm.getValid()), false, true);
+    if (verbosity > Options::Silent)
+      cout << "Model is minimally encoded" << endl;
     return true;
   }
   return false;
@@ -2810,18 +2897,38 @@ void DecodeAction::exec(void)
   if (verbosity > Options::Silent)
     cout << "Decoding of model " << _model.name() << endl;
 
-  ExprAttachment * eat = (ExprAttachment *) _model.attachment(Key::EXPR);
+  Model::Mode mode = _model.defaultMode();
+  bool success;
 
-  Expr::Manager::View * ev = _model.newView();
+  if (mode == Model::mIC3) {
+    auto eat = _model.attachment<ExprAttachment>(Key::EXPR);
+    auto seat = _model.attachment<SeqAttachment>(Key::SEQ);
 
-  bool success = match(*ev, eat, verbosity);
+    Expr::Manager::View * ev = _model.newView();
+
+    success = match(*ev, eat.operator->(), seat.operator->(), verbosity);
+
+    delete ev;
+    _model.release(eat);
+    _model.release(seat);
+  } else if (mode == Model::mFAIR) {
+    ExprAttachment const * const eat = (ExprAttachment const *) _model.constAttachment(Key::EXPR);
+    Expr::Manager::View * ev = _model.newView();
+    auto rat = _model.attachment<RchAttachment>(Key::RCH);
+    success = minimalMatch(*ev, eat, rat.operator->(), verbosity);
+    _model.release(rat);
+    delete ev;
+    _model.constRelease(eat);
+  } else {
+    success = false;
+    if (verbosity > Options::Terse) {
+      cout << "Unsupported type of property" << endl;
+    }
+  }
   if (verbosity > Options::Terse)
     cout << (success ? "" : "un") << "successful decoding" << endl;
-  delete ev;
-  _model.release(eat);
   int64_t endTime = Util::get_user_cpu_time(); 
   if (verbosity > Options::Silent)
     cout << "Decoding completed in "
          << ((endTime - startTime) / 1000000.0) << " s" << endl;
-
 }

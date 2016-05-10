@@ -45,6 +45,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #include <iostream>
+#include <stdexcept>
+#include <cstdlib>
+#include <limits>
 
 /** Namespace of general utilities. */
 namespace Util {
@@ -64,8 +67,31 @@ namespace Util {
   size_t get_soft_as_limit();
   int64_t get_cpu_time(bool include_children_time = false);
   int64_t get_user_cpu_time(bool include_children_time = false);
+  int64_t get_thread_cpu_time(void);
   void printSystemInfo(std::ostream& os = std::cout);
   void printCpuTime(std::ostream& os = std::cout);
+  template<typename Integral>
+  Integral gcd(Integral x, Integral y)
+  {
+    if (x < 0) x = -x;
+    if (y < 0) y = -y;
+    if (x == 0 && y == 0)
+      throw std::domain_error("At least one gcd operand must be nonzero");
+    while (true) {
+      if (x == 0)
+        return y;
+      y %= x;
+      if (y == 0)
+        return x;
+      x %= y;
+    }     
+  }
+  template<typename Integral>
+  Integral lcm(Integral x, Integral y)
+  {
+    return (x / gcd(x, y)) * y;
+  }
 }
+  
 
 #endif // _Util_

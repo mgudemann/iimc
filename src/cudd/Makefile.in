@@ -156,7 +156,7 @@ libutil_a_AR = $(AR) $(ARFLAGS)
 libutil_a_LIBADD =
 am_libutil_a_OBJECTS = cpu_stats.$(OBJEXT) cpu_time.$(OBJEXT) \
 	datalimit.$(OBJEXT) prtime.$(OBJEXT) safe_mem.$(OBJEXT) \
-	qsort.$(OBJEXT)
+	qsort.$(OBJEXT) cstringstream.$(OBJEXT)
 libutil_a_OBJECTS = $(am_libutil_a_OBJECTS)
 am_testcudd_OBJECTS = testcudd.$(OBJEXT)
 testcudd_OBJECTS = $(am_testcudd_OBJECTS)
@@ -564,10 +564,10 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CFLAGS = 
-AM_CXXFLAGS = $(AM_CFLAGS)
+AM_CXXFLAGS = -std=c++11 $(AM_CFLAGS)
 noinst_LIBRARIES = libutil.a libst.a libmtr.a libepd.a libcudd.a libobj.a
 libutil_a_SOURCES = cpu_stats.c cpu_time.c datalimit.c \
-  prtime.c safe_mem.c qsort.c util.h
+  prtime.c safe_mem.c qsort.c util.h cstringstream.c cstringstream.h
 
 libst_a_SOURCES = st.h st.c
 libmtr_a_SOURCES = mtrBasic.c mtrGroup.c mtr.h mtrInt.h
@@ -699,6 +699,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu_stats.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu_time.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cstringstream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cuddAPI.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cuddAddAbs.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cuddAddApply.Po@am__quote@

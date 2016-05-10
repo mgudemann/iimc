@@ -34,8 +34,8 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
-#ifndef _Expr_
-#define _Expr_
+#ifndef EXPR_
+#define EXPR_
 
 /** @file Expr.h */
 
@@ -43,14 +43,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include "HashedStructure.h"
+#include "ExprNode.h"
 
 /** Namespace of expressions. */
 namespace Expr {
 
-  enum Op { Var, True, Not, And, Or, Equiv, Implies, ITE, BV, F, G, X, U, R, W, TITE, Eq };
-
   class Expr;
-#include "Expr_ignore.h"
 
   /**
    * A context for DAG-compressed expressions.
@@ -84,6 +82,8 @@ namespace Expr {
     public:
 
       virtual ~View();
+
+      View * clone() const;
 
       Manager & manager();
 
@@ -174,7 +174,7 @@ namespace Expr {
       class Folder {
       public:
         Folder(Manager::View & _v) : v(_v) {}
-        virtual bool filter(ID id) { return true; }
+        virtual bool filter(ID) { return true; }
         virtual ID fold(ID id, int n, const ID * const args);
         Manager::View & view() { return v; }
       private:
@@ -214,10 +214,10 @@ namespace Expr {
       class fold_fold : public HashedStructure<Expr>::Folder {
       public:
 	fold_fold(Manager::View::Folder & fo) : f(fo) {}
-	virtual bool filter(ID id, Expr * e) {
+	virtual bool filter(ID id, Expr *) {
 	  return f.filter(id);
 	}
-	virtual ID fold(ID id, Expr * e, int n, const ID * const args) {
+	virtual ID fold(ID id, Expr *, int n, const ID * const args) {
 	  return f.fold(id, n, args);
 	}
       private:

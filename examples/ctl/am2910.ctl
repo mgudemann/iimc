@@ -60,3 +60,15 @@ AG EF (
 
 #PASS: (2) The antecedent is never satisfied for the reachable states.
 AG(sp<2> & sp<1> & ~sp<0> -> AX(sp<2> & sp<1> & sp<0>))
+
+#PASS: (3)
+#the contents of the fifth entry of the stack cannot change in the
+# next clock cycle unless the stack pointer is either 4 or 5.
+AG(!(sp<2> & !sp<1> & !sp<0>) & !(sp<2> & !sp<1> & sp<0>) &
+   (reg_file<*5*><11> & !reg_file<*5*><10> & reg_file<*5*><9> & !reg_file<*5*><8> & reg_file<*5*><7> & !reg_file<*5*><6> & reg_file<*5*><5> & !reg_file<*5*><4> & reg_file<*5*><3> & !reg_file<*5*><2> & reg_file<*5*><1> & !reg_file<*5*><0>) ->
+    AX(reg_file<*5*><11> & !reg_file<*5*><10> & reg_file<*5*><9> & !reg_file<*5*><8> & reg_file<*5*><7> & !reg_file<*5*><6> & reg_file<*5*><5> & !reg_file<*5*><4> & reg_file<*5*><3> & !reg_file<*5*><2> & reg_file<*5*><1> & !reg_file<*5*><0>))
+
+#PASS: (4)
+#The antecedent is never satisfied for the reachable states.
+AG(!reg_file<*0*><11> & !reg_file<*0*><10> & !reg_file<*0*><9> & !reg_file<*0*><8> & !reg_file<*0*><7> & !reg_file<*0*><6> & !reg_file<*0*><5> & !reg_file<*0*><4> & !reg_file<*0*><3> & !reg_file<*0*><2> & reg_file<*0*><1> & !reg_file<*0*><0> -> AX(!reg_file<*0*><11> & !reg_file<*0*><10> & !reg_file<*0*><9> & !reg_file<*0*><8> & !reg_file<*0*><7> & !reg_file<*0*><6> & !reg_file<*0*><5> & !reg_file<*0*><4> & !reg_file<*0*><3> & !reg_file<*0*><2> & !reg_file<*0*><1> & reg_file<*0*><0>));
+

@@ -1,0 +1,47 @@
+#PASS: (0)
+~hlock<0> & ~hbusreq<0> & ~hlock<1> & ~hbusreq<1> & ~hlock<2> & ~hbusreq<2> & ~hlock<3> & ~hbusreq<3> & ~hlock<4> & ~hbusreq<4> & ~hlock<5> & ~hbusreq<5> & ~hlock<6> & ~hbusreq<6> & ~hlock<7> & ~hbusreq<7> & hready
+
+#PASS: (1-8)
+AG (hlock<0> -> hbusreq<0>)
+AG (hlock<1> -> hbusreq<1>)
+AG (hlock<2> -> hbusreq<2>)
+AG (hlock<3> -> hbusreq<3>)
+AG (hlock<4> -> hbusreq<4>)
+AG (hlock<5> -> hbusreq<5>)
+AG (hlock<6> -> hbusreq<6>)
+AG (hlock<7> -> hbusreq<7>)
+
+#PASS: (9-16)
+AG (~master<2> & ~master<1> & ~master<0> -> (hbusreq<0> == busreq))
+AG (~master<2> & ~master<1> &  master<0> -> (hbusreq<1> == busreq))
+AG (~master<2> &  master<1> & ~master<0> -> (hbusreq<2> == busreq))
+AG (~master<2> &  master<1> &  master<0> -> (hbusreq<3> == busreq))
+AG ( master<2> & ~master<1> & ~master<0> -> (hbusreq<4> == busreq))
+AG ( master<2> & ~master<1> &  master<0> -> (hbusreq<5> == busreq))
+AG ( master<2> &  master<1> & ~master<0> -> (hbusreq<6> == busreq))
+AG ( master<2> &  master<1> &  master<0> -> (hbusreq<7> == busreq))
+
+#PASS: (17)
+~hmastlock & ~master<2> & ~master<1> & ~master<0> & hgrant<0> & ~hgrant<1> & ~hgrant<2> & ~hgrant<3> & ~hgrant<4> & ~hgrant<5> & ~hgrant<6> & ~hgrant<7>
+
+#PASS: (18-25)
+AG (hready -> ((hgrant<0>  -> AX(~master<2> & ~master<1> & ~master<0>)) & (~hgrant<0>  -> AX~(~master<2> & ~master<1> & ~master<0>))))
+AG (hready -> ((hgrant<1>  -> AX(~master<2> & ~master<1> &  master<0>)) & (~hgrant<1>  -> AX~(~master<2> & ~master<1> &  master<0>))))
+AG (hready -> ((hgrant<2>  -> AX(~master<2> &  master<1> & ~master<0>)) & (~hgrant<2>  -> AX~(~master<2> &  master<1> & ~master<0>))))
+AG (hready -> ((hgrant<3>  -> AX(~master<2> &  master<1> &  master<0>)) & (~hgrant<3>  -> AX~(~master<2> &  master<1> &  master<0>))))
+AG (hready -> ((hgrant<4>  -> AX( master<2> & ~master<1> & ~master<0>)) & (~hgrant<4>  -> AX~( master<2> & ~master<1> & ~master<0>))))
+AG (hready -> ((hgrant<5>  -> AX( master<2> & ~master<1> &  master<0>)) & (~hgrant<5>  -> AX~( master<2> & ~master<1> &  master<0>))))
+AG (hready -> ((hgrant<6>  -> AX( master<2> &  master<1> & ~master<0>)) & (~hgrant<6>  -> AX~( master<2> &  master<1> & ~master<0>))))
+AG (hready -> ((hgrant<7>  -> AX( master<2> &  master<1> &  master<0>)) & (~hgrant<7>  -> AX~( master<2> &  master<1> &  master<0>))))
+
+#PASS: (26-32)
+AG (~hgrant<1> -> (A ~hgrant<1> W hbusreq<1>))
+AG (~hgrant<2> -> (A ~hgrant<2> W hbusreq<2>))
+AG (~hgrant<3> -> (A ~hgrant<3> W hbusreq<3>))
+AG (~hgrant<4> -> (A ~hgrant<4> W hbusreq<4>))
+AG (~hgrant<5> -> (A ~hgrant<5> W hbusreq<5>))
+AG (~hgrant<6> -> (A ~hgrant<6> W hbusreq<6>))
+AG (~hgrant<7> -> (A ~hgrant<7> W hbusreq<7>))
+
+#PASS: (33)
+AG (~hready -> AX ~arb.start)

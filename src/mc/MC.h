@@ -37,7 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifndef _MC_
 #define _MC_
 
-/** @file IC3.h **/
+/** @file MC.h **/
 
 #include "Expr.h"
 #include "SAT.h"

@@ -39,7 +39,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** @file IC3.h **/
 
-#include "BddAttachment.h"
 #include "CNFAttachment.h"
 #include "COI.h"
 #include "ExprAttachment.h"
@@ -92,7 +91,7 @@ namespace IC3 {
   struct IC3Options {
   public:
     IC3Options(const boost::program_options::variables_map & opts,
-               bool _rev = false, bool LR = false) {
+               bool _rev = false, bool LR = false, Model::Action * act = 0, std::string * _backend = NULL, int * _ctgs = NULL, int _rseed = -1) {
       reverse = _rev;
       timeout = _rev ? opts["ic3r_timeout"].as<int>() : opts["ic3_timeout"].as<int>();
       eqprop = opts.count("ic3_xeqprop") == 0;
@@ -125,10 +124,12 @@ namespace IC3 {
       leapfrog = opts.count("ic3_leapfrog");
       gen = opts["ic3_gen"].as<int>();
       propNconstr = opts.count("ic3_propagate");
-      ctgs = LR ? 0 : opts["ic3_ctg"].as<int>();
+      ctgs = LR ? 0 : _ctgs ? *_ctgs : opts["ic3_ctg"].as<int>();
+      rseed = (_rseed != -1) ? _rseed : opts["rand"].as<int>();
       stem = opts["ic3_stem"].as<int>();
       useRAT_stem = opts.count("ic3_tvstem");
       verify = opts.count("ic3_verify");
+      verify_cex = opts.count("ic3_verify_cex");
 
       abstract = LR ? 3 : opts["ic3_abstract"].as<int>();
       abs_strict = opts["ic3_absstrict"].as<int>();
@@ -138,7 +139,8 @@ namespace IC3 {
       abs_pattern = 0;
       abs_prunelo = opts["ic3_absprunelo"].as<int>();
       abs_prunehi = opts["ic3_absprunehi"].as<int>();
-      backend = opts["ic3_backend"].as<std::string>();
+      action = act;
+      backend = _backend ? *_backend : opts["ic3_backend"].as<std::string>();
       pushLast = opts.count("ic3_pushLast");
       minCex = opts.count("ic3_minCex");
     }
@@ -176,9 +178,11 @@ namespace IC3 {
     int gen;
     bool propNconstr;
     int ctgs; //0 disables CTG handling
+    int rseed;
     int stem;
     bool useRAT_stem;
     bool verify;
+    bool verify_cex;
 
     int abstract;
     int abs_strict;
@@ -191,6 +195,7 @@ namespace IC3 {
     PatternMap abs_patternMap;
     int abs_prunelo;
     int abs_prunehi;
+    Model::Action * action;
     std::string backend;
     bool pushLast;
     bool minCex;
@@ -204,32 +209,40 @@ namespace IC3 {
                         std::vector<LevClauses> * propClauses = NULL,
                         CubeSet * indCubes = NULL,
                         bool useRAT = true,
-                        bool * bmcProof = NULL);
+                        bool * bmcProof = NULL,
+                        Expr::Manager::View * ev = NULL);
 
   MC::ReturnValue reach2(Model & m, IC3Options & opts,
                          std::vector<Transition> * cex = NULL,
                          std::vector< std::vector< std::vector<ID> > > * proofs = NULL,
                          std::vector<CubeSet> * cubes = NULL,
                          std::vector<LevClauses> * propClauses = NULL,
-                         CubeSet * indCubes = NULL);
+                         CubeSet * indCubes = NULL,
+                         Expr::Manager::View * ev = NULL);
   
   bool mic(Model & m, IC3Options & opts, std::vector<ID> & cube);
 
   void postProcessProof(Model & m, std::vector< std::vector<ID> > & proof,
-      ProofProcType type, IC3Options & opts, std::vector<ID> * gprop = NULL);
+      ProofProcType type, IC3Options & opts, std::vector<ID> * gprop = NULL,
+      Expr::Manager::View * ev = NULL);
 
   class IC3Action : public Model::Action {
   public:
-    IC3Action(Model & m, bool reverse = false, bool lr = false) : Model::Action(m), reverse(reverse), LR(lr) {
+    IC3Action(Model & m, bool reverse = false, bool lr = false,
+#ifndef DISABLE_ZCHAFF
+              std::string backend = "zchaff",
+#else
+              std::string backend = "minisat",
+#endif
+              int ctgs = 3, int rseed = -1) :
+      Model::Action(m), reverse(reverse), LR(lr), backend(backend),
+      ctgs(ctgs), rseed(rseed) {
       ExprAttachment::Factory eaf;
       requires(Key::EXPR, &eaf);
       COIAttachment::Factory caf;
       requires(Key::COI, &caf);
       RchAttachment::Factory raf;
       requires(Key::RCH, &raf);
-      BddAttachment::Factory baf;
-      prefer(Key::BDD, &baf);
-      toNothing();
       AIGAttachment::Factory aaf;
       if (!m.options().count("ic3_xeqprop")) requires(Key::AIG, &aaf);
       ProofAttachment::Factory paf;
@@ -238,14 +251,31 @@ namespace IC3 {
       requires(Key::CNF, &cnfaf);
     }
     virtual void exec() {
-      IC3Options opts(options(), reverse, LR);
+      IC3Options opts(options(), reverse, LR, this, &backend, &ctgs, rseed);
       MC::ReturnValue rv;
       std::vector<Transition> cex;
       std::vector< std::vector<ID> > proof;
       rv = check(model(), opts, opts.printCex ? &cex : NULL,
           opts.printProof ? &proof : NULL);
-      ProofAttachment * pat = (ProofAttachment *) model().attachment(Key::PROOF);
+      auto pat = model().attachment<ProofAttachment>(Key::PROOF);
       if (rv.returnType != MC::Unknown) {
+        if (model().verbosity() > Options::Silent)
+	  {
+	    std::ostringstream oss;
+	    oss << "Conclusion found by IC3";
+	    if (reverse) 
+	      oss << "r";
+	    if (LR) 
+	      oss << "lr";
+	    if (backend != options()["ic3_backend"].as<std::string>())
+	      oss << backend;
+	    if (ctgs != options()["ic3_ctg"].as<int>()) 
+	      oss << "_ctg" << ctgs;
+	    if (opts.rseed != options()["rand"].as<int>())
+	      oss << "_r" << opts.rseed;
+	    oss << "." << std::endl;
+	    std::cout << oss.str();
+	  }
         if (rv.returnType == MC::Proof) {
           pat->setConclusion(0);
           if(opts.printProof) {
@@ -258,10 +288,10 @@ namespace IC3 {
           }
         }
         else if (rv.returnType == MC::CEX) {
-          pat->setConclusion(1);
           if(opts.printCex) {
             pat->setCex(cex);
           }
+          pat->setConclusion(1);
         }
       }
       model().release(pat);
@@ -269,6 +299,9 @@ namespace IC3 {
   private:
     bool reverse;
     bool LR;
+    std::string backend;
+    int ctgs;
+    int rseed;
     static ActionRegistrar action;
     static ActionRegistrar actionRev;
     static ActionRegistrar actionLR;

@@ -110,7 +110,7 @@ namespace {
 
   void di_tseitin(Model& model)
   {
-    ExprAttachment const * eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
+    ExprAttachment const * const eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
     Expr::Manager::View * view = model.newView();
 
     ID output = eat->outputFnOf(eat->outputs()[0]);
@@ -124,7 +124,7 @@ namespace {
 
   void di_nice(Model& model)
   {
-    ExprAttachment const * eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
+    ExprAttachment const * const eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
     Expr::Manager::View * view = model.newView();
 
     ID output = eat->outputFnOf(eat->outputs()[0]);
@@ -144,9 +144,9 @@ namespace {
 
   void di_techmap(Model& model)
   {
-    ExprAttachment const * eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
-    AIGAttachment const * aatc = static_cast<AIGAttachment const *>(model.constAttachment(Key::AIG));
-    AIGAttachment aat(*aatc);
+    ExprAttachment const * const eat = static_cast<ExprAttachment const *>(model.constAttachment(Key::EXPR));
+    AIGAttachment const * const aatc = static_cast<AIGAttachment const *>(model.constAttachment(Key::AIG));
+    AIGAttachment aat(*aatc, model);
     // get the options
     unsigned k = model.options()["tmcnf_k"].as<unsigned>();
     unsigned l = model.options()["tmcnf_l"].as<unsigned>();

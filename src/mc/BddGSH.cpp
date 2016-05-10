@@ -37,34 +37,43 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "options.h"
 #include "Expr.h"
 
-//typedef boost::program_options::variables_map options_map;
-
 using namespace std;
 
 namespace {
   /**
    * Convergence test of the GSH algorithm simplified
-   * for backward operators only.
+   * for same-direction operators only.
    */
-  bool converged(
-    BDD hull,
-    BDD zeta,
-    BDD init,
-    unordered_set<int>::size_type tau,
-    unordered_set<int>::size_type N,
-    unordered_set<int> & gamma) {
-    if (init <= !hull) // early termination
-      return true;
-    if (hull != zeta) {
-      gamma.clear();
-      if (tau != N-1)
+  class Convergence {
+  public:
+    Convergence(unordered_set<int> & gamma, unordered_set<int>::size_type N,
+                BDD const & init, bool forward, bool simple, bool slice) :
+      gamma(gamma), N(N), init(init), forward(forward),
+      simple(simple), slice(slice) {}
+    bool operator()(BDD & hull, BDD & zeta, unordered_set<int>::size_type tau)
+    {
+      if ((forward || slice) ? hull.IsZero() : init <= !hull)
+        // early termination
+        return true;
+      if (hull != zeta) {
+        gamma.clear();
+        if (tau != N-1 && simple)
+          gamma.insert(tau);
+        return false;
+      } else {
         gamma.insert(tau);
-      return false;
-    } else {
-      gamma.insert(tau);
-      return gamma.size() == N;
+        return gamma.size() == N;
+      }
     }
-  }
+  private:
+    unordered_set<int> & gamma;
+    unordered_set<int>::size_type N;
+    BDD const & init;
+    bool forward;
+    bool simple;
+    bool slice;
+  };
+
 
   /**
    * Choice of operator to apply next to shrink the hull.
@@ -72,8 +81,10 @@ namespace {
   unordered_set<int>::size_type pick(
     unordered_set<int>::size_type N,
     unordered_set<int> & gamma) {
-    // Simplistic schedule.
-    for (unordered_set<int>::size_type i = 0; i < N; ++i) {
+    static unordered_set<int>::size_type i = N-1;
+    // Round robin schedule.
+    unordered_set<int>::size_type j = i;
+    for (i = (i+1) % N; i != j; i = (i+1) % N) {
       if (gamma.find(i) == gamma.end())
         return i;
     }
@@ -81,41 +92,60 @@ namespace {
     return N+1;
   }
 
-  /**
-   * Find the states that satisfy invariant U target.
-   */
-  BDD until(
-    BddTrAttachment const * tat,
-    BDD invariant,
-    BDD target)
-  {
-    BDD Z = target;
-    BDD frontier = target;
-    while (!frontier.IsZero()) {
-      BDD preimgx = tat->preimg(frontier);
-      frontier = preimgx & ~Z & invariant;
-      Z |= frontier;
+  class Until {
+  public:
+    typedef BDD (BddTrAttachment::* PreImgFn)(BDD const &, bool) const;
+    Until(BddTrAttachment const * tat, PreImgFn f,
+          BDD const & inputCube, bool simple) :
+      tat(tat), f(f), inputCube(inputCube), simple(simple) {}
+    /**
+     * Find the states that satisfy hull U (fairness & hull).
+     */
+    BDD operator()(BDD hull, BDD fairness) {
+      BDD Z;
+      if (simple) {
+        Z = hull & fairness;
+      } else {
+        Z = (tat->*f)(hull, true);
+        Z = Z.AndAbstract(fairness & hull, inputCube);
+      }
+      BDD frontier = Z;
+      while (!frontier.IsZero()) {
+        BDD preimgx = (tat->*f)(frontier, false);
+        frontier = preimgx & ~Z & hull;
+        Z |= frontier;
+      }
+      return Z;
     }
-    return Z;
-  }
+  private:
+    BddTrAttachment const * tat;
+    PreImgFn f;
+    BDD const & inputCube;
+    bool simple;
+  };
 
-  /**
-   * Find the states that satisfy invariant S source.
-   */
-  BDD since(
-    BddTrAttachment const * tat,
-    BDD invariant,
-    BDD source)
-  {
-    BDD Z = source;
-    BDD frontier = source;
-    while (!frontier.IsZero()) {
-      BDD imgx = tat->img(frontier);
-      frontier = imgx & ~Z & invariant;
-      Z |= frontier;
+
+  class Since {
+  public:
+    Since(BddTrAttachment const * tat) : tat(tat) {}
+    /**
+     * Find the states that satisfy hull S (fairness & hull).
+     */
+    BDD operator()(BDD hull, BDD fairness)
+    {
+      BDD Z = hull & fairness;
+      BDD frontier = Z;
+      while (!frontier.IsZero()) {
+        BDD imgx = tat->img(frontier);
+        frontier = imgx & ~Z & hull;
+        Z |= frontier;
+      }
+      return Z;
     }
-    return Z;
-  }
+  private:
+    BddTrAttachment const * tat;
+  };
+
 
   bool dependOnStateVarsOnly(
     Cudd const & mgr,
@@ -132,6 +162,51 @@ namespace {
     }
     return true;
   }
+
+  class ToBeSat {
+  public:
+    ToBeSat(RchAttachment const * rat,
+            vector<BDD> const & fbdd,
+            vector<ID> const & fid)
+    {
+      assert(fbdd.size() == fid.size());
+      for (size_t i = 0; i != fbdd.size(); ++i) {
+        if (!rat->isSatisfiedFairnessConstraint(fid.at(i)))
+          toBe.insert(fbdd.at(i));
+      }
+    }
+    bool operator()(BDD const & fc) {
+      return toBe.find(fc) != toBe.end();
+    }
+  private:
+    set<BDD> toBe;
+  };
+
+  /** We could sort by number of minterms, but given the chance of
+   * overflow and the small size of the vectors, we just go quadratic.
+   */
+  class Subsumed {
+  public:
+    Subsumed(vector<BDD> const & f)
+    {
+      typedef vector<BDD>::size_type size_type;
+      size_type s = f.size();
+      for (size_type i = 0; i != s; ++i) {
+        BDD const & b = f.at(i);
+        for (size_type j = 0; j != s; ++j) {
+          if ((i != j && f.at(j) < b) || (i < j && f.at(j) == b)) {
+            sub.insert(b);
+            break;
+          }
+        }
+      }
+    }
+    bool operator()(BDD const & fc) {
+      return sub.find(fc) == sub.end();
+    }
+  private:
+    set<BDD> sub;
+  };
   
 }
 
@@ -140,52 +215,96 @@ void BddGSHAction::exec(void) {
   Model & m = model();
 
   Options::Verbosity verbosity = m.verbosity();
-  // Map iimc verbosity to CUDD verbosity.b
+  // Map iimc verbosity to CUDD verbosity.
   int bddVerbosity = 0;
   if (verbosity == Options::Logorrheic) bddVerbosity = 2;
   else if (verbosity > Options::Terse) bddVerbosity = 1;
 
   // Setup.
-  BddTrAttachment const * tat = 
-    (BddTrAttachment const *) m.constAttachment(Key::BDD_TR);
+  auto tat = m.attachment<BddTrAttachment>(Key::BDD_TR);
   if (tat->hasBdds() == false) {
-    m.constRelease(tat);
+    if (verbosity > Options::Silent) {
+      ostringstream oss;
+      oss << "GSH: no transition relation found: quitting" << endl;
+      cout << oss.str();
+    }
+    m.release(tat);
     return;
+  }
+
+  tat->resetBddManager("gsh_timeout");
+  size_t xvSize = tat->currentStateVars().size();
+  BDD inputCube = bddManager().bddOne();
+  vector<BDD> inputVars = tat->inputVars();
+  for (vector<BDD>::const_iterator bit = inputVars.begin();
+       bit != inputVars.end(); ++bit) {
+    inputCube &= *bit;
+  }
+
+  bool forward = m.options().count("gsh_fw");
+
+  RchAttachment const * const rat = (RchAttachment const *) m.constAttachment(Key::RCH);
+  bool hasReachable = rat->isBddForwardComplete();
+
+  if (forward && !hasReachable && verbosity > Options::Silent) {
+    ostringstream oss;
+    oss << "GSH: forward analysis without reachable states is incomplete"
+        << endl;
+    cout << oss.str();
   }
 
   // Grab initial condition and fairness conditions.
   // (FixRoots replaces outputs with fairness constraints.)
   BDD init(tat->initialCondition());
   vector<BDD> fairness(tat->invariants());
-  if (!dependOnStateVarsOnly(bddManager(), fairness, tat->currentStateVars())) {
-    ostringstream oss;
-    oss << "GSH: Fairness constraints depend on primary inputs: quitting"
-        << endl;
-    cout << oss.str();
+  ExprAttachment const * const eat =
+    (ExprAttachment const *) m.constAttachment(Key::EXPR);
+  vector<ID> fairID(eat->outputFns());
+  m.constRelease(eat);
+
+  // Prune fairness constraints.
+  ToBeSat toBeSat(rat, fairness, fairID);
+  vector<BDD>::iterator fit = stable_partition(fairness.begin(), fairness.end(), toBeSat);
+  fairness.erase(fit, fairness.end());
+
+  Subsumed subSum(fairness);
+  fit = stable_partition(fairness.begin(), fairness.end(), subSum);
+  fairness.erase(fit, fairness.end());
+
+  // Grab reachability info if present. (Use bdd_trav and bdd_save_fw_reach.)
+  BDD hull = hasReachable ?
+    rat->forwardBddLowerBound() : bddManager().bddOne();
+  m.constRelease(rat);
+
+  bool svOnly = dependOnStateVarsOnly(bddManager(), fairness,
+                                      tat->currentStateVars());
+  if (forward && !svOnly) {
+    if (verbosity > Options::Silent) {
+      ostringstream oss;
+      oss << "GSH: Fairness constraints that depend on primary inputs\n"
+          << "     are currently incompatible with gsh_fw: quitting"
+          << endl;
+      cout << oss.str();
+    }
+    m.release(tat);
     return;
   }
 
-  tat->resetBddManager("gsh_timeout");
-  size_t xvSize = tat->currentStateVars().size();
-
-  bool forward = m.options().count("gsh_fw");
-
-  // Grab reachability info if present. (Use bdd_trav and bdd_save_fw_reach.)
-  RchAttachment const *rat = 
-    (RchAttachment const *) m.constAttachment(Key::RCH);
-  bool hasReachable = rat->isBddForwardComplete();
-  BDD hull;
-  if (hasReachable)
-    hull = rat->forwardBddLowerBound();
-  else
-    hull = bddManager().bddOne();
-  m.constRelease(rat);
-
-  if (forward && !hasReachable){
+  bool slice = !forward && m.options().count("gsh_slice");
+  if (slice && !hasReachable && verbosity > Options::Silent) {
     ostringstream oss;
-    oss << "GSH: forward analysis currently requires reachable states: quitting"
-        << endl;
+    oss << "GSH: gsh_slice without reachable states is incomplete" << endl;
     cout << oss.str();
+  }
+
+  if (slice && tat->buildGSHTR() == false) {
+    if (verbosity > Options::Silent) {
+      ostringstream oss;
+      oss << "GSH: construction of sliced transition relation failed: quitting"
+          << endl;
+      cout << oss.str();
+    }
+    m.release(tat);
     return;
   }
 
@@ -201,12 +320,19 @@ void BddGSHAction::exec(void) {
       oss << fairness.size() << " fairness constraints" << endl;
       cout << oss.str();
     }
+    Until::PreImgFn preImgPtr =
+      slice ? &BddTrAttachment::preimgGSH : &BddTrAttachment::preimg;
+    Until until(tat.operator->(), preImgPtr, inputCube, svOnly);
+    Since since(tat.operator->());
+
     BDD zeta = bddManager().bddZero();
     unordered_set<int> gamma;
     // Number of operators.  EX/EY is N-1.
     unordered_set<int>::size_type N = fairness.size() + 1;
     unordered_set<int>::size_type tau = N-1;
-    while (!converged(hull, zeta, init, tau, N, gamma)) {
+    Convergence converged(gamma, N, init, forward, svOnly, slice);
+
+    while (!converged(hull, zeta, tau)) {
       if (bddVerbosity > 0) {
         ostringstream oss;
         oss << "iteration " << step;
@@ -225,39 +351,59 @@ void BddGSHAction::exec(void) {
       }
       if (tau != N-1) {
         if (forward)
-          hull = since(tat, hull, fairness[tau] & hull);
+          hull = since(hull, fairness[tau]);
         else
-          hull = until(tat, hull, fairness[tau] & hull);
+          hull = until(hull, fairness[tau]);
       } else {
         if (forward)
           hull &= tat->img(hull);
         else
-          hull &= tat->preimg(hull);
+          hull &= ((*tat).*preImgPtr)(hull, false);
       }
     }
     if (bddVerbosity > 0) {
       cout << "Hull: ";
       hull.print(xvSize,bddVerbosity);
     }
-    // To be fixed for forward && !hasReachable
-    bool empty = init <= !hull;
-    ProofAttachment * pat = (ProofAttachment *) m.attachment(Key::PROOF);
-    assert(pat != 0);
-    pat->setConclusion(empty ? 0 : 1);
-    m.release(pat);
-    if (verbosity > Options::Silent) {
+    // Since forward and slice are incomplete if !hasReachable, we check
+    // separately for emptiness and nonemptiness.
+    // If hasReachable, the hull is all reachable, and languange emptiness
+    // means hull emptiness.
+    bool empty = (forward || slice) ? hull.IsZero() : init <= !hull;
+    bool nonEmpty =
+      (forward || slice) ? (hasReachable && !hull.IsZero()) : !(init <= !hull);
+    if (empty || nonEmpty) { // we have a conclusion
+      auto pat = m.attachment<ProofAttachment>(Key::PROOF);
+      assert(pat != 0);
+      pat->setConclusion(empty ? 0 : 1);
+      m.release(pat);
+      if (verbosity > Options::Silent) {
+        ostringstream oss;
+        oss << "Conclusion found by GSH." << endl;
+        cout << oss.str();
+      }
+      if (verbosity > Options::Silent) {
+        ostringstream oss;
+        oss << "GSH: " << (empty ? "Empty" : "Non-empty")
+            << " language" << endl;
+        cout << oss.str();
+      }
+    } else if (verbosity > Options::Silent) {
       ostringstream oss;
-      oss << (empty ? "Empty" : "Non-empty") << " language" << endl;
+      oss << "GSH: Inconclusive run" << endl;
       cout << oss.str();
     }
-  } catch (Timeout& e) {
-    if (verbosity > Options::Silent)
-      cout << e.what() << endl;
-
+  } catch (Timeout const & e) {
+    if (verbosity > Options::Silent) {
+      ostringstream oss;
+      oss << e.what() << endl;
+      cout << oss.str();
+    }
     bddManager().ClearErrorCode();
     bddManager().UnsetTimeLimit();
     bddManager().ResetStartTime();
   }
+  m.release(tat);
   if (m.options().count("bdd_info")) {
     bddManager().info();
     ostringstream oss;
@@ -267,6 +413,5 @@ void BddGSHAction::exec(void) {
     cout << oss.str();
   }
   bddManager().UpdateTimeLimit();
-  m.constRelease(tat);
 
 } // BddGSHAction::exec

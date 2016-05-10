@@ -56,12 +56,13 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace BMC {
   struct BMCOptions {
     BMCOptions() : 
-      timeout(-1), sim(false), useCOI(false), printCex(false), 
+      timeout(-1), memlimit(0), sim(false), useCOI(false), printCex(false), 
       constraints(NULL), iictl(false), silent(false), proofProc(IC3::STRENGTHEN),
-      am(NULL), ev(NULL) {}
+      am(NULL), action(NULL), ev(NULL), rseed(-1) {}
     size_t lo;
     size_t * bound;
     int timeout;
+    long memlimit;
     bool sim;
     SAT::Clauses fwd;
     SAT::Clauses bwd;
@@ -74,7 +75,9 @@ namespace BMC {
     bool silent;
     IC3::ProofProcType proofProc;
     MC::AlternateModel * am;
+    Model::Action * action;
     Expr::Manager::View * ev;
+    int rseed;
   };
 
   // Procedure that performs BMC on the given model with the given bound.
@@ -87,7 +90,7 @@ namespace BMC {
   // Defines the basic BMC tactic.
   class BMCAction : public Model::Action {
   public:
-    BMCAction(Model &m) : Model::Action(m) {
+    BMCAction(Model &m, int rseed=-1) : Model::Action(m), rseed(rseed) {
       COIAttachment::Factory caf;
       requires(Key::COI, &caf);
       ExprAttachment::Factory eaf;
@@ -104,6 +107,7 @@ namespace BMC {
     virtual void exec();
   private:
     static ActionRegistrar action;
+    int rseed;
   };
 }
 

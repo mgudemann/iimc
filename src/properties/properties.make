@@ -38,12 +38,12 @@ test_Prop_SOURCES = \
   $(parser_Parser_sources) \
   $(util_Util_sources)
 
-src/properties/PropCtlParser.hh src/properties/PropCtlParser.cc: src/properties/PropCtlParser.yy Makefile
+src/properties/PropCtlParser.hh src/properties/PropCtlParser.cc: src/properties/PropCtlParser.yy
 	$(YACC) -o src/properties/PropCtlParser.cc $(top_srcdir)/src/properties/PropCtlParser.yy
 
-src/properties/PropCtlScanner.cc: $(top_srcdir)/src/properties/PropCtlScanner.ll src/properties/PropCtlParser.hh Makefile
+src/properties/PropCtlScanner.cc: $(top_srcdir)/src/properties/PropCtlScanner.ll src/properties/PropCtlParser.hh
 
-test_prop.sh: src/properties/test_prop.sh.in Makefile
+test_prop.sh: src/properties/test_prop.sh.in
 	$(do_subst) $< > $@
 	chmod +x $@
 

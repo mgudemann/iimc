@@ -50,11 +50,6 @@ ID var(Expr::Manager::View & ev, ID lit) {
   }
 }
 
-void complement(Expr::Manager::View & ev, const vector<ID> & in, vector<ID> & out) {
-  for (vector<ID>::const_iterator it = in.begin(); it != in.end(); it++)
-    out.push_back(ev.apply(Expr::Not, *it));
-}
-
 void printVector(Expr::Manager::View & ev, const vector<ID> & c) {
   for (vector<ID>::const_iterator it = c.begin(); it != c.end(); it++)
     cout << Expr::stringOf(ev, *it) << " ";
@@ -94,7 +89,7 @@ int slice(SAT::Manager::View * init, SAT::Manager::View * cons, Expr::Manager::V
         //Check consecution
         SAT::GID gid = cons->newGID();
         vector<ID> cls;
-        complement(ev, cube, cls);
+        Expr::complement(ev, cube, cls);
         cons->add(cls, gid);
         vector<ID> assumps;
         for (vector<ID>::const_iterator it2 = cube.begin(); it2 != cube.end(); ++it2)
@@ -148,7 +143,7 @@ void SliceAction::exec() {
   if(m.verbosity() > Options::Terse)
     cout << sig << "Checking for start bit(s)..." << endl;
   vector<ID> startBits;
-  ExprAttachment const * const eat = (ExprAttachment const * const)
+  ExprAttachment const * const eat = (ExprAttachment const *)
                                      m.constAttachment(Key::EXPR);
   ID npi = eat->outputFns()[0];
   if (npi == ev.btrue() || npi == ev.bfalse()) {
@@ -171,7 +166,7 @@ void SliceAction::exec() {
   }
   assert(startBits.size() <= 1); //Assumes SequentialEquivalence has run before
 
-  CNFAttachment const * const cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
+  CNFAttachment const * const cnfat = (CNFAttachment const *) m.constAttachment(Key::CNF);
   vector< vector<ID> > tr = cnfat->getPlainCNF();
   vector< vector<ID> > revtr = cnfat->getPlainCNF();
   m.constRelease(cnfat);
@@ -240,7 +235,7 @@ void SliceAction::exec() {
       found = slice(reverseInit, reverseCons, ev, sliced, stateVars, startBits,
                     forwardCons, discConstraints, timeout, startTime, m.verbosity());
     }
-    catch (Timeout & t) {
+    catch (Timeout const & t) {
       if (m.verbosity() > Options::Silent)
         cout << sig << "Timeout" << endl;
       break;
@@ -254,7 +249,7 @@ void SliceAction::exec() {
       found = slice(forwardInit, forwardCons, ev, sliced, stateVars, startBits,
                     reverseCons, discConstraints, timeout, startTime, m.verbosity());
     }
-    catch (Timeout & t) {
+    catch (Timeout const & t) {
       if (m.verbosity() > Options::Silent)
         cout << sig << "Timeout" << endl;
       break;
@@ -264,7 +259,7 @@ void SliceAction::exec() {
   } while (found != 0);
 
   if (!discConstraints.empty()) {
-    ExprAttachment * eat = (ExprAttachment *) m.attachment(Key::EXPR);
+    auto eat = m.attachment<ExprAttachment>(Key::EXPR);
     int i = constraints.size();
     for (vector< vector<ID> >::const_iterator it = discConstraints.begin();
          it != discConstraints.end(); ++it, ++i) {
@@ -273,7 +268,7 @@ void SliceAction::exec() {
       oss << "_dc_" << i;
       ID discConstr = ev.newVar(oss.str());
       vector<ID> cube;
-      complement(ev, *it, cube);
+      Expr::complement(ev, *it, cube);
       eat->addConstraint(discConstr, ev.apply(Expr::Not, 
                                      ev.apply(Expr::And, cube)));
     }

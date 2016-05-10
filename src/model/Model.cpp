@@ -59,10 +59,14 @@ Model::~Model() {
 
 void Model::setOptionValue(const std::string & option,
                            const boost::any & value) {
-  boost::program_options::variables_map::iterator it = 
-    _options.find(option);
-  assert(it != _options.end());
-  it->second.value() = value;
+  namespace bpo = boost::program_options;
+  bpo::variables_map::iterator it = _options.find(option);
+  if (it != _options.end()) {
+    it->second.value() = value;
+  } else {
+    _options.insert(bpo::variables_map::value_type(option, bpo::variable_value(value, false)));
+  }
+  bpo::notify(_options);
 }
 
 void Model::setOption(const std::string & option) {
@@ -93,7 +97,7 @@ std::string Model::string(bool includeDetails) const
  */
 std::string Model::dot(bool terse) const
 {
-  Attachment const *eat = constAttachment(Key::EXPR);
+  Attachment const * const eat = constAttachment(Key::EXPR);
   std::string ret = (eat == 0) ? "" : eat->dot(terse);
   constRelease(eat);
   return ret;
@@ -104,7 +108,7 @@ std::string Model::dot(bool terse) const
  */
 std::string Model::verilog() const
 {
-  Attachment const *eat = constAttachment(Key::EXPR);
+  Attachment const * const eat = constAttachment(Key::EXPR);
   std::string ret = (eat == 0) ? "" : eat->verilog();
   constRelease(eat);
   return ret;
@@ -115,7 +119,7 @@ std::string Model::verilog() const
  */
 std::string Model::blifMv() const
 {
-  Attachment const *eat = constAttachment(Key::EXPR);
+  Attachment const * const eat = constAttachment(Key::EXPR);
   std::string ret = (eat == 0) ? "" : eat->blifMv();
   constRelease(eat);
   return ret;
@@ -126,7 +130,7 @@ std::string Model::blifMv() const
  */
 void Model::AIGER(std::string filename) const
 {
-  Attachment const *eat = constAttachment(Key::EXPR);
+  Attachment const * const eat = constAttachment(Key::EXPR);
   assert(eat);
   eat->AIGER(filename);
   constRelease(eat);
@@ -165,20 +169,6 @@ void Model::detach(Model::Attachment* attachment) {
   }
 }
 
-/**
- * Retrieve the attachment associated with key.
- *
- * A null pointer is returned if no attachment for the given key exists.
- */
-Model::Attachment* Model::attachment(Key::Type key) const {
-  at_map::const_iterator iter = _attachments.find(key);
-  if (iter == _attachments.end()) {
-    return 0;
-  } else {
-    // Here we'll deal with locks when we have them.
-    return iter->second;
-  }
-}
 
 /**
  * Retrieve the attachment associated with key for read access.
@@ -194,21 +184,12 @@ Model::Attachment const * Model::constAttachment(Key::Type key) const {
 }
 
 
-/**
- * Release an attachment obtained with attachment().
- *
- * The timestamp of the attachment is increased as a side effect.
- */
-void Model::release(Model::Attachment* at) const {
-  at->updateTimestamp();
-  // Here we'll deal with locks when we have them.
-}
 
 
 /**
  * Release an attachment obtained with constAttachment().
  */
-void Model::constRelease(Model::Attachment const * at) const {
+void Model::constRelease(Model::Attachment const *) const {
   // Here we'll deal with locks when we have them.
 }
 
@@ -222,7 +203,7 @@ void Model::cloneAttachments(const Model& from)
        i != from._attachments.end(); ++i) {
     Key::Type key = i->first;
     Model::Attachment *fat = i->second;
-    Model::Attachment *tat = fat->clone();
+    Model::Attachment *tat = fat->clone(*this);
     _attachments[key] = tat;
   }
 }
@@ -273,7 +254,7 @@ void Model::Action::make() {
 }
 
 TS Model::Action::_make(bool action) {
-  set<Model::Action*> visited;
+  set<Model::Action const *> visited;
   TS mrts = mostRecentTimeStamp(visited);
   if (mrts == 0) mrts = Model::nextTimestamp();
   if (mrts > _ts) {
@@ -281,7 +262,7 @@ TS Model::Action::_make(bool action) {
          i != _dep.end(); ++i) {
       for (std::vector<Key::Type>::const_iterator ti = i->begin(); ti != i->end(); ++ti) {
         Key::Type key = *ti;
-        Model::Attachment *at = _model.attachment(key);
+        Model::Attachment *at = (Model::Attachment *) _model.constAttachment(key);
         if (at != 0 && (!at->empty() || ti+1 == i->end())) {
           mrts = max(mrts, at->_make(false));
           break;
@@ -296,7 +277,7 @@ TS Model::Action::_make(bool action) {
   return _ts;
 }
 
-TS Model::Action::mostRecentTimeStamp(set<Model::Action*>& visited)
+TS Model::Action::mostRecentTimeStamp(set<Model::Action const *>& visited) const
 {
   if (visited.find(this) != visited.end()) return _ts;
   visited.insert(this);
@@ -305,7 +286,7 @@ TS Model::Action::mostRecentTimeStamp(set<Model::Action*>& visited)
        i != _dep.end(); ++i) {
     for (std::vector<Key::Type>::const_iterator ti = i->begin(); ti != i->end(); ++ti) {
       Key::Type key = *ti;
-      Model::Attachment *at = _model.attachment(key);
+      Model::Attachment const * at = _model.constAttachment(key);
       if (at != 0 && (!at->empty() || ti+1 == i->end())) {
         mostRecent = std::max(mostRecent, at->mostRecentTimeStamp(visited));
         break;
@@ -323,6 +304,7 @@ void Model::Action::requires(Key::Type key, Model::AttachmentFactory * fact) {
 void Model::Action::prefer(Key::Type key, Model::AttachmentFactory * fact) {
   _reqBuild.push_back(ReqPair(key, fact));
 }
+
 void Model::Action::orElse(Key::Type key, Model::AttachmentFactory * fact) {
   _reqBuild.push_back(ReqPair(key, fact));
 }
@@ -331,6 +313,7 @@ void Model::Action::over(Key::Type key, Model::AttachmentFactory * fact) {
   _reqBuild.push_back(ReqPair(key, fact));
   done();
 }
+
 void Model::Action::toNothing() {
   done(false);
   _dep.back().push_back(Key::NONE);
@@ -341,7 +324,7 @@ void Model::Action::done(bool needLast) {
     vector<Key::Type> keys;
     vector<ReqPair>::iterator it = _reqBuild.begin();
     for (; it != _reqBuild.end(); ++it) {
-      if (_model.attachment(it->first) != 0)
+      if (_model.constAttachment(it->first) != 0)
         break;
       if (it+1 == _reqBuild.end() && needLast)
         _model.attach(it->second->operator()(_model));
@@ -352,6 +335,11 @@ void Model::Action::done(bool needLast) {
     _dep.push_back(keys);
     _reqBuild.clear();
   }
+}
+
+bool Model::Action::futureReady(void) const
+{
+  return _termination_flag_p && *_termination_flag_p;
 }
 
 void Model::Attachment::exec() {

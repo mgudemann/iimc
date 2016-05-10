@@ -47,15 +47,9 @@ class CNFAttachment : public Model::Attachment
 public:
   CNFAttachment(Model& model);
 
-  CNFAttachment(const CNFAttachment& other)
-    : Model::Attachment(other._model), cnf(other.cnf), _last_npi(0)
+  CNFAttachment(const CNFAttachment& other, Model & model)
+    : Model::Attachment(other, model), cnf(other.cnf), _last_npi(0)
   { }
-
-  virtual CNFAttachment& operator=(const CNFAttachment& other)
-  {
-    cnf = other.cnf;
-    return *this;
-  }
 
   virtual void build();
   
@@ -72,14 +66,14 @@ public:
     }
   };
 
-  const std::vector<std::vector<ID> >& getCNF() //const
+  const std::vector<std::vector<ID> >& getCNF(Expr::Manager::View * ev = NULL) //const
   { 
-    ExprAttachment const * eat = (ExprAttachment *) _model.constAttachment(Key::EXPR);
+    ExprAttachment const * const eat = (ExprAttachment const *) _model.constAttachment(Key::EXPR);
     ID npi = eat->outputFnOf(eat->outputs()[0]);
     _model.constRelease(eat);
     if (npi != _last_npi) {
       _last_npi = npi;
-      Expr::Manager::View * view = model().newView();
+      Expr::Manager::View * view = ev ? ev : model().newView();
       ID pi = view->apply(Expr::Not, npi);
       cnf.clear();
       cnf.insert(cnf.end(), _core_cnf.begin(), _core_cnf.end());
@@ -94,7 +88,8 @@ public:
       //cnf = simpCNF;
       //if(_model.verbosity() > Options::Terse)
       //  std::cout << "CNF after simp " << cnf.size() << std::endl;
-      delete view;
+      if (!ev)
+        delete view;
     }
     return cnf; 
   }
@@ -123,8 +118,8 @@ public:
   Expr::IDMap satIdOfId;
 
 protected:
-  virtual CNFAttachment* clone() const
-  { return new CNFAttachment(*this); }
+  virtual CNFAttachment* clone(Model & model) const
+  { return new CNFAttachment(*this, model); }
 private:
   void techMap(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);
   void tseitin(const ExprAttachment * eat, Expr::Manager::View * view, std::vector<ID>& latches, std::vector<ID>& inputs, std::vector<ID>& fns, std::vector<std::vector<ID> >& _cnf);

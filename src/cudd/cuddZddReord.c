@@ -905,6 +905,11 @@ cuddZddSifting(
             table->autoDynZ = 0; /* prevent further reordering */
             break;
         }
+        if (table->terminationCallback != NULL &&
+            table->terminationCallback(table->tcbArg)) {
+            table->autoDynZ = 0; /* prevent further reordering */
+            break;
+        }
 	x = table->permZ[var[i]];
 	if (x < lower || x > upper) continue;
 #ifdef DD_STATS

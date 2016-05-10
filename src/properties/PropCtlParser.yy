@@ -1,8 +1,12 @@
 %skeleton "lalr1.cc"                          /*  -*- C++ -*- */
-%require "2.4.1"
+%require "3.0.2"
 %defines
-%define parser_class_name "ctl_parser"
+%define parser_class_name {ctl_parser}
 %code requires {
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdeprecated-register"
+#pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#endif
 #define yylex ctllex
 #include <string>
 #include "ExprUtil.h"

@@ -70,7 +70,7 @@ public:
     // Sample queries.
     if (verbosity > Options::Terse)
       cout << "------ queries ------" << endl;
-    ExprAttachment const *at = (ExprAttachment *) m.constAttachment(Key::EXPR);
+    ExprAttachment const * const at = (ExprAttachment const *) m.constAttachment(Key::EXPR);
     Manager::View *v = m.newView();  // global view
     const IDVector sv = at->stateVars();
     if (verbosity > Options::Terse) {
@@ -93,7 +93,7 @@ public:
  */
 void LocalExprAction::build(Model& model)
 {
-  ExprAttachment *at = (ExprAttachment *) model.attachment(Key::EXPR);
+  auto at = model.attachment<ExprAttachment>(Key::EXPR);
   assert(at != 0);
   Manager::View *v = model.newView();
   v->begin_local();
@@ -178,9 +178,9 @@ int main(int argc, char **argv)
   }
 
   // Test conversion from BDD to expression.
-  BddAttachment const *bat = 
+  BddAttachment const * const bat = 
     (BddAttachment const *) model.constAttachment(Key::BDD);
-  BddTrAttachment const *tat = 
+  BddTrAttachment const * const tat = 
     (BddTrAttachment const *) model.constAttachment(Key::BDD_TR);
   Manager::View *v = model.newView();
   v->begin_local();
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
   model.constRelease(bat);
   // Test conversion from BDD to CNF.
   if (model.options().count("bdd_save_fw_reach")) {
-    RchAttachment const *rat = 
+    RchAttachment const * const rat = 
       (RchAttachment const *) model.constAttachment(Key::RCH);
     BDD rch = rat->forwardBddLowerBound();
     cout << "Reachable states";

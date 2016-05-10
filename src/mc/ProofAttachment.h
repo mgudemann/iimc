@@ -43,7 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 
 struct Transition {
-  Transition() { };
+  Transition(void) { };
   Transition(const std::vector<ID> & _state, const std::vector<ID> & _inputs) :
       state(_state), inputs(_inputs) { };
   std::vector<ID> state;
@@ -65,30 +65,36 @@ public:
     requires(Key::EXPR, &eaf);
   }
 
-  Key::Type key() const { return Key::PROOF; }
-  void build() {
+  ProofAttachment(const ProofAttachment & from, Model & model) :
+    Model::Attachment(from, model), _hasConclusion(false) { }
+
+  Key::Type key(void) const { return Key::PROOF; }
+  void build(void) {
     Options::Verbosity verbosity = _model.verbosity();
     if (verbosity > Options::Silent)
       std::cout << "Building proof attachment for model "
                 << _model.name() << std::endl;
   }
   std::string string(bool includeDetails = false) const;
-  bool hasConclusion() const { return _hasConclusion; }
-  int conclusion() const { return _safe; }
+  bool hasConclusion(void) const { return _hasConclusion; }
+  int conclusion(void) const { return _safe; }
   void printConclusion(std::ostream& os = std::cout) const;
   void setConclusion(const int conclusion) { 
     assert(conclusion == 0 || conclusion == 1);
-    _safe = conclusion; 
-    _hasConclusion = true; 
+    if (_hasConclusion) {
+      assert(_safe == conclusion);
+    } else {
+      _safe = conclusion; 
+      _hasConclusion = true;
+    }
   }
-  void restoreDroppedLatches();
-  void printCex(std::ostream& os = std::cout) const;
+  void produceEvidenceForFailure(void);
   void setCex(const std::vector<Transition> & cex) {
+    if (_cex.empty())
     _cex = cex;
   }
-
   void printProof(std::ostream& os = std::cout) const;
-  void addEquivalenceInfo();
+  void addEquivalenceInfo(void);
   void setProof(const std::vector< std::vector<ID> > & proof) {
     _proof = proof;
   }
@@ -102,9 +108,16 @@ public:
   };
 
 protected:
-  ProofAttachment* clone() const { return new ProofAttachment(*this); }
+  ProofAttachment* clone(Model & model) const { return new ProofAttachment(*this, model); }
 
 private:
+  void restoreInitialCondition(void);
+  void restoreDroppedLatches(void);
+  void decodeCounterexample(void);
+  void unfoldCounterexample(void);
+  void printCex(std::ostream& os = std::cout) const;
+  void printWitness(std::ostream& os = std::cout);
+
   bool _hasConclusion;
   int _safe;
   std::vector<Transition> _cex;

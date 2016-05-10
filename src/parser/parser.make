@@ -24,4 +24,5 @@ test_Parser_SOURCES = \
   $(sat_SAT_sources) \
   src/expressions/ExprVerilog.cpp \
   src/expressions/ExprVerilog.h \
-  src/util/UtilSystem.cpp
+  src/util/UtilSystem.cpp \
+  src/util/Random.cpp

@@ -57,7 +57,7 @@ class Exception {
 public:
   Exception(const std::string msg) throw() : _msg(msg) {}
   Exception(const Exception& from) throw() : _msg(from._msg) {}
-  std::string what() const { return _msg; }
+  std::string what() const throw() { return _msg; }
 protected:
   std::string _msg;
 };
@@ -66,9 +66,17 @@ protected:
 class InputError : public Exception {
 public: InputError(std::string msg) throw() : Exception(msg) {}
 };
+/** Exception class thrown when an engine does not complete. */
+class Incomplete : public Exception {
+public: Incomplete(const std::string msg) throw() : Exception(msg) {}
+};
 /** Exception class on time-out errors. */
-class Timeout : public Exception {
-public: Timeout(const std::string msg) throw() : Exception(msg) {}
+class Timeout : public Incomplete {
+public: Timeout(const std::string msg) throw() : Incomplete(msg) {}
+};
+/** Exception class on termination. */
+class Termination : public Incomplete {
+public: Termination(const std::string msg) throw() : Incomplete(msg) {}
 };
 /** Exception class on mem-out errors. */
 class Memout : public Exception {

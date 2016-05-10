@@ -111,7 +111,7 @@ namespace CNF
         // add to global clauses
         sview->add(clauses);
       }
-      catch(SAT::Trivial tr) {
+      catch(SAT::Trivial const & tr) {
         delete sview;
         if(tr.value() == false) {
           return std::make_pair(false, false);
@@ -144,7 +144,7 @@ namespace CNF
         SAT::GID g1 = sview->newGID();
         try {
           sview->add(assume1, g1);
-        } catch(SAT::Trivial e) {
+        } catch(SAT::Trivial const & e) {
           if(e.value()) {
             sview->remove(g1);
             return false;
@@ -164,7 +164,7 @@ namespace CNF
         SAT::GID g2 = sview->newGID();
         try {
           sview->add(assume2, g2);
-        } catch(SAT::Trivial e) {
+        } catch(SAT::Trivial const & e) {
           if(e.value()) {
             sview->remove(g2);
             return false;
@@ -188,7 +188,7 @@ namespace CNF
 #endif
 
     void check(bool option) {
-      ExprAttachment const* eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
+      ExprAttachment const * const eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
       Expr::Manager::View* view = _model.newView();
 
       // result vectors
@@ -261,7 +261,7 @@ namespace CNF
     }
 #else
     virtual void exec() {
-      ::CNFAttachment const* cat = static_cast< ::CNFAttachment const*>(model().constAttachment(Key::CNF));
+      ::CNFAttachment const * const cat = static_cast< ::CNFAttachment const*>(model().constAttachment(Key::CNF));
       model().constRelease(cat);
 
       Expr::Manager::View* view = _model.newView();
@@ -273,8 +273,8 @@ namespace CNF
 
 
 #if 0
-      CNFAttachment const* cat = static_cast< CNFAttachment const*>(model().constAttachment(Key::CNF));
-      ExprAttachment const* eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
+      CNFAttachment const * const cat = static_cast< CNFAttachment const*>(model().constAttachment(Key::CNF));
+      ExprAttachment const * const eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
       Expr::Manager::View* view = _model.newView();
 
       // result vectors

@@ -48,42 +48,20 @@ POSSIBILITY OF SUCH DAMAGE.
  */
 class BddTrAttachment : public Model::Attachment {
 public:
-  BddTrAttachment(Model& model) : Model::Attachment(model) {
+  BddTrAttachment(Model& model) :
+  Model::Attachment(model) {
     BddAttachment::Factory f;
     requires(Key::BDD, &f);
   }
   /** Copy constructor. */
-  BddTrAttachment(const BddTrAttachment& from) : 
-    Model::Attachment(from),
-    _tr(from._tr),
-    _prequantx(from._prequantx),
-    _prequanty(from._prequanty),
-    _init(from._init),
-    _xvars(from._xvars),
-    _yvars(from._yvars),
-    _inv(from._inv)
+  BddTrAttachment(const BddTrAttachment& from, Model & model) : 
+    Model::Attachment(from, model)
   {}
-  BddTrAttachment& operator=(BddTrAttachment& rhs) {
-    if (&rhs != this) {
-      _model = rhs._model;
-      if (rhs._ts == 0)
-	_ts = 0;
-      else
-	_ts = Model::newTimestamp();
-      _tr = rhs._tr;
-      _prequantx = rhs._prequantx;
-      _prequanty = rhs._prequanty;
-      _init = rhs._init;
-      _xvars = rhs._xvars;
-      _yvars = rhs._yvars;
-      _inv = rhs._inv;
-    }
-    return *this;
-  }
   /** Return the key of this type of attachment. */
   Key::Type key() const { return Key::BDD_TR; }
   std::string string(bool includeDetails = false) const;
-  void build();
+  void build(void);
+  bool buildGSHTR(void);
 
   class Factory : public Model::AttachmentFactory {
   public:
@@ -92,31 +70,41 @@ public:
     }
   };
 
-  bool hasBdds() const { return _tr.size() > 0; }
+  bool hasBdds(void) const { return _tr.size() > 0; }
   //BDD transitionRelation() const { return _tr; }
   BDD initialCondition() const { return _init; }
-  std::vector<BDD> currentStateVars() const { return _xvars; }
-  std::vector<BDD> nextStateVars() const { return _yvars; }
-  std::vector<BDD> invariants() const { return _inv; }
-  std::vector<BDD> constraints() const { return _constr; }
-  BDD img(const BDD& from) const;
-  BDD preimg(const BDD& from) const;
+  std::vector<BDD> currentStateVars(void) const { return _xvars; }
+  std::vector<BDD> nextStateVars(void) const { return _yvars; }
+  std::vector<BDD> inputVars(void) const { return _ivars; }
+  std::vector<BDD> invariants(void) const { return _inv; }
+  std::vector<BDD> outputFunctions(void) const { return _of; }
+  std::vector<BDD> constraints(void) const { return _constr; }
+  BDD img(const BDD& from, bool keepPi = false) const;
+  BDD preimg(const BDD& from, bool keepPi = false) const;
+  BDD preimgGSH(const BDD& from, bool keepPi = false) const;
   void resetBddManager(const std::string bdd_to) const;
 
 protected:
-  BddTrAttachment* clone() const { return new BddTrAttachment(*this); }
+  BddTrAttachment* clone(Model & model) const { return new BddTrAttachment(*this, model); }
 private:
   /** Transition Relation Part */
   class RelPart {
   public:
-    RelPart(BDD p, BDD fc, BDD bc) : _part(p), _fw_qc(fc), _bw_qc(bc) {}
-    BDD part() const { return _part; }
-    BDD fwQuantCube() const { return _fw_qc; }
-    BDD bwQuantCube() const { return _bw_qc; }
+    RelPart(BDD p, BDD fc, BDD fcn, BDD bc, BDD bcn)
+      : _part(p), _fw_qc(fc), _fw_qc_no_pi(fcn), _bw_qc(bc), _bw_qc_no_pi(bcn) {}
+    BDD part(void) const { return _part; }
+    BDD fwQuantCube(bool noPi = false) const {
+      return noPi ? _fw_qc_no_pi : _fw_qc;
+    }
+    BDD bwQuantCube(bool noPi = false) const {
+      return noPi ? _bw_qc_no_pi : _bw_qc;
+    }
   private:
     BDD _part;
     BDD _fw_qc;
+    BDD _fw_qc_no_pi;
     BDD _bw_qc;
+    BDD _bw_qc_no_pi;
   };
   void composeAuxiliaryFunctions(BddAttachment const * bat,
                                  BDD & f, std::unordered_map<int,ID> const & index2id);
@@ -129,7 +117,9 @@ private:
                                     Options::Verbosity verbosity) const;
   BDD quantifyLocalInputs(std::vector<BDD>& conjuncts, const BDD& qcube,
                           unsigned int limit, Options::Verbosity verbosity) const;
-  void computeSchedule(const std::vector<BDD>& conjuncts, const BDD& wCube);
+  void computeSchedule(const std::vector<BDD>& conjuncts, const BDD& wCube,
+                       std::unordered_map<int, ID> index2id,
+                       std::vector<RelPart> & tr, BDD & prequantx, BDD & prequanty);
   BDD flattenOutput(const std::vector<BDD>& conjuncts, const BDD& wCube);
   std::vector< std::vector<unsigned int> > 
   dependenceMatrix(const std::vector<BDD>& conjuncts) const;
@@ -145,9 +135,12 @@ private:
   std::vector< RelPart > _tr;
   BDD _prequantx, _prequanty;
   BDD _init;
-  std::vector<BDD> _xvars, _yvars;
+  std::vector<BDD> _xvars, _yvars, _ivars;
   std::vector<BDD> _inv;
+  std::vector<BDD> _of;
   std::vector<BDD> _constr;
+  std::vector< RelPart > _trGSH;
+  BDD _prequantxGSH, _prequantyGSH;
 };
 
 #endif // _BddTrAttachment_

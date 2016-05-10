@@ -688,6 +688,11 @@ zddGroupSifting(
             table->autoDynZ = 0; /* prevent further reordering */
             break;
         }
+        if (table->terminationCallback != NULL &&
+            table->terminationCallback(table->tcbArg)) {
+            table->autoDynZ = 0; /* prevent further reordering */
+            break;
+        }
 	xindex = var[i];
 	if (sifted[xindex] == 1) /* variable already sifted as part of group */
 	    continue;

@@ -189,7 +189,7 @@ using namespace ThreeValued;
 /** Collect information about a persistent signal. */
 PersistentSignalCard::PersistentSignalCard(
   vecSeq const & lasso,
-  ID var,
+  ID,
   vector<ID>::size_type li) : position(li)
 {
   lastTransition = 0;
@@ -216,7 +216,7 @@ PersistentSignalCard::PersistentSignalCard(
 /** Collect information about a periodic signal. */
 PeriodicSignalCard::PeriodicSignalCard(
   vecSeq const & lasso,
-  ID var,
+  ID,
   vecSeq::size_type stem,
   vector<ID>::size_type li) :
   position(li)
@@ -330,6 +330,64 @@ void findInterestingSignals(
 }
 
 
+/** Check the results of ternary simulation to extract conclusion
+ *  for progress property. */
+int checkFairnessConstraints(
+  vecSeq const & outputValues,
+  vector<ID> const & outputFns,
+  vecSeq::size_type stem,
+  vector<ID> & satisfiedFairness,
+  Expr::Manager::View & v,
+  Options::Verbosity verbosity)
+{
+  int conclusion = 1;
+  for (vector<ID>::size_type oi = 0; oi < outputFns.size(); ++oi) {
+    // A fairness constraint is definitely satisfied if it is
+    // sometimes one during the loop.  It is definitely not satisfied
+    // if it is always zero during the loop.  If all fairness
+    // constraints are definitely satisfied, the language is nonempty.
+    // If at least one constraint is definitely not satisfied, the
+    // language is empty.  Otherwise, the test is inconclusive.
+    TV val = outputValues[stem][oi];
+    bool alwaysFalse = val == TVFalse;
+    bool sometimesTrue = val == TVTrue;
+    for (vecSeq::size_type it = stem + 1; it < outputValues.size(); ++it) {
+      TV newval = outputValues[it][oi];
+      if (newval != TVFalse) {
+        alwaysFalse = false;
+        if (newval == TVTrue) {
+          sometimesTrue = true;
+        }
+      }
+    }
+
+    if (sometimesTrue) {
+      satisfiedFairness.push_back(outputFns[oi]);
+      if (verbosity > Options::Terse) {
+        ostringstream oss;
+        oss << "Fairness constraint ";
+        shortStringOfID(v, outputFns[oi], oss);
+        oss << " is definitely satisfied" << endl;
+        cout << oss.str();
+      }
+    } else {
+      if (alwaysFalse) {
+        if (verbosity > Options::Terse) {
+          ostringstream oss;
+          oss << "Fairness constraint ";
+          shortStringOfID(v, outputFns[oi], oss);
+          oss << " is definitely not satisfied" << endl;
+          cout << oss.str();
+        }
+        return 0;
+      }
+      conclusion = 2;
+    }
+  }
+  return conclusion;
+}
+
+
 /** Print the results of ternary simulation in tabular form.
  *  With "full" set to false (default) only print periodic
  *  and persistent signals.  Otherwise, print all latches.
@@ -409,29 +467,34 @@ void printReport(
   Expr::Manager::View & ev,
   vector<ID> const & sv,
   PersistentCardMap const & persistentMap,
-  PeriodicCardMap const & periodicMap)
+  PeriodicCardMap const & periodicMap,
+  bool reportOutputs)
 {
-  if (verbosity > Options::Informative) {
+  if (verbosity > Options::Informative)
     printSimulationWaves(ev, lasso, sv, persistentMap, periodicMap, verbosity > Options::Verbose);
+  if (verbosity > Options::Terse) {
     PersistentCardMap::size_type nStuck=0;
     for (PersistentCardMap::const_iterator card = persistentMap.begin();
          card != persistentMap.end(); ++card) {
       ostringstream oss;
       shortStringOfID(ev, card->first, oss);
       if (card->second.numberTransitions == 0) {
-        oss << " stuck at " << card->second.finalValue;
+        if (verbosity > Options::Informative)
+          oss << " stuck at " << card->second.finalValue;
         nStuck++;
       } else {
-        oss << " " << card->second.numberTransitions;
-        if (card->second.numberTransitions == 1) {
-          oss << " transition at " << card->second.firstTransition;
-        } else {
-          oss << " transitions between " << card->second.firstTransition
-              << " and " << card->second.lastTransition;
+        if (verbosity > Options::Informative) {
+          oss << " " << card->second.numberTransitions;
+          if (card->second.numberTransitions == 1) {
+            oss << " transition at " << card->second.firstTransition;
+          } else {
+            oss << " transitions between " << card->second.firstTransition
+                << " and " << card->second.lastTransition;
+          }
+          oss << ", initially " << card->second.initialValue
+              << ", eventually " << card->second.finalValue
+              << (card->second.wasX ? ", was X" : ", never X");
         }
-        oss << ", initially " << card->second.initialValue
-            << ", eventually " << card->second.finalValue
-            << (card->second.wasX ? ", was X" : ", never X");
       }
       if (verbosity > Options::Informative)
         cout << oss.str() << endl;
@@ -448,9 +511,11 @@ void printReport(
         cout << oss.str() << endl;
       }
     }
-    cout << "Found " << persistentMap.size() << " persistent latches ("
+    cout << "Found " << persistentMap.size() << " persistent "
+         << (reportOutputs ? "outputs" : "latches") << " ("
          << nStuck << " stuck) and "
-         << periodicMap.size() << " periodic latches" << endl;
+         << periodicMap.size() << " periodic "
+         << (reportOutputs ? "outputs" : "latches") << endl;
   }
 }
 
@@ -956,7 +1021,7 @@ void simplifyModel(
   Options::Verbosity verbosity = model.verbosity();
   implSet implications;
   unordered_map<ID,ID> equivalences;
-  ExprAttachment * eat = (ExprAttachment *) model.attachment(Key::EXPR);
+  auto eat = model.attachment<ExprAttachment>(Key::EXPR);
   if (eat->stateVars().size() > 600)
     findImplicationsLight(ev, ignore, persistentMap, periodicMap, lasso,
                           implications, equivalences, verbosity);
@@ -1028,26 +1093,40 @@ void simplifyTV(
   vector<ID> & outputFns,
   vector<ID> const & init,
   unordered_map<ID,ID> const & assignments,
+  vecSeq & lasso,
+  PersistentCardMap & persistentMap,
+  PeriodicCardMap & periodicMap,
+  vector<ID> & satisfiedFairness,
   Options::Verbosity verbosity,
   bool allowWidening,
   int * pconclusion,
+  Model::Mode mode,
   unsigned int * pstemLength,
   unsigned int * ploopLength,
   unsigned int * pstabilized,
   unsigned int * pfirstNonzero,
-  bool * pwidened)
+  bool * pwidened,
+  int finalTime)
 {
+  vecSeq outputValues;
   // Ternary simulation to find periodic and persistent signals.
-  vecSeq lasso;
-  vecSeq::size_type stem = ThreeValued::computeLasso(ev, init, outputFns, aat, lasso,
-                                                     verbosity, allowWidening, pconclusion,
-                                                     pfirstNonzero, pwidened);
+  vecSeq::size_type stem =
+    ThreeValued::computeLasso(ev, init, outputFns, aat, lasso, outputValues,
+                              verbosity, allowWidening, pconclusion, mode,
+                              pfirstNonzero, pwidened, finalTime);
 
-  if (pconclusion != 0 && *pconclusion != 2) return;
+  if (pconclusion != 0) {
+    if (mode == Model::mFAIR) {
+      if (verbosity > Options::Terse)
+        cout << "Checking " << outputFns.size() << " fairness constraints" << endl;
+      *pconclusion = checkFairnessConstraints(outputValues, outputFns, stem,
+                                              satisfiedFairness, ev, verbosity);
+    }
+    if (*pconclusion != 2)
+      return;
+  }
 
    // Find (eventually) periodic and persistent signals.
-  PersistentCardMap persistentMap;
-  PeriodicCardMap periodicMap;
   findInterestingSignals(lasso, stateVars, stem, persistentMap, periodicMap);
 
   printReport(verbosity, lasso, ev, stateVars, persistentMap, periodicMap);
@@ -1094,12 +1173,13 @@ void simplifyTV(
 namespace {
 
 void rewriteModel(
-  Model & model,
+  Model &,
   ExprAttachment * eat,
   vector<ID> const & nsf,
   vector<ID> const & of)
 {
-  //Options::Verbosity verbosity = model.verbosity();
+  // Since we do not drop any latches, we don't need to fix the
+  // sequential attachment.
   vector<ID> sv(eat->stateVars());
   eat->clearNextStateFns();
   eat->setNextStateFns(sv, nsf);
@@ -1109,9 +1189,32 @@ void rewriteModel(
   eat->setOutputFns(outputs, of);
 
   // We could do more.
-  // We should fix the sequential attachment.
 }
 
+void fillCounterexample(
+  Expr::Manager::View & ev,
+  vecSeq const & lasso,
+  vector<ID> const & sv,
+  unsigned int firstNonzero,
+  vector<Transition> & cex,
+  bool witness)
+{
+  for (vecSeq::size_type ci = 0; ci <= firstNonzero; ++ci) {
+    vector<ID> state;
+    vector<ID> input;
+    if (ci == 0 || !witness) {
+      for (vector<ID>::size_type li = 0; li < sv.size(); ++li) {
+        TV newval = lasso[ci][li];
+        if (newval == TVTrue) {
+          state.push_back(sv.at(li));
+        } else if (newval == TVFalse) {
+          state.push_back(ev.apply(Expr::Not, sv.at(li)));
+        }
+      }
+    }
+    cex.push_back(Transition(state,input));
+  }
+}
 
 } // anonymous
 
@@ -1123,8 +1226,8 @@ void TvSimplifierAction::exec()
   if (verbosity > Options::Silent)
     cout << "TV simplification of model " << _model.name() << endl;
 
-  ExprAttachment * eat = (ExprAttachment *) _model.attachment(Key::EXPR);
-  AIGAttachment const * aat = (AIGAttachment const *) _model.constAttachment(Key::AIG);
+  auto eat = _model.attachment<ExprAttachment>(Key::EXPR);
+  AIGAttachment const * const aat = (AIGAttachment const *) _model.constAttachment(Key::AIG);
 
   Expr::Manager::View * ev = _model.newView();
 
@@ -1133,40 +1236,80 @@ void TvSimplifierAction::exec()
   unordered_map<ID,ID> assignments;
   bool allowWidening = _model.options().count("tv_narrow") == 0;
   bool noOutputCheck = _model.options().count("tv_nocheck") != 0;
+  int tvTimeout = _model.options()["tv_timeout"].as<int>();
+  int finalTime = tvTimeout == -1 ? -1 : startTime + tvTimeout * 1000000;
   Model::Mode mode = _model.defaultMode();
   if (verbosity > Options::Verbose)
     cout << "mode = " << mode << endl;
-  if (mode == Model::mFAIR || mode == Model::mIICTL)
+  assert(mode != Model::mNONE);
+  if (mode == Model::mIICTL)
     noOutputCheck = true;
+  if (eat->constraints().size() > 0)
+    noOutputCheck = true;
+  bool printCex = _model.options().count("print_cex") != 0;
+  // In case we need to store a counterexample, we save the states
+  // if the model is decoded or if we need to print them (no cex_aiger).
+  SeqAttachment const * const seat =
+    (SeqAttachment const *) _model.constAttachment(Key::SEQ);
+  bool decoded = seat->decoded;
+  _model.constRelease(seat);
+  bool noStates = !decoded && _model.options().count("cex_aiger") != 0;
   int conclusion = 2;
   unsigned int stemLength;
   unsigned int loopLength;
   unsigned int stabilized;
   unsigned int firstNonzero;
   bool widened;
-  if (noOutputCheck) {
-    simplifyTV(*ev, aat, eat->stateVars(), nsfv, ofv, eat->initialConditions(),
-               assignments, verbosity, allowWidening, 0,  &stemLength,
-               &loopLength, &stabilized, &firstNonzero, &widened);
-  } else {
-    simplifyTV(*ev, aat, eat->stateVars(), nsfv, ofv, eat->initialConditions(),
-               assignments, verbosity, allowWidening, &conclusion, &stemLength,
-               &loopLength, &stabilized, &firstNonzero, &widened);
-  }
+  vecSeq lasso;
+  PersistentCardMap persistentMap;
+  PeriodicCardMap * pMapPtr = new PeriodicCardMap;
+  PeriodicCardMap & periodicMap = *pMapPtr;
+  vector<ID> satisfiedFairness;
+  simplifyTV(*ev, aat, eat->stateVars(), nsfv, ofv, eat->initialConditions(),
+             assignments, lasso, persistentMap, periodicMap, satisfiedFairness,
+             verbosity, allowWidening, (noOutputCheck ? 0 : &conclusion), mode,
+             &stemLength, &loopLength, &stabilized, &firstNonzero, &widened, finalTime);
   if (conclusion == 2) {
-    rewriteModel(_model, eat, nsfv, ofv);
-    if (verbosity > Options::Terse) {
+    rewriteModel(_model, eat.operator->(), nsfv, ofv);
+    if (mode == Model::mIC3 && verbosity > Options::Terse) {
       cout << "RAT: stem: " << stemLength << " loop: " << loopLength
            << " stable at: " << stabilized << " nonzero: "
            << firstNonzero << " widened: " << widened << endl;
     }
-    RchAttachment * rat = (RchAttachment *) _model.attachment(Key::RCH);
-    rat->setTvInfo(stemLength, loopLength, stabilized, widened);
-    rat->updateCexLowerBound(firstNonzero);
+    auto rat = _model.attachment<RchAttachment>(Key::RCH);
+    rat->setTvInfo(stemLength, loopLength, stabilized, widened, pMapPtr);
+    if (mode == Model::mIC3)
+      rat->updateCexLowerBound(firstNonzero, string("TVSIM"));
+    PersistentCardMap::size_type npersistent = 0;
+    for (PersistentCardMap::const_iterator card = persistentMap.begin();
+         card != persistentMap.end(); ++card) {
+      if (card->second.numberTransitions > 0) {
+        ++npersistent;
+        if (card->second.finalValue == ThreeValued::TVTrue)
+          rat->addPersistentSignal(card->first, true);
+        else if (card->second.finalValue == ThreeValued::TVFalse)
+          rat->addPersistentSignal(ev->apply(Expr::Not, card->first), true);
+        else
+          assert(false);
+      }
+    }
+    rat->addSatisfiedFairnessConstraints(satisfiedFairness.begin(),
+                                         satisfiedFairness.end());
     _model.release(rat);
+    if (verbosity > Options::Informative && npersistent > 0)
+      cout << "RAT: Added " << npersistent
+           << " persistent signals" << endl;
   } else {
-    ProofAttachment * pat = (ProofAttachment *) _model.attachment(Key::PROOF);
+    delete pMapPtr;
+    if (verbosity > Options::Silent)
+      cout << "Conclusion found by TVSIM." << endl;
+    auto pat = _model.attachment<ProofAttachment>(Key::PROOF);
     assert(pat != 0);
+    if (conclusion == 1 && printCex) {
+      vector<Transition> cex;
+      fillCounterexample(*ev, lasso, eat->stateVars(), firstNonzero, cex, noStates);
+      pat->setCex(cex);
+    }
     pat->setConclusion(conclusion);
     _model.release(pat);
   }

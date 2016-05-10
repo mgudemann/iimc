@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([cudd], [2.5.0], [Fabio@Colorado.EDU])
+AC_INIT([cudd], [2.5.1], [Fabio@Colorado.EDU])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE(
@@ -57,6 +57,8 @@ if test $ac_cv_have_ieee_754 = yes ; then
 else
   AC_MSG_RESULT(broken)
 fi
+
+AM_CXXFLAGS="-std=c++11 ${AM_CXXFLAGS}"
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

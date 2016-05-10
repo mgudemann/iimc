@@ -45,11 +45,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <unordered_map>
 #include <vector>
 
-#ifdef MTHREADS
-#include "tbb/mutex.h"
-#include "tbb/spin_mutex.h"
-#endif
-
 /** Namespace of SAT. */
 namespace SAT {
 
@@ -71,7 +66,7 @@ namespace SAT {
   class Trivial {
   public:
     Trivial(bool va) : v(va) {}
-    bool value() { return v; }
+    bool value() const { return v; }
   private:
     bool v;
   };
@@ -200,22 +195,10 @@ namespace SAT {
 
       Manager & man;
       Expr::Manager::View & exprView;
-
-#ifdef MTHREADS
-      typedef tbb::spin_mutex VMuxType;
-      VMuxType mux;
-#endif
     };
 
   private:
     friend class View;
-
-    Expr::Manager & exprMan;
-
-#ifdef MTHREADS
-    typedef tbb::mutex MMuxType;
-    MMuxType mux;
-#endif
 
     std::vector<View *> views;
     Clauses clauses;

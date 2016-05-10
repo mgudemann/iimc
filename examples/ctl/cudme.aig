@@ -1,0 +1,257 @@
+aig 356 36 70 4 250 0 0 0 34
+222
+70
+252
+264
+28
+276
+2
+288
+6
+306
+8
+324
+12
+336
+16
+354
+20
+366
+22
+378
+24
+390
+26
+402
+32
+414 1
+34
+426
+4
+438
+10
+450
+14
+462
+18
+472
+72
+502
+514
+62
+526
+36
+538
+40
+556
+42
+574
+46
+586
+50
+604
+54
+616
+56
+628
+58
+640
+60
+652
+66
+664
+68
+676 1
+38
+688
+44
+700
+48
+712
+52
+144
+74
+210
+140
+76
+82
+86
+90
+94
+98
+102
+106
+110
+114
+118
+122
+126
+130
+134
+138
+142
+146
+152
+156
+160
+164
+168
+172
+176
+180
+184
+188
+192
+196
+200
+204
+208
+212
+ãLFïèÄ…òÄ"#Å—ñµRÉ;ãèΩRã=ìóµ∏ûÃ”« ¨⁄··TÔ∏Ω·‰¬Û˜Vı	—’ˇX£V⁄ﬂáZïÂÈèXéÎÔóZï ı˘ü|• ü£ßzÆ•©Øz∫ ≠±∑z  µπøHÄäç√Ã°Ã”’ÿ© Èv∑;„ÁÒvø=ÎÔÈÏˆÄá˚˛Ñéïïx£êïïòö§ß´z©	©≠≥|≠6≤∑ª~…Ω¡√|¬√«À~… Õ—”†Ÿ ˜˚€û‚˝Å„ûÓ ÖâÎû˛ çëi0 cell0.c.nd
+i1 cell0.n.nd
+i2 cell0.d.nd
+i3 cell0.e.nd
+i4 cell0.p.nd
+i5 cell0.f.nd
+i6 cell0.q.nd
+i7 cell0.g.nd
+i8 cell0.r.nd
+i9 cell0.h.nd
+i10 cell0.i.nd
+i11 cell0.j.nd
+i12 cell0.k.nd
+i13 cell0.a.nd1
+i14 cell0.a.nd2
+i15 cell0.l.nd
+i16 cell0.m.nd
+i17 cell1.c.nd
+i18 cell1.n.nd
+i19 cell1.d.nd
+i20 cell1.e.nd
+i21 cell1.p.nd
+i22 cell1.f.nd
+i23 cell1.q.nd
+i24 cell1.g.nd
+i25 cell1.r.nd
+i26 cell1.h.nd
+i27 cell1.i.nd
+i28 cell1.j.nd
+i29 cell1.k.nd
+i30 cell1.a.nd1
+i31 cell1.a.nd2
+i32 cell1.l.nd
+i33 cell1.m.nd
+i34 user0.nd
+i35 user1.nd
+l0 u_req<0>
+l1 fair<0>
+l2 cell0.acks<1>
+l3 cell0.acks<0>
+l4 fair<1>
+l5 cell0.c_out
+l6 fair<2>
+l7 cell0.d_out
+l8 fair<3>
+l9 cell0.e_out
+l10 fair<4>
+l11 cell0.f_out
+l12 fair<5>
+l13 cell0.g_out
+l14 fair<6>
+l15 cell0.h_out
+l16 fair<7>
+l17 cell0.i_out
+l18 fair<8>
+l19 cell0.j_out
+l20 fair<9>
+l21 cell0.k_out
+l22 fair<10>
+l23 cell0.l_out
+l24 fair<11>
+l25 cell0.m_out
+l26 fair<12>
+l27 cell0.n_out
+l28 fair<13>
+l29 cell0.p_out
+l30 fair<14>
+l31 cell0.q_out
+l32 fair<15>
+l33 cell0.r_out
+l34 fair<16>
+l35 u_req<1>
+l36 fair<17>
+l37 cell1.acks<1>
+l38 cell1.acks<0>
+l39 fair<18>
+l40 cell1.c_out
+l41 fair<19>
+l42 cell1.d_out
+l43 fair<20>
+l44 cell1.e_out
+l45 fair<21>
+l46 cell1.f_out
+l47 fair<22>
+l48 cell1.g_out
+l49 fair<23>
+l50 cell1.h_out
+l51 fair<24>
+l52 cell1.i_out
+l53 fair<25>
+l54 cell1.j_out
+l55 fair<26>
+l56 cell1.k_out
+l57 fair<27>
+l58 cell1.l_out
+l59 fair<28>
+l60 cell1.m_out
+l61 fair<29>
+l62 cell1.n_out
+l63 fair<30>
+l64 cell1.p_out
+l65 fair<31>
+l66 cell1.q_out
+l67 fair<32>
+l68 cell1.r_out
+l69 fair<33>
+o0 u_req<1>
+o1 u_req<0>
+o2 u_ack<1>
+o3 u_ack<0>
+f0 fair<0>0
+f1 fair<1>0
+f2 fair<2>0
+f3 fair<3>0
+f4 fair<4>0
+f5 fair<5>0
+f6 fair<6>0
+f7 fair<7>0
+f8 fair<8>0
+f9 fair<9>0
+f10 fair<10>0
+f11 fair<11>0
+f12 fair<12>0
+f13 fair<13>0
+f14 fair<14>0
+f15 fair<15>0
+f16 fair<16>0
+f17 fair<17>0
+f18 fair<18>0
+f19 fair<19>0
+f20 fair<20>0
+f21 fair<21>0
+f22 fair<22>0
+f23 fair<23>0
+f24 fair<24>0
+f25 fair<25>0
+f26 fair<26>0
+f27 fair<27>0
+f28 fair<28>0
+f29 fair<29>0
+f30 fair<30>0
+f31 fair<31>0
+f32 fair<32>0
+f33 fair<33>0
+c
+bliftoaig
+1.9
+cudme.blif

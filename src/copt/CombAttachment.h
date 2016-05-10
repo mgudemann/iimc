@@ -47,6 +47,12 @@ POSSIBILITY OF SUCH DAMAGE.
 class CombAttachment : public Model::Attachment {
 public:
   CombAttachment(Model& model);
+  CombAttachment(const CombAttachment & from, Model& model) :
+    Model::Attachment(from, model),
+    _simplificationEffort(from._simplificationEffort),
+    _numEquivalences(from._numEquivalences),
+    _unusedTime(from._unusedTime) {
+  }
   Key::Type key() const { return Key::COMB; }
   void build() { 
     if (model().verbosity() > Options::Silent)
@@ -72,7 +78,7 @@ public:
   };
 
 protected:
-  CombAttachment* clone() const { return new CombAttachment(*this); }
+  CombAttachment* clone(Model & model) const { return new CombAttachment(*this, model); }
 
 private:
   Effort _simplificationEffort;

@@ -1,0 +1,12 @@
+aig 4 1 1 1 2 0 0 1
+7
+8
+1
+8
+i0 w
+l0 x
+o0 fair
+c
+bliftoaig
+1.9
+edgeFair.blif

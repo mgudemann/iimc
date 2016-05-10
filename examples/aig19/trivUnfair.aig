@@ -1,0 +1,18 @@
+aig 7 0 4 0 3 0 0 1
+1
+5
+10
+15
+4
+2
+4
+6
+8
+l0 fair<0>
+l1 fair<1>
+l2 fair<2>
+l3 fair<3>
+c
+bliftoaig
+1.9
+trivUnfair.blif

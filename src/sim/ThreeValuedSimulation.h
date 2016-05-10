@@ -134,7 +134,7 @@ namespace ThreeValued {
     }
   private:
     Map & map;
-    void mux(ID id, int n, const ID * const args, TV & rv) {
+    void mux(ID, int n, const ID * const args, TV & rv) {
       assert (n == 2);
       if (view().op(args[0]) != Expr::Not) return;
       if (view().op(args[1]) != Expr::Not) return;
@@ -215,11 +215,11 @@ namespace ThreeValued {
       c = argsl[1];
     }
     else return false;
-    TV tva = Opt::isNot(a) ? tv_not(tvs[UIGET(Opt::indexOf(a))]) :                      
+    TV tva = Opt::isNot(a) ? tv_not(tvs[UIGET(Opt::indexOf(a))]) :
                              tvs[UIGET(Opt::indexOf(a))],
-       tvb = Opt::isNot(b) ? tv_not(tvs[UIGET(Opt::indexOf(b))]) :                      
-                             tvs[UIGET(Opt::indexOf(b))], 
-       tvc = Opt::isNot(c) ? tv_not(tvs[UIGET(Opt::indexOf(c))]) :                      
+       tvb = Opt::isNot(b) ? tv_not(tvs[UIGET(Opt::indexOf(b))]) :
+                             tvs[UIGET(Opt::indexOf(b))],
+       tvc = Opt::isNot(c) ? tv_not(tvs[UIGET(Opt::indexOf(c))]) :
                              tvs[UIGET(Opt::indexOf(c))];
     tvs[i] = tv_not(tv_ite(tvc, tva, tvb));
     return true;
@@ -265,12 +265,12 @@ namespace ThreeValued {
       /*
        * Return a vector with the next-state values
        */
-      const std::vector<TV> & getNSValues();
+      const std::vector<TV> & getNSValues() const;
 
       /*
        * Return a vector with the output values
        */
-      const std::vector<TV> & getOutputValues();
+      const std::vector<TV> & getOutputValues() const;
 
 
     private:
@@ -327,6 +327,10 @@ namespace ThreeValued {
   class PackedTvVector {
   public:
     typedef size_t size_type;
+    /**
+     * Proxy classes are used to allow PackedTvVector to have operators [] that work for both
+     * read and write access and hide the details of packing and unpacking.
+     */
     class Proxy {
       friend class PackedTvVector;
     public:
@@ -334,7 +338,7 @@ namespace ThreeValued {
       Proxy & operator=(Proxy const & rhs);
       operator TV() const { return value; }
     private:
-      Proxy(PackedTvVector & r, size_type i) : ref(r), index(i), value(r.get(i)) {}
+      Proxy(PackedTvVector & r, size_type i) : ref(r), index(i), value(r.at(i)) {}
       PackedTvVector & ref;
       size_type index;
       TV value;
@@ -344,7 +348,7 @@ namespace ThreeValued {
     public:
       operator TV() const { return value; }
     private:
-      ProxyConst(PackedTvVector const & r, size_type i) : ref(r), index(i), value(r.get(i)) {}
+      ProxyConst(PackedTvVector const & r, size_type i) : ref(r), index(i), value(r.at(i)) {}
       PackedTvVector const & ref;
       size_type index;
       TV value;
@@ -355,7 +359,7 @@ namespace ThreeValued {
     PackedTvVector & operator=(PackedTvVector const & rhs);
     Proxy operator[](size_type i) { return Proxy(*this, i); }
     ProxyConst operator[](size_type i) const { return ProxyConst(*this, i); }
-    TV get(size_type i) const;
+    TV at(size_type i) const;
     unsigned long hash(void) const { return hashv; }
     void set(size_type i, TV val);
     size_type size(void) const { return usize; }
@@ -380,11 +384,14 @@ namespace ThreeValued {
     std::vector<ID> const & outputFns,
     AIGAttachment const * aat,
     vecSeq & lasso,
+    vecSeq & outputValues,
     Options::Verbosity verbosity,
     bool allowWidening = true,
     int * pconclusion = 0,
+    Model::Mode mode = Model::mIC3,
     unsigned int * pfirstNonzero = 0,
-    bool * pwidened = 0);
+    bool * pwidened = 0,
+    int finalTime = -1);
 }
 
 #endif
