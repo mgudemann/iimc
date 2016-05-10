@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([iimc], [1.3])
+AC_INIT([iimc], [1.3.2])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE(
@@ -19,12 +19,6 @@ DX_INIT_DOXYGEN($PACKAGE_NAME)
 : ${CFLAGS="-g -O3"}
 AC_PROG_CXX
 AC_PROG_CC
-AX_BOOST_BASE(
-  [1.40.0],,[AC_MSG_FAILURE([boost could not be located.])]
-)
-AX_BOOST_PROGRAM_OPTIONS
-AX_BOOST_REGEX
-
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 AC_PROG_LEX
 AC_PROG_YACC
@@ -44,6 +38,12 @@ save_LDFLAGS=$LDFLAGS
 LDFLAGS="-std=c++0x $AM_LDFLAGS $LDFLAGS"
 
 # Checks for libraries.
+
+AX_BOOST_BASE(
+  [1.40.0],,[AC_MSG_FAILURE([boost could not be located.])]
+)
+AX_BOOST_PROGRAM_OPTIONS
+AX_BOOST_REGEX
 
 # Add an option for disabling zchaff and using MiniSat instead
 AC_ARG_ENABLE([zchaff],

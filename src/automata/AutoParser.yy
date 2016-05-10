@@ -144,7 +144,7 @@ expression: '(' expression ')'      { $$ = $2; }
                                         if (driver.eat->isOutput($$))
                                           $$ = driver.eat->outputFnOf($$);
                                       } else {
-                                        error(yylloc, std::string("unknown variable: ") + *$1);
+                                        error(@$, std::string("unknown variable: ") + *$1);
                                         YYERROR;
                                       }
                                       delete $1;

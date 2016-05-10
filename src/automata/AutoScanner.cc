@@ -36,7 +36,7 @@
 #define FLEX_SCANNER
 #define YY_FLEX_MAJOR_VERSION 2
 #define YY_FLEX_MINOR_VERSION 5
-#define YY_FLEX_SUBMINOR_VERSION 35
+#define YY_FLEX_SUBMINOR_VERSION 39
 #if YY_FLEX_SUBMINOR_VERSION > 0
 #define FLEX_BETA
 #endif
@@ -223,8 +223,13 @@ typedef unsigned int flex_uint32_t;
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 #endif
 
+#ifndef YY_TYPEDEF_YY_SIZE_T
+#define YY_TYPEDEF_YY_SIZE_T
+typedef size_t yy_size_t;
+#endif
+
 /* %if-not-reentrant */
-extern int autoleng;
+extern yy_size_t autoleng;
 /* %endif */
 
 /* %if-c-only */
@@ -238,6 +243,7 @@ extern FILE *autoin, *autoout;
 #define EOB_ACT_LAST_MATCH 2
 
     #define YY_LESS_LINENO(n)
+    #define YY_LINENO_REWIND_TO(ptr)
     
 /* Return all but the first "n" matched characters back to the input stream. */
 #define yyless(n) \
@@ -254,11 +260,6 @@ extern FILE *autoin, *autoout;
 	while ( 0 )
 
 #define unput(c) yyunput( c, (yytext_ptr)  )
-
-#ifndef YY_TYPEDEF_YY_SIZE_T
-#define YY_TYPEDEF_YY_SIZE_T
-typedef size_t yy_size_t;
-#endif
 
 #ifndef YY_STRUCT_YY_BUFFER_STATE
 #define YY_STRUCT_YY_BUFFER_STATE
@@ -282,7 +283,7 @@ struct yy_buffer_state
 	/* Number of characters read into yy_ch_buf, not including EOB
 	 * characters.
 	 */
-	int yy_n_chars;
+	yy_size_t yy_n_chars;
 
 	/* Whether we "own" the buffer - i.e., we know we created it,
 	 * and can realloc() it to grow it, and should free() it to
@@ -366,8 +367,8 @@ static YY_BUFFER_STATE * yy_buffer_stack = 0; /**< Stack as an array. */
 
 /* yy_hold_char holds the character lost when autotext is formed. */
 static char yy_hold_char;
-static int yy_n_chars;		/* number of characters read into yy_ch_buf */
-int autoleng;
+static yy_size_t yy_n_chars;		/* number of characters read into yy_ch_buf */
+yy_size_t autoleng;
 
 /* Points to current character in buffer. */
 static char *yy_c_buf_p = (char *) 0;
@@ -398,7 +399,7 @@ static void auto_init_buffer (YY_BUFFER_STATE b,FILE *file  );
 
 YY_BUFFER_STATE auto_scan_buffer (char *base,yy_size_t size  );
 YY_BUFFER_STATE auto_scan_string (yyconst char *yy_str  );
-YY_BUFFER_STATE auto_scan_bytes (yyconst char *bytes,int len  );
+YY_BUFFER_STATE auto_scan_bytes (yyconst char *bytes,yy_size_t len  );
 
 /* %endif */
 
@@ -433,7 +434,7 @@ void autofree (void *  );
 /* %% [1.0] autotext/autoin/autoout/yy_state_type/autolineno etc. def's & init go here */
 /* Begin user sect3 */
 
-#define autowrap(n) 1
+#define autowrap() 1
 #define YY_SKIP_YYWRAP
 
 #define FLEX_DEBUG
@@ -450,6 +451,8 @@ int autolineno = 1;
 
 extern char *autotext;
 #define yytext_ptr autotext
+
+/* %% [1.5] DFA */
 
 /* %if-c-only Standard (non-C++) definition */
 
@@ -601,8 +604,8 @@ static yyconst flex_int16_t yy_rule_linenum[15] =
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
 char *autotext;
-#line 1 "AutoScanner.ll"
-#line 2 "AutoScanner.ll"
+#line 1 "../1.3.2/src/automata/AutoScanner.ll"
+#line 2 "../1.3.2/src/automata/AutoScanner.ll"
 # include <cstdlib>
 # include <cerrno>
 # include <climits>
@@ -624,9 +627,9 @@ char *autotext;
 /* the never-interactive option is a hack for cygwin
  * compilation with g++ 4.3.4 and 4.5.3.  It is hoped that
  * it will soon become unnecessary. */
-#line 33 "AutoScanner.ll"
+#line 33 "../1.3.2/src/automata/AutoScanner.ll"
 # define YY_USER_ACTION  yylloc->columns(autoleng);
-#line 630 "src/automata/AutoScanner.cc"
+#line 633 "src/automata/AutoScanner.cc"
 
 #define INITIAL 0
 
@@ -678,7 +681,7 @@ FILE *autoget_out (void );
 
 void autoset_out  (FILE * out_str  );
 
-int autoget_leng (void );
+yy_size_t autoget_leng (void );
 
 char *autoget_text (void );
 
@@ -870,14 +873,6 @@ YY_DECL
 	register char *yy_cp, *yy_bp;
 	register int yy_act;
     
-/* %% [7.0] user's declarations go here */
-#line 35 "AutoScanner.ll"
-
-
-  yylloc->step();
-
-#line 880 "src/automata/AutoScanner.cc"
-
 	if ( !(yy_init) )
 		{
 		(yy_init) = 1;
@@ -912,6 +907,15 @@ YY_DECL
 		auto_load_buffer_state( );
 		}
 
+	{
+/* %% [7.0] user's declarations go here */
+#line 35 "../1.3.2/src/automata/AutoScanner.ll"
+
+
+  yylloc->step();
+
+#line 918 "src/automata/AutoScanner.cc"
+
 	while ( 1 )		/* loops until end-of-file is reached */
 		{
 /* %% [8.0] yymore()-related code goes here */
@@ -930,7 +934,7 @@ YY_DECL
 yy_match:
 		do
 			{
-			register YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)];
+			register YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)] ;
 			if ( yy_accept[yy_current_state] )
 				{
 				(yy_last_accepting_state) = yy_current_state;
@@ -988,18 +992,18 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 39 "AutoScanner.ll"
+#line 39 "../1.3.2/src/automata/AutoScanner.ll"
 yylloc->step();
 	YY_BREAK
 case 2:
 /* rule 2 can match eol */
 YY_RULE_SETUP
-#line 40 "AutoScanner.ll"
+#line 40 "../1.3.2/src/automata/AutoScanner.ll"
 yylloc->lines(autoleng); yylloc->step();
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 41 "AutoScanner.ll"
+#line 41 "../1.3.2/src/automata/AutoScanner.ll"
 yylloc->step();
 	YY_BREAK
 
@@ -1008,67 +1012,67 @@ yylloc->step();
 /* Convert ints to the actual type of tokens.  */
 case 4:
 YY_RULE_SETUP
-#line 47 "AutoScanner.ll"
+#line 47 "../1.3.2/src/automata/AutoScanner.ll"
 return autoparser::auto_parser::token_type(autotext[0]);
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 48 "AutoScanner.ll"
+#line 48 "../1.3.2/src/automata/AutoScanner.ll"
 return token::INIT;
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 49 "AutoScanner.ll"
+#line 49 "../1.3.2/src/automata/AutoScanner.ll"
 return token::EQUIV;
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 50 "AutoScanner.ll"
+#line 50 "../1.3.2/src/automata/AutoScanner.ll"
 return token::IMPLIES;
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 51 "AutoScanner.ll"
+#line 51 "../1.3.2/src/automata/AutoScanner.ll"
 return token::TRUE;
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 52 "AutoScanner.ll"
+#line 52 "../1.3.2/src/automata/AutoScanner.ll"
 return token::FALSE;
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 53 "AutoScanner.ll"
+#line 53 "../1.3.2/src/automata/AutoScanner.ll"
 return token::STRUCTURE;
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 54 "AutoScanner.ll"
+#line 54 "../1.3.2/src/automata/AutoScanner.ll"
 return token::FAIRNESS;
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 55 "AutoScanner.ll"
+#line 55 "../1.3.2/src/automata/AutoScanner.ll"
 yylval->sval = new std::string(autotext); return token::IDENTIFIER;
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 56 "AutoScanner.ll"
+#line 56 "../1.3.2/src/automata/AutoScanner.ll"
 { std::stringstream ss(autotext); ss >> yylval->index;
              return token::STATE; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 58 "AutoScanner.ll"
+#line 58 "../1.3.2/src/automata/AutoScanner.ll"
 { driver.error(*yylloc, std::string("invalid character: ") + autotext[0]);
              return token::INVALID_CHAR; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 60 "AutoScanner.ll"
+#line 60 "../1.3.2/src/automata/AutoScanner.ll"
 ECHO;
 	YY_BREAK
-#line 1072 "src/automata/AutoScanner.cc"
+#line 1076 "src/automata/AutoScanner.cc"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1201,6 +1205,7 @@ case YY_STATE_EOF(INITIAL):
 			"fatal flex scanner internal error--no action found" );
 	} /* end of action switch */
 		} /* end of scanning one token */
+	} /* end of user's declarations */
 } /* end of autolex */
 /* %ok-for-header */
 
@@ -1268,21 +1273,21 @@ static int yy_get_next_buffer (void)
 
 	else
 		{
-			int num_to_read =
+			yy_size_t num_to_read =
 			YY_CURRENT_BUFFER_LVALUE->yy_buf_size - number_to_move - 1;
 
 		while ( num_to_read <= 0 )
 			{ /* Not enough room in the buffer - grow it. */
 
 			/* just a shorter name for the current buffer */
-			YY_BUFFER_STATE b = YY_CURRENT_BUFFER;
+			YY_BUFFER_STATE b = YY_CURRENT_BUFFER_LVALUE;
 
 			int yy_c_buf_p_offset =
 				(int) ((yy_c_buf_p) - b->yy_ch_buf);
 
 			if ( b->yy_is_our_buffer )
 				{
-				int new_size = b->yy_buf_size * 2;
+				yy_size_t new_size = b->yy_buf_size * 2;
 
 				if ( new_size <= 0 )
 					b->yy_buf_size += b->yy_buf_size / 8;
@@ -1313,7 +1318,7 @@ static int yy_get_next_buffer (void)
 
 		/* Read in more data. */
 		YY_INPUT( (&YY_CURRENT_BUFFER_LVALUE->yy_ch_buf[number_to_move]),
-			(yy_n_chars), (size_t) num_to_read );
+			(yy_n_chars), num_to_read );
 
 		YY_CURRENT_BUFFER_LVALUE->yy_n_chars = (yy_n_chars);
 		}
@@ -1421,7 +1426,7 @@ static int yy_get_next_buffer (void)
 	yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
 	yy_is_jam = (yy_current_state == 54);
 
-	return yy_is_jam ? 0 : yy_current_state;
+		return yy_is_jam ? 0 : yy_current_state;
 }
 
 /* %if-c-only */
@@ -1456,7 +1461,7 @@ static int yy_get_next_buffer (void)
 
 		else
 			{ /* need more input */
-			int offset = (yy_c_buf_p) - (yytext_ptr);
+			yy_size_t offset = (yy_c_buf_p) - (yytext_ptr);
 			++(yy_c_buf_p);
 
 			switch ( yy_get_next_buffer(  ) )
@@ -1640,13 +1645,6 @@ static void auto_load_buffer_state  (void)
 	autofree((void *) b  );
 }
 
-/* %if-c-only */
-
-/* %endif */
-
-/* %if-c++-only */
-/* %endif */
-
 /* Initializes or reinitializes a buffer.
  * This function is sometimes called more than once on the same buffer,
  * such as during a autorestart() or at EOF.
@@ -1789,7 +1787,7 @@ static void autoensure_buffer_stack (void)
 /* %if-c++-only */
 /* %endif */
 {
-	int num_to_alloc;
+	yy_size_t num_to_alloc;
     
 	if (!(yy_buffer_stack)) {
 
@@ -1892,12 +1890,12 @@ YY_BUFFER_STATE auto_scan_string (yyconst char * yystr )
  * 
  * @return the newly allocated buffer state object.
  */
-YY_BUFFER_STATE auto_scan_bytes  (yyconst char * yybytes, int  _yybytes_len )
+YY_BUFFER_STATE auto_scan_bytes  (yyconst char * yybytes, yy_size_t  _yybytes_len )
 {
 	YY_BUFFER_STATE b;
 	char *buf;
 	yy_size_t n;
-	int i;
+	yy_size_t i;
     
 	/* Get memory for full buffer, including space for trailing EOB's. */
 	n = _yybytes_len + 2;
@@ -1988,7 +1986,7 @@ FILE *autoget_out  (void)
 /** Get the length of the current token.
  * 
  */
-int autoget_leng  (void)
+yy_size_t autoget_leng  (void)
 {
         return autoleng;
 }
@@ -2157,7 +2155,7 @@ void autofree (void * ptr )
 
 /* %ok-for-header */
 
-#line 60 "AutoScanner.ll"
+#line 59 "../1.3.2/src/automata/AutoScanner.ll"
 
 
 

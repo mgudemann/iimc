@@ -36,7 +36,7 @@
 #define FLEX_SCANNER
 #define YY_FLEX_MAJOR_VERSION 2
 #define YY_FLEX_MINOR_VERSION 5
-#define YY_FLEX_SUBMINOR_VERSION 35
+#define YY_FLEX_SUBMINOR_VERSION 39
 #if YY_FLEX_SUBMINOR_VERSION > 0
 #define FLEX_BETA
 #endif
@@ -223,8 +223,13 @@ typedef unsigned int flex_uint32_t;
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 #endif
 
+#ifndef YY_TYPEDEF_YY_SIZE_T
+#define YY_TYPEDEF_YY_SIZE_T
+typedef size_t yy_size_t;
+#endif
+
 /* %if-not-reentrant */
-extern int ctlleng;
+extern yy_size_t ctlleng;
 /* %endif */
 
 /* %if-c-only */
@@ -238,6 +243,7 @@ extern FILE *ctlin, *ctlout;
 #define EOB_ACT_LAST_MATCH 2
 
     #define YY_LESS_LINENO(n)
+    #define YY_LINENO_REWIND_TO(ptr)
     
 /* Return all but the first "n" matched characters back to the input stream. */
 #define yyless(n) \
@@ -254,11 +260,6 @@ extern FILE *ctlin, *ctlout;
 	while ( 0 )
 
 #define unput(c) yyunput( c, (yytext_ptr)  )
-
-#ifndef YY_TYPEDEF_YY_SIZE_T
-#define YY_TYPEDEF_YY_SIZE_T
-typedef size_t yy_size_t;
-#endif
 
 #ifndef YY_STRUCT_YY_BUFFER_STATE
 #define YY_STRUCT_YY_BUFFER_STATE
@@ -282,7 +283,7 @@ struct yy_buffer_state
 	/* Number of characters read into yy_ch_buf, not including EOB
 	 * characters.
 	 */
-	int yy_n_chars;
+	yy_size_t yy_n_chars;
 
 	/* Whether we "own" the buffer - i.e., we know we created it,
 	 * and can realloc() it to grow it, and should free() it to
@@ -366,8 +367,8 @@ static YY_BUFFER_STATE * yy_buffer_stack = 0; /**< Stack as an array. */
 
 /* yy_hold_char holds the character lost when ctltext is formed. */
 static char yy_hold_char;
-static int yy_n_chars;		/* number of characters read into yy_ch_buf */
-int ctlleng;
+static yy_size_t yy_n_chars;		/* number of characters read into yy_ch_buf */
+yy_size_t ctlleng;
 
 /* Points to current character in buffer. */
 static char *yy_c_buf_p = (char *) 0;
@@ -398,7 +399,7 @@ static void ctl_init_buffer (YY_BUFFER_STATE b,FILE *file  );
 
 YY_BUFFER_STATE ctl_scan_buffer (char *base,yy_size_t size  );
 YY_BUFFER_STATE ctl_scan_string (yyconst char *yy_str  );
-YY_BUFFER_STATE ctl_scan_bytes (yyconst char *bytes,int len  );
+YY_BUFFER_STATE ctl_scan_bytes (yyconst char *bytes,yy_size_t len  );
 
 /* %endif */
 
@@ -433,7 +434,7 @@ void ctlfree (void *  );
 /* %% [1.0] ctltext/ctlin/ctlout/yy_state_type/ctllineno etc. def's & init go here */
 /* Begin user sect3 */
 
-#define ctlwrap(n) 1
+#define ctlwrap() 1
 #define YY_SKIP_YYWRAP
 
 #define FLEX_DEBUG
@@ -450,6 +451,8 @@ int ctllineno = 1;
 
 extern char *ctltext;
 #define yytext_ptr ctltext
+
+/* %% [1.5] DFA */
 
 /* %if-c-only Standard (non-C++) definition */
 
@@ -590,8 +593,8 @@ static yyconst flex_int16_t yy_rule_linenum[22] =
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
 char *ctltext;
-#line 1 "PropCtlScanner.ll"
-#line 2 "PropCtlScanner.ll"
+#line 1 "../1.3.2/src/properties/PropCtlScanner.ll"
+#line 2 "../1.3.2/src/properties/PropCtlScanner.ll"
 # include <cstdlib>
 # include <cerrno>
 # include <climits>
@@ -613,9 +616,9 @@ char *ctltext;
 /* the never-interactive option is a hack for cygwin
  * compilation with g++ 4.3.4 and 4.5.3.  It is hoped that
  * it will soon become unnecessary. */
-#line 32 "PropCtlScanner.ll"
+#line 32 "../1.3.2/src/properties/PropCtlScanner.ll"
 # define YY_USER_ACTION  yylloc->columns(ctlleng);
-#line 619 "src/properties/PropCtlScanner.cc"
+#line 622 "src/properties/PropCtlScanner.cc"
 
 #define INITIAL 0
 
@@ -667,7 +670,7 @@ FILE *ctlget_out (void );
 
 void ctlset_out  (FILE * out_str  );
 
-int ctlget_leng (void );
+yy_size_t ctlget_leng (void );
 
 char *ctlget_text (void );
 
@@ -859,14 +862,6 @@ YY_DECL
 	register char *yy_cp, *yy_bp;
 	register int yy_act;
     
-/* %% [7.0] user's declarations go here */
-#line 34 "PropCtlScanner.ll"
-
-
-  yylloc->step();
-
-#line 869 "src/properties/PropCtlScanner.cc"
-
 	if ( !(yy_init) )
 		{
 		(yy_init) = 1;
@@ -901,6 +896,15 @@ YY_DECL
 		ctl_load_buffer_state( );
 		}
 
+	{
+/* %% [7.0] user's declarations go here */
+#line 34 "../1.3.2/src/properties/PropCtlScanner.ll"
+
+
+  yylloc->step();
+
+#line 907 "src/properties/PropCtlScanner.cc"
+
 	while ( 1 )		/* loops until end-of-file is reached */
 		{
 /* %% [8.0] yymore()-related code goes here */
@@ -919,7 +923,7 @@ YY_DECL
 yy_match:
 		do
 			{
-			register YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)];
+			register YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)] ;
 			if ( yy_accept[yy_current_state] )
 				{
 				(yy_last_accepting_state) = yy_current_state;
@@ -977,18 +981,18 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 38 "PropCtlScanner.ll"
+#line 38 "../1.3.2/src/properties/PropCtlScanner.ll"
 yylloc->step();
 	YY_BREAK
 case 2:
 /* rule 2 can match eol */
 YY_RULE_SETUP
-#line 39 "PropCtlScanner.ll"
+#line 39 "../1.3.2/src/properties/PropCtlScanner.ll"
 yylloc->lines(ctlleng); yylloc->step();
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 40 "PropCtlScanner.ll"
+#line 40 "../1.3.2/src/properties/PropCtlScanner.ll"
 yylloc->step();
 	YY_BREAK
 
@@ -997,101 +1001,101 @@ yylloc->step();
 /* Convert ints to the actual type of tokens.  */
 case 4:
 YY_RULE_SETUP
-#line 46 "PropCtlScanner.ll"
+#line 46 "../1.3.2/src/properties/PropCtlScanner.ll"
 return yy::ctl_parser::token_type(ctltext[0]);
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 47 "PropCtlScanner.ll"
+#line 47 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::EQUIV;
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 48 "PropCtlScanner.ll"
+#line 48 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::IMPLIES;
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 49 "PropCtlScanner.ll"
+#line 49 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::EX;
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 50 "PropCtlScanner.ll"
+#line 50 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::EF;
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 51 "PropCtlScanner.ll"
+#line 51 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::EG;
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 52 "PropCtlScanner.ll"
+#line 52 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::AX;
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 53 "PropCtlScanner.ll"
+#line 53 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::AF;
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 54 "PropCtlScanner.ll"
+#line 54 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::AG;
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 55 "PropCtlScanner.ll"
+#line 55 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::EQUANT;
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 56 "PropCtlScanner.ll"
+#line 56 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::AQUANT;
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 57 "PropCtlScanner.ll"
+#line 57 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::UNTIL;
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 58 "PropCtlScanner.ll"
+#line 58 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::RELEASES;
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 59 "PropCtlScanner.ll"
+#line 59 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::WEAK_UNTIL;
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 60 "PropCtlScanner.ll"
+#line 60 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::TRUE;
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 61 "PropCtlScanner.ll"
+#line 61 "../1.3.2/src/properties/PropCtlScanner.ll"
 return token::FALSE;
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 62 "PropCtlScanner.ll"
+#line 62 "../1.3.2/src/properties/PropCtlScanner.ll"
 yylval->sval = new std::string(ctltext); return token::IDENTIFIER;
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 63 "PropCtlScanner.ll"
+#line 63 "../1.3.2/src/properties/PropCtlScanner.ll"
 { driver.error(*yylloc, std::string("invalid character: ") + ctltext[0]);
              return token::INVALID_CHAR; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 65 "PropCtlScanner.ll"
+#line 65 "../1.3.2/src/properties/PropCtlScanner.ll"
 ECHO;
 	YY_BREAK
-#line 1095 "src/properties/PropCtlScanner.cc"
+#line 1099 "src/properties/PropCtlScanner.cc"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1224,6 +1228,7 @@ case YY_STATE_EOF(INITIAL):
 			"fatal flex scanner internal error--no action found" );
 	} /* end of action switch */
 		} /* end of scanning one token */
+	} /* end of user's declarations */
 } /* end of ctllex */
 /* %ok-for-header */
 
@@ -1291,21 +1296,21 @@ static int yy_get_next_buffer (void)
 
 	else
 		{
-			int num_to_read =
+			yy_size_t num_to_read =
 			YY_CURRENT_BUFFER_LVALUE->yy_buf_size - number_to_move - 1;
 
 		while ( num_to_read <= 0 )
 			{ /* Not enough room in the buffer - grow it. */
 
 			/* just a shorter name for the current buffer */
-			YY_BUFFER_STATE b = YY_CURRENT_BUFFER;
+			YY_BUFFER_STATE b = YY_CURRENT_BUFFER_LVALUE;
 
 			int yy_c_buf_p_offset =
 				(int) ((yy_c_buf_p) - b->yy_ch_buf);
 
 			if ( b->yy_is_our_buffer )
 				{
-				int new_size = b->yy_buf_size * 2;
+				yy_size_t new_size = b->yy_buf_size * 2;
 
 				if ( new_size <= 0 )
 					b->yy_buf_size += b->yy_buf_size / 8;
@@ -1336,7 +1341,7 @@ static int yy_get_next_buffer (void)
 
 		/* Read in more data. */
 		YY_INPUT( (&YY_CURRENT_BUFFER_LVALUE->yy_ch_buf[number_to_move]),
-			(yy_n_chars), (size_t) num_to_read );
+			(yy_n_chars), num_to_read );
 
 		YY_CURRENT_BUFFER_LVALUE->yy_n_chars = (yy_n_chars);
 		}
@@ -1444,7 +1449,7 @@ static int yy_get_next_buffer (void)
 	yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
 	yy_is_jam = (yy_current_state == 38);
 
-	return yy_is_jam ? 0 : yy_current_state;
+		return yy_is_jam ? 0 : yy_current_state;
 }
 
 /* %if-c-only */
@@ -1479,7 +1484,7 @@ static int yy_get_next_buffer (void)
 
 		else
 			{ /* need more input */
-			int offset = (yy_c_buf_p) - (yytext_ptr);
+			yy_size_t offset = (yy_c_buf_p) - (yytext_ptr);
 			++(yy_c_buf_p);
 
 			switch ( yy_get_next_buffer(  ) )
@@ -1663,13 +1668,6 @@ static void ctl_load_buffer_state  (void)
 	ctlfree((void *) b  );
 }
 
-/* %if-c-only */
-
-/* %endif */
-
-/* %if-c++-only */
-/* %endif */
-
 /* Initializes or reinitializes a buffer.
  * This function is sometimes called more than once on the same buffer,
  * such as during a ctlrestart() or at EOF.
@@ -1812,7 +1810,7 @@ static void ctlensure_buffer_stack (void)
 /* %if-c++-only */
 /* %endif */
 {
-	int num_to_alloc;
+	yy_size_t num_to_alloc;
     
 	if (!(yy_buffer_stack)) {
 
@@ -1915,12 +1913,12 @@ YY_BUFFER_STATE ctl_scan_string (yyconst char * yystr )
  * 
  * @return the newly allocated buffer state object.
  */
-YY_BUFFER_STATE ctl_scan_bytes  (yyconst char * yybytes, int  _yybytes_len )
+YY_BUFFER_STATE ctl_scan_bytes  (yyconst char * yybytes, yy_size_t  _yybytes_len )
 {
 	YY_BUFFER_STATE b;
 	char *buf;
 	yy_size_t n;
-	int i;
+	yy_size_t i;
     
 	/* Get memory for full buffer, including space for trailing EOB's. */
 	n = _yybytes_len + 2;
@@ -2011,7 +2009,7 @@ FILE *ctlget_out  (void)
 /** Get the length of the current token.
  * 
  */
-int ctlget_leng  (void)
+yy_size_t ctlget_leng  (void)
 {
         return ctlleng;
 }
@@ -2180,7 +2178,7 @@ void ctlfree (void * ptr )
 
 /* %ok-for-header */
 
-#line 65 "PropCtlScanner.ll"
+#line 64 "../1.3.2/src/properties/PropCtlScanner.ll"
 
 
 

@@ -1,68 +1,67 @@
-/* A Bison parser, made by GNU Bison 2.5.  */
+// A Bison parser, made by GNU Bison 3.0.2.
 
-/* Skeleton implementation for Bison LALR(1) parsers in C++
-   
-      Copyright (C) 2002-2011 Free Software Foundation, Inc.
-   
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+// Skeleton implementation for Bison LALR(1) parsers in C++
 
-/* As a special exception, you may create a larger work that contains
-   part or all of the Bison parser skeleton and distribute that work
-   under terms of your choice, so long as that work isn't itself a
-   parser generator using the skeleton or a modified version thereof
-   as a parser skeleton.  Alternatively, if you modify or redistribute
-   the parser skeleton itself, you may (at your option) remove this
-   special exception, which will cause the skeleton and the resulting
-   Bison output files to be licensed under the GNU General Public
-   License without this special exception.
-   
-   This special exception was added by the Free Software Foundation in
-   version 2.2 of Bison.  */
+// Copyright (C) 2002-2013 Free Software Foundation, Inc.
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+// As a special exception, you may create a larger work that contains
+// part or all of the Bison parser skeleton and distribute that work
+// under terms of your choice, so long as that work isn't itself a
+// parser generator using the skeleton or a modified version thereof
+// as a parser skeleton.  Alternatively, if you modify or redistribute
+// the parser skeleton itself, you may (at your option) remove this
+// special exception, which will cause the skeleton and the resulting
+// Bison output files to be licensed under the GNU General Public
+// License without this special exception.
+
+// This special exception was added by the Free Software Foundation in
+// version 2.2 of Bison.
 
 // Take the name prefix into account.
 #define yylex   autoparserlex
 
-/* First part of user declarations.  */
+// First part of user declarations.
 
+#line 39 "src/automata/AutoParser.cc" // lalr1.cc:399
 
-/* Line 293 of lalr1.cc  */
-#line 41 "src/automata/AutoParser.cc"
-
+# ifndef YY_NULLPTR
+#  if defined __cplusplus && 201103L <= __cplusplus
+#   define YY_NULLPTR nullptr
+#  else
+#   define YY_NULLPTR 0
+#  endif
+# endif
 
 #include "AutoParser.hh"
 
-/* User implementation prologue.  */
+// User implementation prologue.
 
-
-/* Line 299 of lalr1.cc  */
-#line 50 "src/automata/AutoParser.cc"
-/* Unqualified %code blocks.  */
-
-/* Line 300 of lalr1.cc  */
-#line 35 "../iimc/src/automata/AutoParser.yy"
+#line 53 "src/automata/AutoParser.cc" // lalr1.cc:407
+// Unqualified %code blocks.
+#line 35 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:408
 
 #include "AutoWrapper.h"
 
+#line 59 "src/automata/AutoParser.cc" // lalr1.cc:408
 
-
-/* Line 300 of lalr1.cc  */
-#line 61 "src/automata/AutoParser.cc"
 
 #ifndef YY_
 # if defined YYENABLE_NLS && YYENABLE_NLS
 #  if ENABLE_NLS
-#   include <libintl.h> /* FIXME: INFRINGES ON USER NAME SPACE */
+#   include <libintl.h> // FIXME: INFRINGES ON USER NAME SPACE.
 #   define YY_(msgid) dgettext ("bison-runtime", msgid)
 #  endif
 # endif
@@ -71,79 +70,78 @@
 # endif
 #endif
 
+#define YYRHSLOC(Rhs, K) ((Rhs)[K].location)
 /* YYLLOC_DEFAULT -- Set CURRENT to span from RHS[1] to RHS[N].
    If N is 0, then set CURRENT to the empty location which ends
    the previous symbol: RHS[0] (always defined).  */
 
-#define YYRHSLOC(Rhs, K) ((Rhs)[K])
-#ifndef YYLLOC_DEFAULT
-# define YYLLOC_DEFAULT(Current, Rhs, N)                               \
- do                                                                    \
-   if (N)                                                              \
-     {                                                                 \
-       (Current).begin = YYRHSLOC (Rhs, 1).begin;                      \
-       (Current).end   = YYRHSLOC (Rhs, N).end;                        \
-     }                                                                 \
-   else                                                                \
-     {                                                                 \
-       (Current).begin = (Current).end = YYRHSLOC (Rhs, 0).end;        \
-     }                                                                 \
- while (false)
-#endif
+# ifndef YYLLOC_DEFAULT
+#  define YYLLOC_DEFAULT(Current, Rhs, N)                               \
+    do                                                                  \
+      if (N)                                                            \
+        {                                                               \
+          (Current).begin  = YYRHSLOC (Rhs, 1).begin;                   \
+          (Current).end    = YYRHSLOC (Rhs, N).end;                     \
+        }                                                               \
+      else                                                              \
+        {                                                               \
+          (Current).begin = (Current).end = YYRHSLOC (Rhs, 0).end;      \
+        }                                                               \
+    while (/*CONSTCOND*/ false)
+# endif
 
-/* Suppress unused-variable warnings by "using" E.  */
-#define YYUSE(e) ((void) (e))
 
-/* Enable debugging if requested.  */
+// Suppress unused-variable warnings by "using" E.
+#define YYUSE(E) ((void) (E))
+
+// Enable debugging if requested.
 #if YYDEBUG
 
-/* A pseudo ostream that takes yydebug_ into account.  */
+// A pseudo ostream that takes yydebug_ into account.
 # define YYCDEBUG if (yydebug_) (*yycdebug_)
 
-# define YY_SYMBOL_PRINT(Title, Type, Value, Location)	\
-do {							\
-  if (yydebug_)						\
-    {							\
-      *yycdebug_ << Title << ' ';			\
-      yy_symbol_print_ ((Type), (Value), (Location));	\
-      *yycdebug_ << std::endl;				\
-    }							\
-} while (false)
+# define YY_SYMBOL_PRINT(Title, Symbol)         \
+  do {                                          \
+    if (yydebug_)                               \
+    {                                           \
+      *yycdebug_ << Title << ' ';               \
+      yy_print_ (*yycdebug_, Symbol);           \
+      *yycdebug_ << std::endl;                  \
+    }                                           \
+  } while (false)
 
-# define YY_REDUCE_PRINT(Rule)		\
-do {					\
-  if (yydebug_)				\
-    yy_reduce_print_ (Rule);		\
-} while (false)
+# define YY_REDUCE_PRINT(Rule)          \
+  do {                                  \
+    if (yydebug_)                       \
+      yy_reduce_print_ (Rule);          \
+  } while (false)
 
-# define YY_STACK_PRINT()		\
-do {					\
-  if (yydebug_)				\
-    yystack_print_ ();			\
-} while (false)
+# define YY_STACK_PRINT()               \
+  do {                                  \
+    if (yydebug_)                       \
+      yystack_print_ ();                \
+  } while (false)
 
-#else /* !YYDEBUG */
+#else // !YYDEBUG
 
 # define YYCDEBUG if (false) std::cerr
-# define YY_SYMBOL_PRINT(Title, Type, Value, Location)
-# define YY_REDUCE_PRINT(Rule)
-# define YY_STACK_PRINT()
+# define YY_SYMBOL_PRINT(Title, Symbol)  YYUSE(Symbol)
+# define YY_REDUCE_PRINT(Rule)           static_cast<void>(0)
+# define YY_STACK_PRINT()                static_cast<void>(0)
 
-#endif /* !YYDEBUG */
+#endif // !YYDEBUG
 
-#define yyerrok		(yyerrstatus_ = 0)
-#define yyclearin	(yychar = yyempty_)
+#define yyerrok         (yyerrstatus_ = 0)
+#define yyclearin       (yyempty = true)
 
-#define YYACCEPT	goto yyacceptlab
-#define YYABORT		goto yyabortlab
-#define YYERROR		goto yyerrorlab
+#define YYACCEPT        goto yyacceptlab
+#define YYABORT         goto yyabortlab
+#define YYERROR         goto yyerrorlab
 #define YYRECOVERING()  (!!yyerrstatus_)
 
 
 namespace autoparser {
-
-/* Line 382 of lalr1.cc  */
-#line 147 "src/automata/AutoParser.cc"
+#line 145 "src/automata/AutoParser.cc" // lalr1.cc:474
 
   /* Return YYSTR after stripping away unnecessary quotes and
      backslashes, so that it's suitable for yyerror.  The heuristic is
@@ -168,7 +166,7 @@ namespace autoparser {
             case '\\':
               if (*++yyp != '\\')
                 goto do_not_strip_quotes;
-              /* Fall through.  */
+              // Fall through.
             default:
               yyr += *yyp;
               break;
@@ -191,95 +189,244 @@ namespace autoparser {
       yycdebug_ (&std::cerr),
 #endif
       driver (driver_yyarg)
+  {}
+
+  auto_parser::~auto_parser ()
+  {}
+
+
+  /*---------------.
+  | Symbol types.  |
+  `---------------*/
+
+  inline
+  auto_parser::syntax_error::syntax_error (const location_type& l, const std::string& m)
+    : std::runtime_error (m)
+    , location (l)
+  {}
+
+  // basic_symbol.
+  template <typename Base>
+  inline
+  auto_parser::basic_symbol<Base>::basic_symbol ()
+    : value ()
+  {}
+
+  template <typename Base>
+  inline
+  auto_parser::basic_symbol<Base>::basic_symbol (const basic_symbol& other)
+    : Base (other)
+    , value ()
+    , location (other.location)
+  {
+    value = other.value;
+  }
+
+
+  template <typename Base>
+  inline
+  auto_parser::basic_symbol<Base>::basic_symbol (typename Base::kind_type t, const semantic_type& v, const location_type& l)
+    : Base (t)
+    , value (v)
+    , location (l)
+  {}
+
+
+  /// Constructor for valueless symbols.
+  template <typename Base>
+  inline
+  auto_parser::basic_symbol<Base>::basic_symbol (typename Base::kind_type t, const location_type& l)
+    : Base (t)
+    , value ()
+    , location (l)
+  {}
+
+  template <typename Base>
+  inline
+  auto_parser::basic_symbol<Base>::~basic_symbol ()
   {
   }
 
-  auto_parser::~auto_parser ()
+  template <typename Base>
+  inline
+  void
+  auto_parser::basic_symbol<Base>::move (basic_symbol& s)
   {
+    super_type::move(s);
+    value = s.value;
+    location = s.location;
+  }
+
+  // by_type.
+  inline
+  auto_parser::by_type::by_type ()
+     : type (empty)
+  {}
+
+  inline
+  auto_parser::by_type::by_type (const by_type& other)
+    : type (other.type)
+  {}
+
+  inline
+  auto_parser::by_type::by_type (token_type t)
+    : type (yytranslate_ (t))
+  {}
+
+  inline
+  void
+  auto_parser::by_type::move (by_type& that)
+  {
+    type = that.type;
+    that.type = empty;
+  }
+
+  inline
+  int
+  auto_parser::by_type::type_get () const
+  {
+    return type;
+  }
+
+
+  // by_state.
+  inline
+  auto_parser::by_state::by_state ()
+    : state (empty)
+  {}
+
+  inline
+  auto_parser::by_state::by_state (const by_state& other)
+    : state (other.state)
+  {}
+
+  inline
+  void
+  auto_parser::by_state::move (by_state& that)
+  {
+    state = that.state;
+    that.state = empty;
+  }
+
+  inline
+  auto_parser::by_state::by_state (state_type s)
+    : state (s)
+  {}
+
+  inline
+  auto_parser::symbol_number_type
+  auto_parser::by_state::type_get () const
+  {
+    return state == empty ? 0 : yystos_[state];
+  }
+
+  inline
+  auto_parser::stack_symbol_type::stack_symbol_type ()
+  {}
+
+
+  inline
+  auto_parser::stack_symbol_type::stack_symbol_type (state_type s, symbol_type& that)
+    : super_type (s, that.location)
+  {
+    value = that.value;
+    // that is emptied.
+    that.type = empty;
+  }
+
+  inline
+  auto_parser::stack_symbol_type&
+  auto_parser::stack_symbol_type::operator= (const stack_symbol_type& that)
+  {
+    state = that.state;
+    value = that.value;
+    location = that.location;
+    return *this;
+  }
+
+
+  template <typename Base>
+  inline
+  void
+  auto_parser::yy_destroy_ (const char* yymsg, basic_symbol<Base>& yysym) const
+  {
+    if (yymsg)
+      YY_SYMBOL_PRINT (yymsg, yysym);
+
+    // User destructor.
+    switch (yysym.type_get ())
+    {
+            case 11: // "identifier"
+
+#line 60 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:599
+        { delete (yysym.value.sval); }
+#line 364 "src/automata/AutoParser.cc" // lalr1.cc:599
+        break;
+
+
+      default:
+        break;
+    }
   }
 
 #if YYDEBUG
-  /*--------------------------------.
-  | Print this symbol on YYOUTPUT.  |
-  `--------------------------------*/
-
-  inline void
-  auto_parser::yy_symbol_value_print_ (int yytype,
-			   const semantic_type* yyvaluep, const location_type* yylocationp)
-  {
-    YYUSE (yylocationp);
-    YYUSE (yyvaluep);
-    switch (yytype)
-      {
-        case 11: /* "\"identifier\"" */
-
-/* Line 449 of lalr1.cc  */
-#line 59 "../iimc/src/automata/AutoParser.yy"
-	{ debug_stream() << *(yyvaluep->sval); };
-
-/* Line 449 of lalr1.cc  */
-#line 222 "src/automata/AutoParser.cc"
-	break;
-      case 36: /* "expression" */
-
-/* Line 449 of lalr1.cc  */
-#line 61 "../iimc/src/automata/AutoParser.yy"
-	{ debug_stream() << stringOf(*driver.ev,(yyvaluep->ival)); };
-
-/* Line 449 of lalr1.cc  */
-#line 231 "src/automata/AutoParser.cc"
-	break;
-       default:
-	  break;
-      }
-  }
-
-
+  template <typename Base>
   void
-  auto_parser::yy_symbol_print_ (int yytype,
-			   const semantic_type* yyvaluep, const location_type* yylocationp)
+  auto_parser::yy_print_ (std::ostream& yyo,
+                                     const basic_symbol<Base>& yysym) const
   {
-    *yycdebug_ << (yytype < yyntokens_ ? "token" : "nterm")
-	       << ' ' << yytname_[yytype] << " ("
-	       << *yylocationp << ": ";
-    yy_symbol_value_print_ (yytype, yyvaluep, yylocationp);
-    *yycdebug_ << ')';
+    std::ostream& yyoutput = yyo;
+    YYUSE (yyoutput);
+    symbol_number_type yytype = yysym.type_get ();
+    yyo << (yytype < yyntokens_ ? "token" : "nterm")
+        << ' ' << yytname_[yytype] << " ("
+        << yysym.location << ": ";
+    switch (yytype)
+    {
+            case 11: // "identifier"
+
+#line 59 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:617
+        { debug_stream() << *(yysym.value.sval); }
+#line 391 "src/automata/AutoParser.cc" // lalr1.cc:617
+        break;
+
+      case 36: // expression
+
+#line 61 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:617
+        { debug_stream() << stringOf(*driver.ev,(yysym.value.ival)); }
+#line 398 "src/automata/AutoParser.cc" // lalr1.cc:617
+        break;
+
+
+      default:
+        break;
+    }
+    yyo << ')';
   }
 #endif
 
+  inline
   void
-  auto_parser::yydestruct_ (const char* yymsg,
-			   int yytype, semantic_type* yyvaluep, location_type* yylocationp)
+  auto_parser::yypush_ (const char* m, state_type s, symbol_type& sym)
   {
-    YYUSE (yylocationp);
-    YYUSE (yymsg);
-    YYUSE (yyvaluep);
-
-    YY_SYMBOL_PRINT (yymsg, yytype, yyvaluep, yylocationp);
-
-    switch (yytype)
-      {
-        case 11: /* "\"identifier\"" */
-
-/* Line 480 of lalr1.cc  */
-#line 60 "../iimc/src/automata/AutoParser.yy"
-	{ delete (yyvaluep->sval); };
-
-/* Line 480 of lalr1.cc  */
-#line 270 "src/automata/AutoParser.cc"
-	break;
-
-	default:
-	  break;
-      }
+    stack_symbol_type t (s, sym);
+    yypush_ (m, t);
   }
 
+  inline
+  void
+  auto_parser::yypush_ (const char* m, stack_symbol_type& s)
+  {
+    if (m)
+      YY_SYMBOL_PRINT (m, s);
+    yystack_.push (s);
+  }
+
+  inline
   void
   auto_parser::yypop_ (unsigned int n)
   {
-    yystate_stack_.pop (n);
-    yysemantic_stack_.pop (n);
-    yylocation_stack_.pop (n);
+    yystack_.pop (n);
   }
 
 #if YYDEBUG
@@ -307,7 +454,17 @@ namespace autoparser {
   {
     yydebug_ = l;
   }
-#endif
+#endif // YYDEBUG
+
+  inline auto_parser::state_type
+  auto_parser::yy_lr_goto_state_ (state_type yystate, int yysym)
+  {
+    int yyr = yypgoto_[yysym - yyntokens_] + yystate;
+    if (0 <= yyr && yyr <= yylast_ && yycheck_[yyr] == yystate)
+      return yytable_[yyr];
+    else
+      return yydefgoto_[yysym - yyntokens_];
+  }
 
   inline bool
   auto_parser::yy_pact_value_is_default_ (int yyvalue)
@@ -324,135 +481,117 @@ namespace autoparser {
   int
   auto_parser::parse ()
   {
-    /// Lookahead and lookahead in internal form.
-    int yychar = yyempty_;
-    int yytoken = 0;
+    /// Whether yyla contains a lookahead.
+    bool yyempty = true;
 
-    /* State.  */
+    // State.
     int yyn;
+    /// Length of the RHS of the rule being reduced.
     int yylen = 0;
-    int yystate = 0;
 
-    /* Error handling.  */
+    // Error handling.
     int yynerrs_ = 0;
     int yyerrstatus_ = 0;
 
-    /// Semantic value of the lookahead.
-    semantic_type yylval;
-    /// Location of the lookahead.
-    location_type yylloc;
+    /// The lookahead symbol.
+    symbol_type yyla;
+
     /// The locations where the error started and ended.
-    location_type yyerror_range[3];
+    stack_symbol_type yyerror_range[3];
 
-    /// $$.
-    semantic_type yyval;
-    /// @$.
-    location_type yyloc;
-
+    /// The return value of parse ().
     int yyresult;
 
+    // FIXME: This shoud be completely indented.  It is not yet to
+    // avoid gratuitous conflicts when merging into the master branch.
+    try
+      {
     YYCDEBUG << "Starting parse" << std::endl;
 
 
-    /* User initialization code.  */
-    
-/* Line 565 of lalr1.cc  */
-#line 18 "../iimc/src/automata/AutoParser.yy"
+    // User initialization code.
+    #line 18 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:725
 {
   // Initialize the initial location.
-  yylloc.begin.filename = yylloc.end.filename = &driver.file;
+  yyla.location.begin.filename = yyla.location.end.filename = &driver.file;
 }
 
-/* Line 565 of lalr1.cc  */
-#line 368 "src/automata/AutoParser.cc"
+#line 520 "src/automata/AutoParser.cc" // lalr1.cc:725
 
-    /* Initialize the stacks.  The initial state will be pushed in
+    /* Initialize the stack.  The initial state will be set in
        yynewstate, since the latter expects the semantical and the
        location values to have been already stored, initialize these
        stacks with a primary value.  */
-    yystate_stack_ = state_stack_type (0);
-    yysemantic_stack_ = semantic_stack_type (0);
-    yylocation_stack_ = location_stack_type (0);
-    yysemantic_stack_.push (yylval);
-    yylocation_stack_.push (yylloc);
+    yystack_.clear ();
+    yypush_ (YY_NULLPTR, 0, yyla);
 
-    /* New state.  */
+    // A new symbol was pushed on the stack.
   yynewstate:
-    yystate_stack_.push (yystate);
-    YYCDEBUG << "Entering state " << yystate << std::endl;
+    YYCDEBUG << "Entering state " << yystack_[0].state << std::endl;
 
-    /* Accept?  */
-    if (yystate == yyfinal_)
+    // Accept?
+    if (yystack_[0].state == yyfinal_)
       goto yyacceptlab;
 
     goto yybackup;
 
-    /* Backup.  */
+    // Backup.
   yybackup:
 
-    /* Try to take a decision without lookahead.  */
-    yyn = yypact_[yystate];
+    // Try to take a decision without lookahead.
+    yyn = yypact_[yystack_[0].state];
     if (yy_pact_value_is_default_ (yyn))
       goto yydefault;
 
-    /* Read a lookahead token.  */
-    if (yychar == yyempty_)
+    // Read a lookahead token.
+    if (yyempty)
       {
-	YYCDEBUG << "Reading a token: ";
-	yychar = yylex (&yylval, &yylloc, driver);
+        YYCDEBUG << "Reading a token: ";
+        try
+          {
+            yyla.type = yytranslate_ (yylex (&yyla.value, &yyla.location, driver));
+          }
+        catch (const syntax_error& yyexc)
+          {
+            error (yyexc);
+            goto yyerrlab1;
+          }
+        yyempty = false;
       }
+    YY_SYMBOL_PRINT ("Next token is", yyla);
 
-
-    /* Convert token to internal form.  */
-    if (yychar <= yyeof_)
-      {
-	yychar = yytoken = yyeof_;
-	YYCDEBUG << "Now at end of input." << std::endl;
-      }
-    else
-      {
-	yytoken = yytranslate_ (yychar);
-	YY_SYMBOL_PRINT ("Next token is", yytoken, &yylval, &yylloc);
-      }
-
-    /* If the proper action on seeing token YYTOKEN is to reduce or to
-       detect an error, take that action.  */
-    yyn += yytoken;
-    if (yyn < 0 || yylast_ < yyn || yycheck_[yyn] != yytoken)
+    /* If the proper action on seeing token YYLA.TYPE is to reduce or
+       to detect an error, take that action.  */
+    yyn += yyla.type_get ();
+    if (yyn < 0 || yylast_ < yyn || yycheck_[yyn] != yyla.type_get ())
       goto yydefault;
 
-    /* Reduce or error.  */
+    // Reduce or error.
     yyn = yytable_[yyn];
     if (yyn <= 0)
       {
-	if (yy_table_value_is_error_ (yyn))
-	  goto yyerrlab;
-	yyn = -yyn;
-	goto yyreduce;
+        if (yy_table_value_is_error_ (yyn))
+          goto yyerrlab;
+        yyn = -yyn;
+        goto yyreduce;
       }
 
-    /* Shift the lookahead token.  */
-    YY_SYMBOL_PRINT ("Shifting", yytoken, &yylval, &yylloc);
+    // Discard the token being shifted.
+    yyempty = true;
 
-    /* Discard the token being shifted.  */
-    yychar = yyempty_;
-
-    yysemantic_stack_.push (yylval);
-    yylocation_stack_.push (yylloc);
-
-    /* Count tokens shifted since error; after three, turn off error
-       status.  */
+    // Count tokens shifted since error; after three, turn off error status.
     if (yyerrstatus_)
       --yyerrstatus_;
 
-    yystate = yyn;
+    // Shift the lookahead token.
+    yypush_ ("Shifting", yyn, yyla);
     goto yynewstate;
 
   /*-----------------------------------------------------------.
   | yydefault -- do the default action for the current state.  |
   `-----------------------------------------------------------*/
   yydefault:
-    yyn = yydefact_[yystate];
+    yyn = yydefact_[yystack_[0].state];
     if (yyn == 0)
       goto yyerrlab;
     goto yyreduce;
@@ -462,312 +601,271 @@ namespace autoparser {
   `-----------------------------*/
   yyreduce:
     yylen = yyr2_[yyn];
-    /* If YYLEN is nonzero, implement the default value of the action:
-       `$$ = $1'.  Otherwise, use the top of the stack.
-
-       Otherwise, the following line sets YYVAL to garbage.
-       This behavior is undocumented and Bison
-       users should not rely upon it.  */
-    if (yylen)
-      yyval = yysemantic_stack_[yylen - 1];
-    else
-      yyval = yysemantic_stack_[0];
-
     {
-      slice<location_type, location_stack_type> slice (yylocation_stack_, yylen);
-      YYLLOC_DEFAULT (yyloc, slice, yylen);
-    }
-    YY_REDUCE_PRINT (yyn);
-    switch (yyn)
-      {
-	  case 3:
+      stack_symbol_type yylhs;
+      yylhs.state = yy_lr_goto_state_(yystack_[yylen].state, yyr1_[yyn]);
+      /* If YYLEN is nonzero, implement the default value of the
+         action: '$$ = $1'.  Otherwise, use the top of the stack.
 
-/* Line 690 of lalr1.cc  */
-#line 73 "../iimc/src/automata/AutoParser.yy"
-    { driver.eat->addAutomaton(*(yysemantic_stack_[(2) - (2)].aut));
-                    delete (yysemantic_stack_[(2) - (2)].aut); }
+         Otherwise, the following line sets YYLHS.VALUE to garbage.
+         This behavior is undocumented and Bison users should not rely
+         upon it.  */
+      if (yylen)
+        yylhs.value = yystack_[yylen - 1].value;
+      else
+        yylhs.value = yystack_[0].value;
+
+      // Compute the default @$.
+      {
+        slice<stack_symbol_type, stack_type> slice (yystack_, yylen);
+        YYLLOC_DEFAULT (yylhs.location, slice, yylen);
+      }
+
+      // Perform the reduction.
+      YY_REDUCE_PRINT (yyn);
+      try
+        {
+          switch (yyn)
+            {
+  case 3:
+#line 73 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { driver.eat->addAutomaton(*(yystack_[0].value.aut));
+                    delete (yystack_[0].value.aut); }
+#line 635 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 4:
-
-/* Line 690 of lalr1.cc  */
-#line 77 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = (yysemantic_stack_[(2) - (1)].aut);
-                                                (yyval.aut)->badStates = *(yysemantic_stack_[(2) - (2)].states);
-                                                delete (yysemantic_stack_[(2) - (2)].states); }
+#line 77 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = (yystack_[1].value.aut);
+                                                (yylhs.value.aut)->badStates = *(yystack_[0].value.states);
+                                                delete (yystack_[0].value.states); }
+#line 643 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 5:
-
-/* Line 690 of lalr1.cc  */
-#line 81 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = (yysemantic_stack_[(2) - (2)].aut); }
+#line 81 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = (yystack_[0].value.aut); }
+#line 649 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 6:
-
-/* Line 690 of lalr1.cc  */
-#line 83 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = new Automaton; 
-                    assert((yysemantic_stack_[(1) - (1)].aut)->states.size() == 1);
-                    (yyval.aut)->states.push_back((yysemantic_stack_[(1) - (1)].aut)->states[0]);
-                    (yyval.aut)->initialStates.insert((yyval.aut)->initialStates.end(), (yysemantic_stack_[(1) - (1)].aut)->initialStates.begin(), (yysemantic_stack_[(1) - (1)].aut)->initialStates.end());
-                    (yyval.aut)->transitions.insert((yyval.aut)->transitions.end(),
-                    (yysemantic_stack_[(1) - (1)].aut)->transitions.begin(), (yysemantic_stack_[(1) - (1)].aut)->transitions.end());
-                    delete (yysemantic_stack_[(1) - (1)].aut); }
+#line 83 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = new Automaton; 
+                    assert((yystack_[0].value.aut)->states.size() == 1);
+                    (yylhs.value.aut)->states.push_back((yystack_[0].value.aut)->states[0]);
+                    (yylhs.value.aut)->initialStates.insert((yylhs.value.aut)->initialStates.end(), (yystack_[0].value.aut)->initialStates.begin(), (yystack_[0].value.aut)->initialStates.end());
+                    (yylhs.value.aut)->transitions.insert((yylhs.value.aut)->transitions.end(),
+                    (yystack_[0].value.aut)->transitions.begin(), (yystack_[0].value.aut)->transitions.end());
+                    delete (yystack_[0].value.aut); }
+#line 661 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 7:
-
-/* Line 690 of lalr1.cc  */
-#line 90 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = (yysemantic_stack_[(2) - (1)].aut);
-                    assert((yysemantic_stack_[(2) - (2)].aut)->states.size() == 1);
-                    (yyval.aut)->states.push_back((yysemantic_stack_[(2) - (2)].aut)->states[0]);
-                    (yyval.aut)->initialStates.insert((yyval.aut)->initialStates.end(), (yysemantic_stack_[(2) - (2)].aut)->initialStates.begin(), (yysemantic_stack_[(2) - (2)].aut)->initialStates.end());
-                    (yyval.aut)->transitions.insert((yyval.aut)->transitions.end(),
-                    (yysemantic_stack_[(2) - (2)].aut)->transitions.begin(), (yysemantic_stack_[(2) - (2)].aut)->transitions.end());
-                    delete (yysemantic_stack_[(2) - (2)].aut); }
+#line 90 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = (yystack_[1].value.aut);
+                    assert((yystack_[0].value.aut)->states.size() == 1);
+                    (yylhs.value.aut)->states.push_back((yystack_[0].value.aut)->states[0]);
+                    (yylhs.value.aut)->initialStates.insert((yylhs.value.aut)->initialStates.end(), (yystack_[0].value.aut)->initialStates.begin(), (yystack_[0].value.aut)->initialStates.end());
+                    (yylhs.value.aut)->transitions.insert((yylhs.value.aut)->transitions.end(),
+                    (yystack_[0].value.aut)->transitions.begin(), (yystack_[0].value.aut)->transitions.end());
+                    delete (yystack_[0].value.aut); }
+#line 673 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 8:
-
-/* Line 690 of lalr1.cc  */
-#line 99 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = (yysemantic_stack_[(2) - (2)].aut);
-                        (yyval.aut)->initialStates.push_back((yysemantic_stack_[(2) - (2)].aut)->states[0]); }
+#line 99 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = (yystack_[0].value.aut);
+                        (yylhs.value.aut)->initialStates.push_back((yystack_[0].value.aut)->states[0]); }
+#line 680 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 9:
-
-/* Line 690 of lalr1.cc  */
-#line 101 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = (yysemantic_stack_[(1) - (1)].aut); }
+#line 101 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = (yystack_[0].value.aut); }
+#line 686 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 10:
-
-/* Line 690 of lalr1.cc  */
-#line 104 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.aut) = new Automaton;
-                                         (yyval.aut)->states.push_back((yysemantic_stack_[(4) - (1)].index));
-                                         for(unsigned i = 0; i < (yysemantic_stack_[(4) - (3)].transitions)->size(); ++i)
-                                           (*(yysemantic_stack_[(4) - (3)].transitions))[i].source = (yysemantic_stack_[(4) - (1)].index);
-                                         (yyval.aut)->transitions = *(yysemantic_stack_[(4) - (3)].transitions);
-                                         delete (yysemantic_stack_[(4) - (3)].transitions); }
+#line 104 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.aut) = new Automaton;
+                                         (yylhs.value.aut)->states.push_back((yystack_[3].value.index));
+                                         for(unsigned i = 0; i < (yystack_[1].value.transitions)->size(); ++i)
+                                           (*(yystack_[1].value.transitions))[i].source = (yystack_[3].value.index);
+                                         (yylhs.value.aut)->transitions = *(yystack_[1].value.transitions);
+                                         delete (yystack_[1].value.transitions); }
+#line 697 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 11:
-
-/* Line 690 of lalr1.cc  */
-#line 112 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.transitions) = new std::vector<Automaton::Transition>;
-                                       (yyval.transitions)->push_back(*(yysemantic_stack_[(1) - (1)].transition));
-                                       delete (yysemantic_stack_[(1) - (1)].transition); }
+#line 112 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.transitions) = new std::vector<Automaton::Transition>;
+                                       (yylhs.value.transitions)->push_back(*(yystack_[0].value.transition));
+                                       delete (yystack_[0].value.transition); }
+#line 705 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 12:
-
-/* Line 690 of lalr1.cc  */
-#line 115 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.transitions) = (yysemantic_stack_[(3) - (3)].transitions);
-                                       (yyval.transitions)->push_back(*(yysemantic_stack_[(3) - (1)].transition));
-                                       delete (yysemantic_stack_[(3) - (1)].transition); }
+#line 115 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.transitions) = (yystack_[0].value.transitions);
+                                       (yylhs.value.transitions)->push_back(*(yystack_[2].value.transition));
+                                       delete (yystack_[2].value.transition); }
+#line 713 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 13:
-
-/* Line 690 of lalr1.cc  */
-#line 120 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.transition) = new Automaton::Transition;
-                                       (yyval.transition)->destination = (yysemantic_stack_[(4) - (4)].index);
-                                       (yyval.transition)->label = (yysemantic_stack_[(4) - (2)].ival); }
+#line 120 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.transition) = new Automaton::Transition;
+                                       (yylhs.value.transition)->destination = (yystack_[0].value.index);
+                                       (yylhs.value.transition)->label = (yystack_[2].value.ival); }
+#line 721 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 14:
-
-/* Line 690 of lalr1.cc  */
-#line 124 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.states) = (yysemantic_stack_[(2) - (2)].states); }
+#line 124 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.states) = (yystack_[0].value.states); }
+#line 727 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 15:
-
-/* Line 690 of lalr1.cc  */
-#line 126 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.states) = new std::vector<Automaton::State>;
-                                      (yyval.states)->push_back((yysemantic_stack_[(1) - (1)].index)); }
+#line 126 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.states) = new std::vector<Automaton::State>;
+                                      (yylhs.value.states)->push_back((yystack_[0].value.index)); }
+#line 734 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 16:
-
-/* Line 690 of lalr1.cc  */
-#line 128 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.states) = (yysemantic_stack_[(2) - (1)].states);
-                                      (yyval.states)->push_back((yysemantic_stack_[(2) - (2)].index)); }
+#line 128 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.states) = (yystack_[1].value.states);
+                                      (yylhs.value.states)->push_back((yystack_[0].value.index)); }
+#line 741 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 17:
-
-/* Line 690 of lalr1.cc  */
-#line 132 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = (yysemantic_stack_[(3) - (2)].ival); }
+#line 132 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = (yystack_[1].value.ival); }
+#line 747 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 18:
-
-/* Line 690 of lalr1.cc  */
-#line 133 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->btrue(); }
+#line 133 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->btrue(); }
+#line 753 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 19:
-
-/* Line 690 of lalr1.cc  */
-#line 134 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->bfalse(); }
+#line 134 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->bfalse(); }
+#line 759 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 20:
-
-/* Line 690 of lalr1.cc  */
-#line 135 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Or, (yysemantic_stack_[(3) - (1)].ival), (yysemantic_stack_[(3) - (3)].ival)); }
+#line 135 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Or, (yystack_[2].value.ival), (yystack_[0].value.ival)); }
+#line 765 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 21:
-
-/* Line 690 of lalr1.cc  */
-#line 136 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::And, (yysemantic_stack_[(3) - (1)].ival), (yysemantic_stack_[(3) - (3)].ival)); }
+#line 136 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::And, (yystack_[2].value.ival), (yystack_[0].value.ival)); }
+#line 771 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 22:
-
-/* Line 690 of lalr1.cc  */
-#line 137 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Not, driver.ev->apply(Expr::Equiv, (yysemantic_stack_[(3) - (1)].ival), (yysemantic_stack_[(3) - (3)].ival))); }
+#line 137 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Not, driver.ev->apply(Expr::Equiv, (yystack_[2].value.ival), (yystack_[0].value.ival))); }
+#line 777 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 23:
-
-/* Line 690 of lalr1.cc  */
-#line 138 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Equiv, (yysemantic_stack_[(3) - (1)].ival), (yysemantic_stack_[(3) - (3)].ival)); }
+#line 138 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Equiv, (yystack_[2].value.ival), (yystack_[0].value.ival)); }
+#line 783 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 24:
-
-/* Line 690 of lalr1.cc  */
-#line 139 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Implies, (yysemantic_stack_[(3) - (1)].ival), (yysemantic_stack_[(3) - (3)].ival)); }
+#line 139 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Implies, (yystack_[2].value.ival), (yystack_[0].value.ival)); }
+#line 789 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 25:
-
-/* Line 690 of lalr1.cc  */
-#line 140 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Not, (yysemantic_stack_[(2) - (2)].ival)); }
+#line 140 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Not, (yystack_[0].value.ival)); }
+#line 795 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 26:
-
-/* Line 690 of lalr1.cc  */
-#line 141 "../iimc/src/automata/AutoParser.yy"
-    { (yyval.ival) = driver.ev->apply(Expr::Not, (yysemantic_stack_[(2) - (2)].ival)); }
+#line 141 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { (yylhs.value.ival) = driver.ev->apply(Expr::Not, (yystack_[0].value.ival)); }
+#line 801 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
   case 27:
-
-/* Line 690 of lalr1.cc  */
-#line 142 "../iimc/src/automata/AutoParser.yy"
-    { if (driver.ev->varExists(*(yysemantic_stack_[(1) - (1)].sval))) {
-                                        (yyval.ival) = driver.ev->newVar(*(yysemantic_stack_[(1) - (1)].sval));
-                                        if (driver.eat->isOutput((yyval.ival)))
-                                          (yyval.ival) = driver.eat->outputFnOf((yyval.ival));
+#line 142 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:847
+    { if (driver.ev->varExists(*(yystack_[0].value.sval))) {
+                                        (yylhs.value.ival) = driver.ev->newVar(*(yystack_[0].value.sval));
+                                        if (driver.eat->isOutput((yylhs.value.ival)))
+                                          (yylhs.value.ival) = driver.eat->outputFnOf((yylhs.value.ival));
                                       } else {
-                                        error(yylloc, std::string("unknown variable: ") + *(yysemantic_stack_[(1) - (1)].sval));
+                                        error(yylhs.location, std::string("unknown variable: ") + *(yystack_[0].value.sval));
                                         YYERROR;
                                       }
-                                      delete (yysemantic_stack_[(1) - (1)].sval);
+                                      delete (yystack_[0].value.sval);
                                     }
+#line 816 "src/automata/AutoParser.cc" // lalr1.cc:847
     break;
 
 
+#line 820 "src/automata/AutoParser.cc" // lalr1.cc:847
+            default:
+              break;
+            }
+        }
+      catch (const syntax_error& yyexc)
+        {
+          error (yyexc);
+          YYERROR;
+        }
+      YY_SYMBOL_PRINT ("-> $$ =", yylhs);
+      yypop_ (yylen);
+      yylen = 0;
+      YY_STACK_PRINT ();
 
-/* Line 690 of lalr1.cc  */
-#line 700 "src/automata/AutoParser.cc"
-	default:
-          break;
-      }
-    /* User semantic actions sometimes alter yychar, and that requires
-       that yytoken be updated with the new translation.  We take the
-       approach of translating immediately before every use of yytoken.
-       One alternative is translating here after every semantic action,
-       but that translation would be missed if the semantic action
-       invokes YYABORT, YYACCEPT, or YYERROR immediately after altering
-       yychar.  In the case of YYABORT or YYACCEPT, an incorrect
-       destructor might then be invoked immediately.  In the case of
-       YYERROR, subsequent parser actions might lead to an incorrect
-       destructor call or verbose syntax error message before the
-       lookahead is translated.  */
-    YY_SYMBOL_PRINT ("-> $$ =", yyr1_[yyn], &yyval, &yyloc);
-
-    yypop_ (yylen);
-    yylen = 0;
-    YY_STACK_PRINT ();
-
-    yysemantic_stack_.push (yyval);
-    yylocation_stack_.push (yyloc);
-
-    /* Shift the result of the reduction.  */
-    yyn = yyr1_[yyn];
-    yystate = yypgoto_[yyn - yyntokens_] + yystate_stack_[0];
-    if (0 <= yystate && yystate <= yylast_
-	&& yycheck_[yystate] == yystate_stack_[0])
-      yystate = yytable_[yystate];
-    else
-      yystate = yydefgoto_[yyn - yyntokens_];
+      // Shift the result of the reduction.
+      yypush_ (YY_NULLPTR, yylhs);
+    }
     goto yynewstate;
 
-  /*------------------------------------.
-  | yyerrlab -- here on detecting error |
-  `------------------------------------*/
+  /*--------------------------------------.
+  | yyerrlab -- here on detecting error.  |
+  `--------------------------------------*/
   yyerrlab:
-    /* Make sure we have latest lookahead translation.  See comments at
-       user semantic actions for why this is necessary.  */
-    yytoken = yytranslate_ (yychar);
-
-    /* If not already recovering from an error, report this error.  */
+    // If not already recovering from an error, report this error.
     if (!yyerrstatus_)
       {
-	++yynerrs_;
-	if (yychar == yyempty_)
-	  yytoken = yyempty_;
-	error (yylloc, yysyntax_error_ (yystate, yytoken));
+        ++yynerrs_;
+        error (yyla.location, yysyntax_error_ (yystack_[0].state,
+                                           yyempty ? yyempty_ : yyla.type_get ()));
       }
 
-    yyerror_range[1] = yylloc;
+
+    yyerror_range[1].location = yyla.location;
     if (yyerrstatus_ == 3)
       {
-	/* If just tried and failed to reuse lookahead token after an
-	 error, discard it.  */
+        /* If just tried and failed to reuse lookahead token after an
+           error, discard it.  */
 
-	if (yychar <= yyeof_)
-	  {
-	  /* Return failure if at end of input.  */
-	  if (yychar == yyeof_)
-	    YYABORT;
-	  }
-	else
-	  {
-	    yydestruct_ ("Error: discarding", yytoken, &yylval, &yylloc);
-	    yychar = yyempty_;
-	  }
+        // Return failure if at end of input.
+        if (yyla.type_get () == yyeof_)
+          YYABORT;
+        else if (!yyempty)
+          {
+            yy_destroy_ ("Error: discarding", yyla);
+            yyempty = true;
+          }
       }
 
-    /* Else will try to reuse lookahead token after shifting the error
-       token.  */
+    // Else will try to reuse lookahead token after shifting the error token.
     goto yyerrlab1;
 
 
@@ -781,100 +879,105 @@ namespace autoparser {
        code.  */
     if (false)
       goto yyerrorlab;
-
-    yyerror_range[1] = yylocation_stack_[yylen - 1];
-    /* Do not reclaim the symbols of the rule which action triggered
+    yyerror_range[1].location = yystack_[yylen - 1].location;
+    /* Do not reclaim the symbols of the rule whose action triggered
        this YYERROR.  */
     yypop_ (yylen);
     yylen = 0;
-    yystate = yystate_stack_[0];
     goto yyerrlab1;
 
   /*-------------------------------------------------------------.
   | yyerrlab1 -- common code for both syntax error and YYERROR.  |
   `-------------------------------------------------------------*/
   yyerrlab1:
-    yyerrstatus_ = 3;	/* Each real token shifted decrements this.  */
+    yyerrstatus_ = 3;   // Each real token shifted decrements this.
+    {
+      stack_symbol_type error_token;
+      for (;;)
+        {
+          yyn = yypact_[yystack_[0].state];
+          if (!yy_pact_value_is_default_ (yyn))
+            {
+              yyn += yyterror_;
+              if (0 <= yyn && yyn <= yylast_ && yycheck_[yyn] == yyterror_)
+                {
+                  yyn = yytable_[yyn];
+                  if (0 < yyn)
+                    break;
+                }
+            }
 
-    for (;;)
-      {
-	yyn = yypact_[yystate];
-	if (!yy_pact_value_is_default_ (yyn))
-	{
-	  yyn += yyterror_;
-	  if (0 <= yyn && yyn <= yylast_ && yycheck_[yyn] == yyterror_)
-	    {
-	      yyn = yytable_[yyn];
-	      if (0 < yyn)
-		break;
-	    }
-	}
+          // Pop the current state because it cannot handle the error token.
+          if (yystack_.size () == 1)
+            YYABORT;
 
-	/* Pop the current state because it cannot handle the error token.  */
-	if (yystate_stack_.height () == 1)
-	YYABORT;
+          yyerror_range[1].location = yystack_[0].location;
+          yy_destroy_ ("Error: popping", yystack_[0]);
+          yypop_ ();
+          YY_STACK_PRINT ();
+        }
 
-	yyerror_range[1] = yylocation_stack_[0];
-	yydestruct_ ("Error: popping",
-		     yystos_[yystate],
-		     &yysemantic_stack_[0], &yylocation_stack_[0]);
-	yypop_ ();
-	yystate = yystate_stack_[0];
-	YY_STACK_PRINT ();
-      }
+      yyerror_range[2].location = yyla.location;
+      YYLLOC_DEFAULT (error_token.location, yyerror_range, 2);
 
-    yyerror_range[2] = yylloc;
-    // Using YYLLOC is tempting, but would change the location of
-    // the lookahead.  YYLOC is available though.
-    YYLLOC_DEFAULT (yyloc, yyerror_range, 2);
-    yysemantic_stack_.push (yylval);
-    yylocation_stack_.push (yyloc);
-
-    /* Shift the error token.  */
-    YY_SYMBOL_PRINT ("Shifting", yystos_[yyn],
-		     &yysemantic_stack_[0], &yylocation_stack_[0]);
-
-    yystate = yyn;
+      // Shift the error token.
+      error_token.state = yyn;
+      yypush_ ("Shifting", error_token);
+    }
     goto yynewstate;
 
-    /* Accept.  */
+    // Accept.
   yyacceptlab:
     yyresult = 0;
     goto yyreturn;
 
-    /* Abort.  */
+    // Abort.
   yyabortlab:
     yyresult = 1;
     goto yyreturn;
 
   yyreturn:
-    if (yychar != yyempty_)
-      {
-        /* Make sure we have latest lookahead translation.  See comments
-           at user semantic actions for why this is necessary.  */
-        yytoken = yytranslate_ (yychar);
-        yydestruct_ ("Cleanup: discarding lookahead", yytoken, &yylval,
-                     &yylloc);
-      }
+    if (!yyempty)
+      yy_destroy_ ("Cleanup: discarding lookahead", yyla);
 
-    /* Do not reclaim the symbols of the rule which action triggered
+    /* Do not reclaim the symbols of the rule whose action triggered
        this YYABORT or YYACCEPT.  */
     yypop_ (yylen);
-    while (yystate_stack_.height () != 1)
+    while (1 < yystack_.size ())
       {
-	yydestruct_ ("Cleanup: popping",
-		   yystos_[yystate_stack_[0]],
-		   &yysemantic_stack_[0],
-		   &yylocation_stack_[0]);
-	yypop_ ();
+        yy_destroy_ ("Cleanup: popping", yystack_[0]);
+        yypop_ ();
       }
 
     return yyresult;
   }
+    catch (...)
+      {
+        YYCDEBUG << "Exception caught: cleaning lookahead and stack"
+                 << std::endl;
+        // Do not try to display the values of the reclaimed symbols,
+        // as their printer might throw an exception.
+        if (!yyempty)
+          yy_destroy_ (YY_NULLPTR, yyla);
+
+        while (1 < yystack_.size ())
+          {
+            yy_destroy_ (YY_NULLPTR, yystack_[0]);
+            yypop_ ();
+          }
+        throw;
+      }
+  }
+
+  void
+  auto_parser::error (const syntax_error& yyexc)
+  {
+    error (yyexc.location, yyexc.what());
+  }
 
   // Generate an error message.
   std::string
-  auto_parser::yysyntax_error_ (int yystate, int yytoken)
+  auto_parser::yysyntax_error_ (state_type yystate, symbol_number_type yytoken) const
   {
     std::string yyres;
     // Number of reported tokens (one for the "unexpected", one per
@@ -899,7 +1002,7 @@ namespace autoparser {
          a consistent state with a default action.  There might have
          been a previous inconsistent state, consistent state with a
          non-default action, or user semantic action that manipulated
-         yychar.
+         yyla.  (However, yyla is currently not documented for users.)
        - Of course, the expected token list depends on states to have
          correct lookahead information, and it depends on the parser not
          to perform extra reductions after fetching a lookahead from the
@@ -920,7 +1023,7 @@ namespace autoparser {
                YYCHECK.  In other words, skip the first -YYN actions for
                this state because they are default actions.  */
             int yyxbegin = yyn < 0 ? -yyn : 0;
-            /* Stay within bounds of both yycheck and yytname.  */
+            // Stay within bounds of both yycheck and yytname.
             int yychecklim = yylast_ - yyn + 1;
             int yyxend = yychecklim < yyntokens_ ? yychecklim : yyntokens_;
             for (int yyx = yyxbegin; yyx < yyxend; ++yyx)
@@ -938,7 +1041,7 @@ namespace autoparser {
           }
       }
 
-    char const* yyformat = 0;
+    char const* yyformat = YY_NULLPTR;
     switch (yycount)
       {
 #define YYCASE_(N, S)                         \
@@ -968,162 +1071,111 @@ namespace autoparser {
   }
 
 
-  /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
-     STATE-NUM.  */
   const signed char auto_parser::yypact_ninf_ = -14;
+
+  const signed char auto_parser::yytable_ninf_ = -1;
+
   const signed char
   auto_parser::yypact_[] =
   {
-       -14,     8,   -14,     3,   -14,    -7,    -5,   -13,     3,   -14,
+     -14,     8,   -14,     3,   -14,    -7,    -5,   -13,     3,   -14,
      -14,     7,   -14,   -14,     5,   -14,   -14,    13,    11,    14,
       12,   -14,   -14,   -14,   -14,    11,    11,    11,    -1,   -14,
        5,   -14,   -14,    -4,    11,    11,    11,    11,    11,    23,
      -14,   -14,     9,     9,     9,    21,   -14,   -14
   };
 
-  /* YYDEFACT[S] -- default reduction number in state S.  Performed when
-     YYTABLE doesn't specify something else to do.  Zero means the
-     default is an error.  */
   const unsigned char
   auto_parser::yydefact_[] =
   {
-         2,     0,     1,     0,     3,     0,     0,     0,     5,     6,
+       2,     0,     1,     0,     3,     0,     0,     0,     5,     6,
        9,     0,     4,     8,     0,     7,    15,    14,     0,     0,
       11,    16,    18,    19,    27,     0,     0,     0,     0,    10,
        0,    25,    26,     0,     0,     0,     0,     0,     0,     0,
       12,    17,    23,    24,    22,    20,    21,    13
   };
 
-  /* YYPGOTO[NTERM-NUM].  */
   const signed char
   auto_parser::yypgoto_[] =
   {
-       -14,   -14,   -14,   -14,   -14,    29,    37,    15,   -14,   -14,
+     -14,   -14,   -14,   -14,   -14,    29,    37,    15,   -14,   -14,
      -14,     4
   };
 
-  /* YYDEFGOTO[NTERM-NUM].  */
   const signed char
   auto_parser::yydefgoto_[] =
   {
-        -1,     1,     4,     5,     8,     9,    10,    19,    20,    12,
+      -1,     1,     4,     5,     8,     9,    10,    19,    20,    12,
       17,    28
   };
 
-  /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
-     positive, shift that token.  If negative, reduce the rule which
-     number is the opposite.  If YYTABLE_NINF_, syntax error.  */
-  const signed char auto_parser::yytable_ninf_ = -1;
   const unsigned char
   auto_parser::yytable_[] =
   {
-        34,    35,    11,    34,    35,    14,     6,     7,     2,    36,
+      34,    35,    11,    34,    35,    14,     6,     7,     2,    36,
       37,    38,    36,    37,    38,     7,     3,    22,    23,    16,
       41,    39,    24,    37,    38,    21,    18,    25,    26,    31,
       32,    33,    30,    29,    27,    47,    38,    15,    42,    43,
       44,    45,    46,    13,     0,    40
   };
 
-  /* YYCHECK.  */
   const signed char
   auto_parser::yycheck_[] =
   {
-         4,     5,     9,     4,     5,    18,     3,    12,     0,    13,
+       4,     5,     9,     4,     5,    18,     3,    12,     0,    13,
       14,    15,    13,    14,    15,    12,     8,     6,     7,    12,
       24,    22,    11,    14,    15,    12,    21,    16,    17,    25,
       26,    27,    20,    19,    23,    12,    15,     8,    34,    35,
       36,    37,    38,     6,    -1,    30
   };
 
-  /* STOS_[STATE-NUM] -- The (internal number of the) accessing
-     symbol of state STATE-NUM.  */
   const unsigned char
   auto_parser::yystos_[] =
   {
-         0,    26,     0,     8,    27,    28,     3,    12,    29,    30,
+       0,    26,     0,     8,    27,    28,     3,    12,    29,    30,
       31,     9,    34,    31,    18,    30,    12,    35,    21,    32,
       33,    12,     6,     7,    11,    16,    17,    23,    36,    19,
       20,    36,    36,    36,     4,     5,    13,    14,    15,    22,
       32,    24,    36,    36,    36,    36,    36,    12
   };
 
-#if YYDEBUG
-  /* TOKEN_NUMBER_[YYLEX-NUM] -- Internal symbol number corresponding
-     to YYLEX-NUM.  */
-  const unsigned short int
-  auto_parser::yytoken_number_[] =
-  {
-         0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267,    94,   124,    38,   126,    33,   123,   125,
-      44,    91,    93,    40,    41
-  };
-#endif
-
-  /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
   const unsigned char
   auto_parser::yyr1_[] =
   {
-         0,    25,    26,    26,    27,    28,    29,    29,    30,    30,
+       0,    25,    26,    26,    27,    28,    29,    29,    30,    30,
       31,    32,    32,    33,    34,    35,    35,    36,    36,    36,
       36,    36,    36,    36,    36,    36,    36,    36
   };
 
-  /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
   const unsigned char
   auto_parser::yyr2_[] =
   {
-         0,     2,     0,     2,     2,     2,     1,     2,     2,     1,
+       0,     2,     0,     2,     2,     2,     1,     2,     2,     1,
        4,     1,     3,     4,     2,     1,     2,     3,     1,     1,
        3,     3,     3,     3,     3,     2,     2,     1
   };
 
-#if YYDEBUG || YYERROR_VERBOSE || YYTOKEN_TABLE
-  /* YYTNAME[SYMBOL-NUM] -- String name of the symbol SYMBOL-NUM.
-     First, the terminals, then, starting at \a yyntokens_, nonterminals.  */
+
+
+  // YYTNAME[SYMBOL-NUM] -- String name of the symbol SYMBOL-NUM.
+  // First, the terminals, then, starting at \a yyntokens_, nonterminals.
   const char*
   const auto_parser::yytname_[] =
   {
-    "\"end of file\"", "error", "$undefined", "\"=>\"", "\"==\"", "\"->\"",
+  "\"end of file\"", "error", "$undefined", "\"=>\"", "\"==\"", "\"->\"",
   "TRUE", "FALSE", "\"Structure\"", "\"Buechi Fairness\"", "INVALID_CHAR",
   "\"identifier\"", "STATE", "'^'", "'|'", "'&'", "'~'", "'!'", "'{'",
   "'}'", "','", "'['", "']'", "'('", "')'", "$accept", "input",
   "automaton", "structure_section", "structure", "state", "state_def",
   "transitions", "transition", "fairness_section", "fairness",
-  "expression", 0
+  "expression", YY_NULLPTR
   };
-#endif
 
 #if YYDEBUG
-  /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
-  const auto_parser::rhs_number_type
-  auto_parser::yyrhs_[] =
-  {
-        26,     0,    -1,    -1,    26,    27,    -1,    28,    34,    -1,
-       8,    29,    -1,    30,    -1,    29,    30,    -1,     3,    31,
-      -1,    31,    -1,    12,    18,    32,    19,    -1,    33,    -1,
-      33,    20,    32,    -1,    21,    36,    22,    12,    -1,     9,
-      35,    -1,    12,    -1,    35,    12,    -1,    23,    36,    24,
-      -1,     6,    -1,     7,    -1,    36,    14,    36,    -1,    36,
-      15,    36,    -1,    36,    13,    36,    -1,    36,     4,    36,
-      -1,    36,     5,    36,    -1,    16,    36,    -1,    17,    36,
-      -1,    11,    -1
-  };
-
-  /* YYPRHS[YYN] -- Index of the first RHS symbol of rule number YYN in
-     YYRHS.  */
-  const unsigned char
-  auto_parser::yyprhs_[] =
-  {
-         0,     0,     3,     4,     7,    10,    13,    15,    18,    21,
-      23,    28,    30,    34,    39,    42,    44,    47,    51,    53,
-      55,    59,    63,    67,    71,    75,    78,    81
-  };
-
-  /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
   const unsigned char
   auto_parser::yyrline_[] =
   {
-         0,    72,    72,    73,    77,    81,    83,    90,    99,   101,
+       0,    72,    72,    73,    77,    81,    83,    90,    99,   101,
      104,   112,   115,   120,   124,   126,   128,   132,   133,   134,
      135,   136,   137,   138,   139,   140,   141,   142
   };
@@ -1133,9 +1185,11 @@ namespace autoparser {
   auto_parser::yystack_print_ ()
   {
     *yycdebug_ << "Stack now";
-    for (state_stack_type::const_iterator i = yystate_stack_.begin ();
-	 i != yystate_stack_.end (); ++i)
-      *yycdebug_ << ' ' << *i;
+    for (stack_type::const_iterator
+           i = yystack_.begin (),
+           i_end = yystack_.end ();
+         i != i_end; ++i)
+      *yycdebug_ << ' ' << i->state;
     *yycdebug_ << std::endl;
   }
 
@@ -1145,19 +1199,18 @@ namespace autoparser {
   {
     unsigned int yylno = yyrline_[yyrule];
     int yynrhs = yyr2_[yyrule];
-    /* Print the symbols being reduced, and their result.  */
+    // Print the symbols being reduced, and their result.
     *yycdebug_ << "Reducing stack by rule " << yyrule - 1
-	       << " (line " << yylno << "):" << std::endl;
-    /* The symbols being reduced.  */
+               << " (line " << yylno << "):" << std::endl;
+    // The symbols being reduced.
     for (int yyi = 0; yyi < yynrhs; yyi++)
       YY_SYMBOL_PRINT ("   $" << yyi + 1 << " =",
-		       yyrhs_[yyprhs_[yyrule] + yyi],
-		       &(yysemantic_stack_[(yynrhs) - (yyi + 1)]),
-		       &(yylocation_stack_[(yynrhs) - (yyi + 1)]));
+                       yystack_[(yynrhs) - (yyi + 1)]);
   }
 #endif // YYDEBUG
 
-  /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
+  // Symbol number corresponding to token number t.
+  inline
   auto_parser::token_number_type
   auto_parser::yytranslate_ (int t)
   {
@@ -1165,7 +1218,7 @@ namespace autoparser {
     const token_number_type
     translate_table[] =
     {
-           0,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+     0,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,    17,     2,     2,     2,     2,    15,     2,
@@ -1193,33 +1246,21 @@ namespace autoparser {
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12
     };
-    if ((unsigned int) t <= yyuser_token_number_max_)
+    const unsigned int user_token_number_max_ = 267;
+    const token_number_type undef_token_ = 2;
+
+    if (static_cast<int>(t) <= yyeof_)
+      return yyeof_;
+    else if (static_cast<unsigned int> (t) <= user_token_number_max_)
       return translate_table[t];
     else
-      return yyundef_token_;
+      return undef_token_;
   }
-
-  const int auto_parser::yyeof_ = 0;
-  const int auto_parser::yylast_ = 45;
-  const int auto_parser::yynnts_ = 12;
-  const int auto_parser::yyempty_ = -2;
-  const int auto_parser::yyfinal_ = 2;
-  const int auto_parser::yyterror_ = 1;
-  const int auto_parser::yyerrcode_ = 256;
-  const int auto_parser::yyntokens_ = 25;
-
-  const unsigned int auto_parser::yyuser_token_number_max_ = 267;
-  const auto_parser::token_number_type auto_parser::yyundef_token_ = 2;
 
 
 } // autoparser
-
-/* Line 1136 of lalr1.cc  */
-#line 1219 "src/automata/AutoParser.cc"
-
-
-/* Line 1138 of lalr1.cc  */
-#line 153 "../iimc/src/automata/AutoParser.yy"
+#line 1263 "src/automata/AutoParser.cc" // lalr1.cc:1155
+#line 153 "../1.3.2/src/automata/AutoParser.yy" // lalr1.cc:1156
 
 
 void
@@ -1228,4 +1269,3 @@ autoparser::auto_parser::error(const autoparser::auto_parser::location_type& l,
 {
   driver.error(l, m);
 }
-

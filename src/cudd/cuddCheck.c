@@ -414,7 +414,7 @@ Cudd_DebugCheck(
 	flag = 1;
     }
     gen = st_init_gen(edgeTable);
-    while (st_gen(gen, &f, &count)) {
+    while (st_gen_int(gen, &f, &count)) {
 	if (count > (int)(f->ref) && f->ref != DD_MAXREF) {
 #if SIZEOF_VOID_P == 8
 	    fprintf(table->err,"ref count error at node 0x%lx, count = %d, id = %u, ref = %u, then = 0x%lx, else = 0x%lx\n",(ptruint)f,count,f->index,f->ref,(ptruint)cuddT(f),(ptruint)cuddE(f));

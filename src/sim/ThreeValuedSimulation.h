@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2013, Regents of the University of Colorado
+Copyright (c) 2010-2015, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -215,12 +215,6 @@ namespace ThreeValued {
       c = argsl[1];
     }
     else return false;
-    if (Opt::isNot(c)) {
-      Opt::NodeRef t = a;
-      a = b;
-      b = t;
-      c = Opt::invert(c);
-    }
     TV tva = Opt::isNot(a) ? tv_not(tvs[UIGET(Opt::indexOf(a))]) :                      
                              tvs[UIGET(Opt::indexOf(a))],
        tvb = Opt::isNot(b) ? tv_not(tvs[UIGET(Opt::indexOf(b))]) :                      

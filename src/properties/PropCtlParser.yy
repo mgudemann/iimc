@@ -126,7 +126,7 @@ formula: '(' formula ')'            { $$ = $2; }
 | "identifier"                      { if (driver.ev->varExists(*$1)) {
                                         $$ = driver.ev->newVar(*$1);
                                       } else {
-                                        error(yylloc, std::string("unknown variable: ") + *$1);
+                                        error(@$, std::string("unknown variable: ") + *$1);
                                         YYERROR;
                                       }
                                       delete $1;

@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2013, Regents of the University of Colorado
+Copyright (c) 2010-2015, Regents of the University of Colorado
 
 All rights reserved.
 
