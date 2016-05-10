@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -46,9 +46,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 #include "Verbosity.h"
 
-using namespace std;
-using namespace boost::program_options;
-
 /** namespace of program options */
 namespace Options {
 
@@ -71,37 +68,31 @@ namespace Options {
     int parseCommandLineOptions(Model & model, int argc, char * argv[]);
 
     /**
-     * Returns the Tactics specified by the command line, once
-     * parseCommandLineOptions has been called.
-     */
-    vector<Model::Action *> tactics() { return tactics_; }
-
-    /**
      * Returns the boost::program_options::variables_map that
      * indicates the command line options.
      */
-    const variables_map & options() { return varMap; }
+    boost::program_options::variables_map & options() { return varMap; }
 
     /**
      * Get the input file name
      */
-    string & inputFile() { return inputFileName; }
+    std::string & inputFile() { return inputFileName; }
 
     Verbosity verbosity() { return (Verbosity) verbosityLevel; }
 
   private:
-    options_description visible;
-    options_description hidden;
-    options_description cmdline_options;
-    positional_options_description posOpt;
-    variables_map varMap;
-    
+    boost::program_options::options_description visible;
+    boost::program_options::options_description hidden;
+    boost::program_options::options_description cmdline_options;
+    boost::program_options::positional_options_description posOpt;
+    boost::program_options::variables_map varMap;
+
     //Variables that reflect the command line options go here
 
     /**
      * Input File
      */
-    string inputFileName;
+    std::string inputFileName;
 
     /**
      * Verbosity (integer value).
@@ -109,12 +100,26 @@ namespace Options {
     int verbosityLevel;
 
     /**
-     * Tactic string and resulting Tactic vector.
+     * Tactic string.
      */
-    vector<string> tacticSpec_;
-    vector<Model::Action *> tactics_;
+    std::vector<std::string> tacticSpec_;
 
   };
+
 }
+
+typedef std::unordered_map<std::string, std::string> StrStrMap;
+
+struct ActionRegistrar {
+  ActionRegistrar(std::string abbr, std::string help) {
+    registry().insert(StrStrMap::value_type(abbr, help));
+  }
+  static StrStrMap & registry(bool del = false) {
+    static StrStrMap * actions = new StrStrMap;
+    if (del)
+      delete actions;
+    return *actions;
+  }
+};
 
 #endif

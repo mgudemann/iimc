@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -92,6 +92,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
   model.constRelease(rat);
 
   bool keepGoing = model.options().count("bdd_trav");
+  bool extractCex = model.options().count("print_cex");
   if (!keepGoing && invariants[0].IsZero()) {  // AIGER/iimc-specific
     // Trivial case of passing property.
     if (verbosity > Options::Terse)
@@ -113,6 +114,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
   // n from the initial states.
   int step = 0;
   int nfrontiers = 0;
+  vector<BDD> frontiers;
   try {
     // Do forward reachability analysis.
     if (verbosity != Options::Silent)
@@ -121,6 +123,8 @@ void BddFwReachAction::doFwReachability(Model& model) {
     while (!frontier.IsZero()) {
       if (bddVerbosity > 0) cout << "frontier " << step;
       frontier.print(xvSize,bddVerbosity);
+      if (extractCex)
+        frontiers.push_back(frontier);
       // Check invariants.
       if (!counterex) {
         for (vector<BDD>::const_iterator it = invariants.begin();
@@ -131,6 +135,9 @@ void BddFwReachAction::doFwReachability(Model& model) {
             if (verbosity > Options::Terse) {
               cout << "Failure for output";
               it->print(xvSize,bddVerbosity);
+            }
+            if (extractCex) {
+              printFwCex(tat, frontiers, *it, verbosity);
             }
           }
         }
@@ -170,12 +177,17 @@ void BddFwReachAction::doFwReachability(Model& model) {
       RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
       assert(rat != 0);
       rat->setForwardBddLowerBound(reached);
+      rat->setBddForwardComplete(true);
+      if (extractCex)
+        rat->setForwardRings(frontiers);
       model.release(rat);
     } else {
-      ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
-      assert(pat != 0);
-      pat->setConclusion(counterex ? 1 : 0);
-      model.release(pat);
+      if (!keepGoing) {
+        ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+        assert(pat != 0);
+        pat->setConclusion(counterex ? 1 : 0);
+        model.release(pat);
+      }
     }
   } catch (Timeout& e) {
     if (verbosity > Options::Silent)
@@ -214,7 +226,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
           (BddAttachment const *) model.constAttachment(Key::BDD);
         assert(bat != 0);
         Expr::Manager::View *v = model.newView();
-        ID cubeExpr = bat->exprOf(enlargedSource, *v);
+        ID cubeExpr = exprOf(enlargedSource, *v, bat->order());
         rat->updateForwardLowerBound(cubeExpr);
         delete v;
         model.constRelease(bat);
@@ -301,6 +313,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
   model.constRelease(rat);
 
   bool keepGoing = model.options().count("bdd_trav");
+  bool extractCex = model.options().count("print_cex");
   if (!keepGoing && target.IsOne()) {  // AIGER-specific
     // Trivial case of failing property.
     if (verbosity > Options::Terse)
@@ -322,6 +335,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
   // the initial states.
   int step = 0;
   int nfrontiers = 0;
+  vector<BDD> frontiers;
   try {
     // Do backward reachability analysis.
     if (verbosity != Options::Silent)
@@ -330,6 +344,8 @@ void BddBwReachAction::doBwReachability(Model& model) {
     while (!frontier.IsZero()) {
       if (bddVerbosity > 0) cout << "frontier " << step;
       frontier.print(xvSize,bddVerbosity);
+      if (extractCex)
+        frontiers.push_back(frontier);
       // Check invariants.
       if (!counterex) {
         if (!(frontier <= !init)) {
@@ -352,10 +368,22 @@ void BddBwReachAction::doBwReachability(Model& model) {
       cout << "Backward reachable states";
       reached.print(xvSize,bddVerbosity);
     }
-    ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
-    assert(pat != 0);
-    pat->setConclusion(counterex ? 1 : 0);
-    model.release(pat);
+    if (model.options().count("bdd_save_bw_reach")) {
+      RchAttachment *rat = (RchAttachment *) model.attachment(Key::RCH);
+      assert(rat != 0);
+      rat->setBackwardBddLowerBound(reached);
+      rat->setBddBackwardComplete(true);
+      if (extractCex)
+        rat->setBackwardRings(frontiers);
+      model.release(rat);
+    } else {
+      if (!keepGoing) {
+        ProofAttachment * pat = (ProofAttachment *) model.attachment(Key::PROOF);
+        assert(pat != 0);
+        pat->setConclusion(counterex ? 1 : 0);
+        model.release(pat);
+      }
+    }
   } catch (Timeout& e) {
     if (verbosity > Options::Silent)
       cout << e.what() << endl;
@@ -388,7 +416,7 @@ void BddBwReachAction::doBwReachability(Model& model) {
           (BddAttachment const *) model.constAttachment(Key::BDD);
         assert(bat != 0);
         Expr::Manager::View *v = model.newView();
-        ID cubeExpr = bat->exprOf(enlargedTarget, *v);
+        ID cubeExpr = exprOf(enlargedTarget, *v, bat->order());
         rat->updateBackwardLowerBound(cubeExpr);
         delete v;
         model.constRelease(bat);
@@ -433,3 +461,27 @@ void BddBwReachAction::doBwReachability(Model& model) {
   model.constRelease(tat);
 
 } // BddBwReachAction::doBwReachability
+
+
+/** Very rudimentary counterexample printing function.
+ *  Not yet ready for prime time. */
+void BddFwReachAction::printFwCex(
+  BddTrAttachment const * tat,
+  vector<BDD> const & frontiers,
+  BDD badStates,
+  Options::Verbosity verbosity)
+{
+  if (verbosity > Options::Informative)
+    cout << "Counterexample of length " << frontiers.size() << endl;
+  size_t xvSize = tat->currentStateVars().size();
+  BDD traceStates = badStates;
+  for (vector<BDD>::const_reverse_iterator it = frontiers.rbegin();
+       it != frontiers.rend(); ++it) {
+    BDD interStates = traceStates.Intersect(*it);
+    interStates.print(xvSize, 2);
+    // This throws away the input values.
+    traceStates = tat->preimg(interStates);
+  }
+  if (verbosity > Options::Informative)
+    cout << "End of counterexample" << endl;
+}

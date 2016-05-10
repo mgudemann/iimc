@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -98,6 +98,25 @@ namespace Opt
 
 AIG::AIG()
 {
+  _nodes.push_back(AIGNode(0, 0));
+  _depth.push_back(0);
+  _merged.push_back(NodeRef(0));
+  _fanouts.push_back(unordered_set<NodeIndex>());
+}
+
+void AIG::clear()
+{
+  _nodes.clear();
+  _merged.clear();
+  _depth.clear();
+  _fanouts.clear();
+  _nextStateFnRefs.clear();
+  _outputFnRefs.clear();
+  _badFnRefs.clear();
+  _constraintFnRefs.clear();
+  _justiceFnSetRefs.clear();
+  _fairnessFnRefs.clear();
+
   _nodes.push_back(AIGNode(0, 0));
   _depth.push_back(0);
   _merged.push_back(NodeRef(0));

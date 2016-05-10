@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -52,7 +52,8 @@ namespace CNF {
                 std::vector<ID> inputs,
                 std::vector<ID> latches,
                 std::vector<ID> fns,
-                bool replace = true);
+                bool replace = true,
+                Expr::Manager::View * _ev = NULL);
 }
 
 #endif

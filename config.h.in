@@ -1,5 +1,8 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 to disable zchaff and use MiniSat as the backend SAT solver */
+#undef DISABLE_ZCHAFF
+
 /* Define to 1 if you have the <assert.h> header file. */
 #undef HAVE_ASSERT_H
 
@@ -8,6 +11,9 @@
 
 /* define if the Boost::PROGRAM_OPTIONS library is available */
 #undef HAVE_BOOST_PROGRAM_OPTIONS
+
+/* define if the Boost::Regex library is available */
+#undef HAVE_BOOST_REGEX
 
 /* Define to 1 if you have the <cinttypes> header file. */
 #undef HAVE_CINTTYPES
@@ -99,6 +105,9 @@
 /* Define to 1 if libtbb is requested and available. */
 #undef MTHREADS
 
+/* Define to 1 if your C compiler doesn't accept -c and -o together. */
+#undef NO_MINUS_C_MINUS_O
+
 /* Name of package */
 #undef PACKAGE
 
@@ -120,14 +129,20 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
+/* Scaling factor for the value of ru_maxrss */
+#undef RU_MAXRSS_SCALE
+
+/* The size of `int', as computed by sizeof. */
+#undef SIZEOF_INT
+
 /* The size of `long', as computed by sizeof. */
 #undef SIZEOF_LONG
 
+/* The size of `void *', as computed by sizeof. */
+#undef SIZEOF_VOID_P
+
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
-
-/* Define to 1 to use MiniSat as the backend SAT solver */
-#undef USE_MINISAT
 
 /* Version number of package */
 #undef VERSION

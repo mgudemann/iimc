@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -81,9 +81,18 @@ namespace IC3 {
     std::vector< std::vector<ID> > clauses;
   };
 
+  struct AbsPattern {
+    AbsPattern() : cnt(0) {}
+    std::vector< std::set<ID> > concrete;
+    int cnt;
+    std::set<ID> resume;
+  };
+  typedef std::unordered_map<uint64_t, int> PatternMap;
+
   struct IC3Options {
   public:
-    IC3Options(const boost::program_options::variables_map & opts, bool _rev = false) {
+    IC3Options(const boost::program_options::variables_map & opts,
+               bool _rev = false, bool LR = false) {
       reverse = _rev;
       timeout = _rev ? opts["ic3r_timeout"].as<int>() : opts["ic3_timeout"].as<int>();
       eqprop = opts.count("ic3_xeqprop") == 0;
@@ -97,18 +106,41 @@ namespace IC3 {
       printCex = opts.count("print_cex");
       printProof = opts.count("print_proof");
       constraints = NULL;
+      negConstraints = NULL;
       sccH = opts.count("ic3_sccH") == 1;
       iictl = false;
+      fair = false;
       silent = false;
       incremental = false;
       propagate = false;
-      lift = opts.count("ic3_lift");
+      lift = !opts.count("ic3_xlift");
       lift_aggr = opts["ic3_laggr"].as<int>();
       inf = opts.count("ic3_inf");
       inf_weak = opts.count("ic3_weak_inf");
-      try_unlifted = opts.count("ic3_try_unlifted");
+      inf_vweak = opts.count("ic3_vweak_inf");
       stats = opts.count("ic3_stats");
       initCube = NULL;
+      snd = opts.count("ic3_snd");
+      intNodes = opts.count("ic3_intNodes");
+      leapfrog = opts.count("ic3_leapfrog");
+      gen = opts["ic3_gen"].as<int>();
+      propNconstr = opts.count("ic3_propagate");
+      ctgs = LR ? 0 : opts["ic3_ctg"].as<int>();
+      stem = opts["ic3_stem"].as<int>();
+      useRAT_stem = opts.count("ic3_tvstem");
+      verify = opts.count("ic3_verify");
+
+      abstract = LR ? 3 : opts["ic3_abstract"].as<int>();
+      abs_strict = opts["ic3_absstrict"].as<int>();
+      abs_onedrop = opts.count("ic3_absonedrop");
+      abs_bmc = opts["ic3_absbmc"].as<int>();
+      abs_bmctimeout = opts["ic3_absbmctimeout"].as<int>();
+      abs_pattern = 0;
+      abs_prunelo = opts["ic3_absprunelo"].as<int>();
+      abs_prunehi = opts["ic3_absprunehi"].as<int>();
+      backend = opts["ic3_backend"].as<std::string>();
+      pushLast = opts.count("ic3_pushLast");
+      minCex = opts.count("ic3_minCex");
     }
     bool reverse;
     int timeout;
@@ -123,8 +155,10 @@ namespace IC3 {
     bool printCex;
     bool printProof;
     std::vector<SAT::Clauses> * constraints;
+    SAT::Clauses * negConstraints; //for lifting
     bool sccH;
     bool iictl;
+    bool fair;
     SAT::Clauses * iictl_clauses;
     bool silent;
     bool incremental;
@@ -133,9 +167,33 @@ namespace IC3 {
     int lift_aggr;
     bool inf;
     bool inf_weak;
-    bool try_unlifted;
+    bool inf_vweak;
     bool stats;
     std::vector<ID> * initCube;
+    bool snd; //slice'n'dice
+    bool intNodes;
+    bool leapfrog;
+    int gen;
+    bool propNconstr;
+    int ctgs; //0 disables CTG handling
+    int stem;
+    bool useRAT_stem;
+    bool verify;
+
+    int abstract;
+    int abs_strict;
+    bool abs_onedrop;
+    int abs_bmc;
+    int abs_bmctimeout;
+    uint64_t abs_pattern;
+
+    std::vector<AbsPattern> abs_patterns;
+    PatternMap abs_patternMap;
+    int abs_prunelo;
+    int abs_prunehi;
+    std::string backend;
+    bool pushLast;
+    bool minCex;
   };
 
   MC::ReturnValue check(Model & m, IC3Options & opts,
@@ -147,10 +205,6 @@ namespace IC3 {
                         CubeSet * indCubes = NULL,
                         bool useRAT = true,
                         bool * bmcProof = NULL);
-
-  MC::ReturnValue reach(Model & m, IC3Options & opts,
-                        std::vector< std::vector< std::vector<ID> > > & proofs,
-                        std::vector<Transition> * cex = NULL);
 
   MC::ReturnValue reach2(Model & m, IC3Options & opts,
                          std::vector<Transition> * cex = NULL,
@@ -166,7 +220,7 @@ namespace IC3 {
 
   class IC3Action : public Model::Action {
   public:
-    IC3Action(Model & m, bool reverse = false) : Model::Action(m), reverse(reverse) {
+    IC3Action(Model & m, bool reverse = false, bool lr = false) : Model::Action(m), reverse(reverse), LR(lr) {
       ExprAttachment::Factory eaf;
       requires(Key::EXPR, &eaf);
       COIAttachment::Factory caf;
@@ -184,7 +238,7 @@ namespace IC3 {
       requires(Key::CNF, &cnfaf);
     }
     virtual void exec() {
-      IC3Options opts(options(), reverse);
+      IC3Options opts(options(), reverse, LR);
       MC::ReturnValue rv;
       std::vector<Transition> cex;
       std::vector< std::vector<ID> > proof;
@@ -214,6 +268,10 @@ namespace IC3 {
     }
   private:
     bool reverse;
+    bool LR;
+    static ActionRegistrar action;
+    static ActionRegistrar actionRev;
+    static ActionRegistrar actionLR;
   };
 
 }

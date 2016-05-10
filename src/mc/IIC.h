@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -39,21 +39,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** @file IIC.h **/
 
-#include "BddReach.h"
-#include "BMC.h"
-#include "ExprAttachment.h"
-#include "Fair.h"
-#include "FCBMC.h"
-#include "IC3.h"
-#include "IICTL.h"
-#include "MC.h"
 #include "Model.h"
-#include "PropCtlDriver.h"
-#include "Error.h"
-
-#include <boost/program_options.hpp>
-
-#include <sstream>
+#include "options.h"
+#include "ExprAttachment.h"
 
 /** namespace of IIC */
 namespace IIC {
@@ -67,134 +55,51 @@ namespace IIC {
       ExprAttachment::Factory eaf;
       requires(Key::EXPR, &eaf);
     }
-    virtual void exec() {
-      model().setDefaultMode(Model::mNONE);
-
-      ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
-      unsigned int pi = model().options()["pi"].as<unsigned int>();
-      if (model().options().count("ctl") > 0) { // CTL model checking
-        std::string filename =  model().options()["ctl"].as<std::string>();
-        ctl_driver driver(eat);
-        if (driver.parse(filename))
-          throw InputError("Error(s) in property file " + filename);
-        std::vector<ID> properties = eat->ctlProperties();
-        if (pi >= properties.size())
-          throw InputError("Property index out of range");
-        eat->clearBadFns();
-        eat->clearJusticeSets();
-        ID ctlp = properties[pi];
-        eat->clearCtlProperties();
-        eat->addCtlProperty(ctlp);
-        std::set<ID> support;
-        Expr::Manager::View * v = model().newView();
-        Expr::variables(*v, ctlp, support);
-        delete v;
-        std::set<ID> outputs(eat->outputs().begin(),eat->outputs().end());
-        std::vector<ID> poutputs;
-        set_intersection(support.begin(), support.end(), outputs.begin(), outputs.end(), inserter(poutputs, poutputs.end()));
-        std::vector<ID> poutFns = eat->outputFnOf(poutputs);
-        eat->clearOutputFns();
-        eat->setOutputFns(poutputs, poutFns);
-        model().setDefaultMode(Model::mIICTL);
-      }
-      else if (eat->bad().size() > 0 && pi < eat->bad().size()) { // safety
-        if (model().verbosity() > Options::Silent &&
-            (eat->bad().size() > 1 ||
-             eat->fairness().size() > 0 || 
-             eat->justice().size() > 0))
-          std::cout << "IGNORING ALL BUT BAD OUTPUT " << pi << std::endl;
-        eat->clearOutputFns();
-        std::vector<ID> bad = eat->bad();
-        std::vector<ID> badFns = eat->badFns();
-        eat->clearBadFns();
-        eat->clearFairnessFns();
-        eat->clearJusticeSets();
-        eat->setOutputFn(bad[pi], badFns[pi]);
-        model().setDefaultMode(Model::mIC3);
-      }
-      else if (eat->justice().size() > 0 && pi - eat->bad().size() < eat->justice().size()) { // progress
-        pi -= eat->bad().size();
-        assert(pi < eat->justice().size());
-        if (model().verbosity() > Options::Silent && eat->justice().size() > 1)
-          std::cout << "IGNORING ALL BUT JUSTICE SET " << pi << std::endl;
-        eat->clearOutputFns();
-        eat->clearBadFns();
-        std::vector<ID> fairness = eat->fairness();
-        std::vector<ID> fairnessFns = eat->fairnessFns();
-        eat->clearFairnessFns();
-        for (size_t i = 0; i < fairness.size(); ++i)
-          eat->setOutputFn(fairness[i], fairnessFns[i]);
-        if (eat->justice().size() > 0) {
-          Expr::Manager::View * v = model().newView();
-          for (size_t i = 0; i < eat->justiceSets()[pi].size(); ++i) {
-            std::stringstream ss;
-            ss << "jo" << i;
-            eat->setOutputFn(v->newVar(ss.str()), eat->justiceSets()[pi][i]);
-          }
-          delete v;
-        }
-        eat->clearJusticeSets();
-        model().setDefaultMode(Model::mFAIR);
-      }
-      else if (eat->bad().empty() && eat->justice().empty() && pi < eat->outputs().size()) { // AIGER 1.0: safety
-        std::vector<ID> outputs = eat->outputs();
-        std::vector<ID> outputFns = eat->outputFns();
-        eat->clearOutputFns();
-        eat->setOutputFn(outputs[pi], outputFns[pi]);
-        if (model().verbosity() > Options::Silent && eat->outputs().size() > 1)
-          std::cout << "IGNORING ALL BUT OUTPUT " << pi << std::endl;
-        model().setDefaultMode(Model::mIC3);
-      }
-      else {
-        throw InputError("Property index out of range");
-      }
-      model().release(eat);
-    }
+    void exec();
+  private:
+    static ActionRegistrar action;
   };
 
+
+  /**
+   * Executes the "check" tactic sequence.
+   */
   class IICAction : public Model::Action {
   public:
     IICAction(Model & m) : Model::Action(m) {
       ExprAttachment::Factory eaf;
       requires(Key::EXPR, &eaf);
     }
-    virtual void exec() {
-      if (model().defaultMode() == Model::mIC3) {
-        IC3::IC3Action(model(), true /* reverse */).make();
-        const ProofAttachment * pat = (const ProofAttachment *) model().attachment(Key::PROOF);
-        bool hc = pat->hasConclusion();
-        model().constRelease(pat);
-        if (hc) return;
-        BMC::BMCAction(model()).make();
-        pat = (const ProofAttachment *) model().attachment(Key::PROOF);
-        hc = pat->hasConclusion();
-        model().constRelease(pat);
-        if (hc) return;
-        BddFwReachAction(model()).make();
-        pat = (const ProofAttachment *) model().attachment(Key::PROOF);
-        hc = pat->hasConclusion();
-        model().constRelease(pat);
-        if (hc) return;
-        IC3::IC3Action(model()).make();
-      }
-      else if (model().defaultMode() == Model::mFAIR) {
-        FCBMC::FCBMCAction(model()).make();
-        const ProofAttachment * pat = (const ProofAttachment *) model().attachment(Key::PROOF);
-        bool hc = pat->hasConclusion();
-        model().constRelease(pat);
-        if (hc) return;
-        Fair::FairOptions opts(options());
-        opts.ic3_opts.sccH = true;
-        Fair::FairAction(model(), &opts).make();
-      }
-      else if (model().defaultMode() == Model::mIICTL) {
-        IICTL::IICTLOptions opts(options());
-        // opts.ic3_opts.sccH = true; // ???
-        IICTL::IICTLAction(model(), &opts).make();
-      }
-    }
+    void exec();
+  private:
+    static ActionRegistrar action;
   };
 
+
+  /**
+   * Executes the standard preprocessing tactic sequence.
+   */
+  class PreProcessAction : public Model::Action {
+  public:
+    PreProcessAction(Model & m) : Model::Action(m) {
+    }
+    void exec();
+  private:
+    static ActionRegistrar action;
+  };
+
+
+  /**
+   * Executes the sequential reduction tactic sequence.
+   */
+  class SequentialReductionAction : public Model::Action {
+  public:
+    SequentialReductionAction(Model & m) : Model::Action(m) {
+    }
+    void exec();
+  private:
+    static ActionRegistrar action;
+  };
 }
 
 #endif

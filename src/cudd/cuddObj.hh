@@ -233,6 +233,7 @@ public:
     BDD operator-(const BDD& other) const;
     BDD operator-=(const BDD& other);
     bool IsZero() const;
+    bool IsVar() const;
     BDD AndAbstract(const BDD& g, const BDD& cube, unsigned int limit = 0)
 	const;
     BDD UnderApprox(
@@ -312,8 +313,8 @@ public:
     BDD MakePrime(const BDD& F) const;
     BDD MaximallyExpand(const BDD& ub, const BDD& f);
     BDD LargestPrimeUnate(const BDD& phases);
-    BDD SolveEqn(const BDD& Y, BDD* G, int ** yIndex, int n) const;
-    BDD VerifySol(BDD* G, int * yIndex, int n) const;
+    BDD SolveEqn(const BDD& Y, std::vector<BDD> & G, int ** yIndex, int n) const;
+    BDD VerifySol(std::vector<BDD> const & G, int * yIndex) const;
     BDD SplitSet(std::vector<BDD> xVars, double m) const;
     BDD SubsetHeavyBranch(int numVars, int threshold) const;
     BDD SupersetHeavyBranch(int numVars, int threshold) const;
@@ -733,7 +734,9 @@ public:
       FILE * fp = stdout) const;
     BDD VectorSupport(const std::vector<BDD>& roots) const;
     std::vector<unsigned int> 
-    SupportIndices(const std::vector<ABDD>& roots) const;
+    SupportIndices(const std::vector<BDD>& roots) const;
+    std::vector<unsigned int> 
+    SupportIndices(const std::vector<ADD>& roots) const;
     int nodeCount(const std::vector<BDD>& roots) const;
     int VectorSupportSize(const std::vector<BDD>& roots) const;
     void DumpDot(

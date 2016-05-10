@@ -404,8 +404,8 @@ class CSolver:public CDatabase {
     //AARON
     void prefer(int v_idx, int val);
 
-    void _unit_ante(int * lid, int * nlid, char * did, ClauseIdx cid);
-    int unit_antecedents(int * lid);
+    void _unit_ante(vector<int> & lid, char * did, ClauseIdx cid);
+    void unit_antecedents(vector<int> & lid);
     //AARON
 
 

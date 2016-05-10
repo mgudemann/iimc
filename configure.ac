@@ -2,11 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([iimc], [1.2])
+AC_INIT([iimc], [1.3])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE(
-  [-Wall -Werror foreign subdir-objects color-tests silent-rules]
+  [1.11 -Wall -Werror -Wno-portability foreign subdir-objects color-tests silent-rules]
 )
 AC_CONFIG_SRCDIR([src/expressions/Expr.cpp])
 : ${DOXYGEN_PAPER_SIZE=letter}
@@ -23,9 +23,12 @@ AX_BOOST_BASE(
   [1.40.0],,[AC_MSG_FAILURE([boost could not be located.])]
 )
 AX_BOOST_PROGRAM_OPTIONS
+AX_BOOST_REGEX
 
+m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 AC_PROG_LEX
 AC_PROG_YACC
+AM_PROG_CC_C_O
 
 # Use the C++ compiler for the following checks.
 AC_LANG([C++])
@@ -49,7 +52,7 @@ AC_ARG_ENABLE([zchaff],
               [case "${enableval}" in
                yes) zchaff=true ;;
                no)  zchaff=false
-                    AC_DEFINE([USE_MINISAT], [1], Define to 1 to use MiniSat as the backend SAT solver) ;;
+                    AC_DEFINE([DISABLE_ZCHAFF], [1], Define to 1 to disable zchaff and use MiniSat as the backend SAT solver) ;;
                *) AC_MSG_ERROR(bad value ${enableval} for --enable-zchaff) ;;
                esac],
               [zchaff=true])
@@ -98,6 +101,8 @@ AC_TYPE_INT64_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINTPTR_T
 AC_CHECK_SIZEOF([long])
+AC_CHECK_SIZEOF([int])
+AC_CHECK_SIZEOF([void *])
 AC_CHECK_DECLS([_SC_PHYS_PAGES, _SC_AVPHYS_PAGES, _SC_PAGESIZE])
 
 # Checks for library functions.
@@ -114,12 +119,23 @@ LDFLAGS=$save_LDFLAGS
 # On some Red Hat systems the boost libraries are in /usr/local/lib,
 # but the loader does not look for dynamic libraries in that directory
 # by default.  We add a -R option to change that behavior.
-AS_CASE([$BOOST_LDFLAGS],
-  [*/usr/local/lib], [AM_LDFLAGS="$AM_LDFLAGS -Wl,-R /usr/local/lib"]
-)
 # On Cygwin we want a larger limit for the stack.
+# On OS/X we don't want to change the linker options.
 AS_CASE([$host],
-  [i?86-pc-cygwin], [AM_LDFLAGS="$AM_LDFLAGS -Wl,--stack,16777216"]
+  [*86*-*-cygwin], [AM_LDFLAGS="$AM_LDFLAGS -Wl,--stack,16777216"],
+  [*86*-apple-darwin*], [],
+  [AS_CASE([$BOOST_LDFLAGS],
+    [*/usr/local/lib], [AM_LDFLAGS="$AM_LDFLAGS -Wl,-R /usr/local/lib"],
+    [*/usr/lib64], [AM_LDFLAGS="$AM_LDFLAGS -Wl,-R /usr/lib64"]
+  )]
+)
+# On OS X, getrusage returns the number of bytes instead of the usual
+# number of kilobytes.  Yet another case of misplaced creativity.
+AS_CASE([$host],
+  [*86*-apple-darwin*], [AC_DEFINE([RU_MAXRSS_SCALE], [1],
+                         [Scaling factor for the value of ru_maxrss])],
+                        [AC_DEFINE([RU_MAXRSS_SCALE], [1024],
+                         [Scaling factor for the value of ru_maxrss])]
 )
 
 # Distribute additional compiler flags to Makefiles.
@@ -129,7 +145,7 @@ AC_SUBST([AM_LDFLAGS])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile Doxyfile])
-AC_CONFIG_SUBDIRS([src/cudd src/sat/minisat src/sat/zchaff src/sat/minisat22])
+AC_CONFIG_SUBDIRS([src/cudd src/sat/minisat20 src/sat/zchaff src/sat/minisat])
 AC_OUTPUT
 
 echo \

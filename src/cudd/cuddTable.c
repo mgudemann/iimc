@@ -2166,7 +2166,6 @@ cuddDestroySubtables(
     for (index = firstIndex; index < lastIndex; index++) {
 	level = unique->perm[index];
 	if (level < lowestLevel) lowestLevel = level;
-	nodelist = subtables[level].nodelist;
 	if (subtables[level].keys - subtables[level].dead != 1) return(0);
 	/* The projection function should be isolated. If the ref count
 	** is 1, everything is OK. If the ref count is saturated, then

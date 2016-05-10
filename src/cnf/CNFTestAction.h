@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -34,7 +34,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <boost/program_options.hpp>
 #include "options.h"
-#include "Tactic.h"
 #include "AIG.h"
 #include "AIGAttachment.h"
 #include "TechMapCNF.h"
@@ -57,9 +56,9 @@ namespace CNF
       requires(Key::EXPR, &ef);
     }
 
-    ::std::string satstrOfID(::Expr::Manager::View* v, ID id)
+    std::string satstrOfID(Expr::Manager::View* v, ID id)
     {
-      ::std::string name = stringOfID(v, id);
+      std::string name = stringOfID(v, id);
       for(unsigned i = 0; i < name.length(); ++i) {
         if(name[i] == '(' || name[i] == ')')
           name[i] = '_';
@@ -67,40 +66,40 @@ namespace CNF
       return name;
     }
 
-    void printCNF(::Expr::Manager::View& v, ::std::vector< ::std::vector<ID> >& cnf)
+    void printCNF(Expr::Manager::View& v, std::vector< std::vector<ID> >& cnf)
     {
       // print variables
-      ::std::set<ID> vars;
+      std::set<ID> vars;
       for(unsigned i = 0; i < cnf.size(); ++i) {
         for(unsigned j = 0; j < cnf[i].size(); ++j) {
-          if(v.op(cnf[i][j]) == ::Expr::Not) {
-            vars.insert(v.apply(::Expr::Not, cnf[i][j]));
+          if(v.op(cnf[i][j]) == Expr::Not) {
+            vars.insert(v.apply(Expr::Not, cnf[i][j]));
           } else {
             vars.insert(cnf[i][j]);
           }
         }
       }
 
-      for(::std::set<ID>::iterator i = vars.begin(); i != vars.end(); ++i) {
-        ::std::cout << "(define " << satstrOfID(&v, *i) << "::bool)" << endl;
+      for(std::set<ID>::iterator i = vars.begin(); i != vars.end(); ++i) {
+        std::cout << "(define " << satstrOfID(&v, *i) << "::bool)" << std::endl;
       }
 
-      ::std::cout << ::std::endl << "(and";
+      std::cout << std::endl << "(and";
       for(unsigned i = 0; i < cnf.size(); ++i) {
-        ::std::cout << ::std::endl << "  (or";
+        std::cout << std::endl << "  (or";
         for(unsigned j = 0; j < cnf[i].size(); ++j) {
-          if(v.op(cnf[i][j]) == ::Expr::Not) {
+          if(v.op(cnf[i][j]) == Expr::Not) {
             int nargs;
             const ID* ids = v.arguments(cnf[i][j], &nargs);
             assert(nargs == 1);
-            ::std::cout << ::std::endl << "    (not " << satstrOfID(&v,ids[0]) << ")";
+            std::cout << std::endl << "    (not " << satstrOfID(&v,ids[0]) << ")";
           } else {
-            ::std::cout << ::std::endl << "    " << satstrOfID(&v, cnf[i][j]);
+            std::cout << std::endl << "    " << satstrOfID(&v, cnf[i][j]);
           }
         }
-        ::std::cout << ")";
+        std::cout << ")";
       }
-      ::std::cout << ")" << ::std::endl;
+      std::cout << ")" << std::endl;
     }
 
     typedef std::pair<bool,bool> ClRet;
@@ -189,7 +188,7 @@ namespace CNF
 #endif
 
     void check(bool option) {
-      ::ExprAttachment const* eat = static_cast< ::ExprAttachment const*>(model().constAttachment(Key::EXPR));
+      ExprAttachment const* eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
       Expr::Manager::View* view = _model.newView();
 
       // result vectors
@@ -222,14 +221,14 @@ namespace CNF
 
       // run tseitin
       Expr::tseitin(*view, tr1, tcnf);
-      std::cout << "Tseitin:"<< endl;
+      std::cout << "Tseitin:"<< std::endl;
       printCNF(*view, tcnf);
 
       // run nice
       unsigned k = _model.options()["nice_k"].as<unsigned>();
 
       CNF::niceCNF(model().verbosity(), view, k, tr2, ncnf);
-      std::cout << "Nice:"<< endl;
+      std::cout << "Nice:"<< std::endl;
       printCNF(*view, ncnf);
 
 
@@ -274,8 +273,8 @@ namespace CNF
 
 
 #if 0
-      ::CNFAttachment const* cat = static_cast< ::CNFAttachment const*>(model().constAttachment(Key::CNF));
-      ::ExprAttachment const* eat = static_cast< ::ExprAttachment const*>(model().constAttachment(Key::EXPR));
+      CNFAttachment const* cat = static_cast< CNFAttachment const*>(model().constAttachment(Key::CNF));
+      ExprAttachment const* eat = static_cast< ExprAttachment const*>(model().constAttachment(Key::EXPR));
       Expr::Manager::View* view = _model.newView();
 
       // result vectors
@@ -299,10 +298,10 @@ namespace CNF
 
       // print out the models if requested
       if(model().verbosity() >= Options::Logorrheic) {
-        ::std::cout << "CNF Attachment: ";
+        std::cout << "CNF Attachment: ";
         printCNF(*view, ccnf);
-        ::std::cout << ::std::endl;
-        ::std::cout << "Tseitin: ";
+        std::cout << std::endl;
+        std::cout << "Tseitin: ";
         printCNF(*view, tcnf);
       }
 
@@ -314,7 +313,7 @@ namespace CNF
 
       // Quick sanity check.  Roots should be the same size
       if(croots.size() != outputs.size()) {
-        std::cout << "Fail roots different size" << ::std::endl;
+        std::cout << "Fail roots different size" << std::endl;
         goto cleanup;
       }
 

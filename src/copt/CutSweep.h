@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -39,6 +39,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** @file CutSweep.h */
 
+#include "options.h"
 #include "Model.h"
 #include "AIGAttachment.h"
 #include "CombAttachment.h"
@@ -66,6 +67,8 @@ public:
   {
     Opt::cutSweep(model());
   }
+private:
+  static ActionRegistrar action;
 };
 
 } // namespace Action

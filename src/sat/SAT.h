@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -45,35 +45,32 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <unordered_map>
 #include <vector>
 
-#ifdef USE_MINISAT
-#include "minisat22/mcore/Solver.h"
-#else
-#include "zchaff/SAT_C.h"
-#endif
-
 #ifdef MTHREADS
 #include "tbb/mutex.h"
 #include "tbb/spin_mutex.h"
 #endif
 
-#define MAX_LITS (16*1024)
-
 /** Namespace of SAT. */
 namespace SAT {
 
+  enum Solver {
+#ifndef DISABLE_ZCHAFF
+    ZCHAFF,
+#endif
+    MINISAT};
+
+  bool isValidBackend(const std::string & backend);
+
+  Solver toSolver(const std::string & backend);
+
   typedef Expr::IDVector Clause;
   typedef std::vector<Expr::IDVector> Clauses;
-#ifdef USE_MINISAT
-  typedef Minisat::Lit GID;
-  const GID NULL_GID = Minisat::lit_Undef;
-#else
-  typedef unsigned int GID;
+  typedef const void * GID;
   const GID NULL_GID = 0;
-#endif
 
   class Trivial {
   public:
-    Trivial(bool v) : v(v) {}
+    Trivial(bool va) : v(va) {}
     bool value() { return v; }
   private:
     bool v;
@@ -116,7 +113,12 @@ namespace SAT {
      * Creates a thread-local view of the SAT solver over the given
      * Expr::Manager::View.
      */
-    View * newView(Expr::Manager::View & exprView);
+#ifdef DISABLE_ZCHAFF
+    View * newView(Expr::Manager::View & exprView, Solver solver = MINISAT);
+#else
+    View * newView(Expr::Manager::View & exprView, Solver solver = ZCHAFF);
+#endif
+    View * newView(Expr::Manager::View & exprView, std::string solver);
 
     static uint64_t satTime() { return sat_time; }
     static unsigned int satCount() { return sat_count; }
@@ -130,14 +132,14 @@ namespace SAT {
       /**
        * Deletes the view.
        */
-      ~View();
+      virtual ~View();
 
       /**
        * Adds a clause to the thread-local clause database with the
        * given Group ID.  Returns false if the clause is equivalent to
        * false.
        */
-      bool add(Clause & clause, GID gid = NULL_GID) throw(Trivial);
+      virtual bool add(Clause & clause, GID gid = NULL_GID) throw(Trivial) = 0;
       /**
        * Adds a list of clauses to the thread-local clause database
        * with the given Group ID.  Returns false if any clause is
@@ -148,11 +150,11 @@ namespace SAT {
       /**
        * Allocates a new Group ID.
        */
-      GID newGID();
+      virtual GID newGID() = 0;
       /**
        * Removes all clauses with the given Group ID.
        */
-      void remove(GID gid);
+      virtual void remove(GID gid) = 0;
 
       /**
        * Solves the current SAT problem using the global database, the
@@ -170,12 +172,12 @@ namespace SAT {
        * implementation; it can only be used when there is when sat()
        * call involving the clause group.
        */
-      bool sat(Expr::IDVector * assumptions = NULL, 
+      virtual bool sat(Expr::IDVector * assumptions = NULL, 
                Assignment * asgn = NULL, 
                Expr::IDVector * criticalUnits = NULL, 
                GID gid = NULL_GID,
                bool full_init = false,
-               Assignment * lift = NULL);
+               Assignment * lift = NULL) = 0;
 
       /**
        * Returns this view's manager.
@@ -185,10 +187,16 @@ namespace SAT {
       /**
        * Set this view's maximum allotted solving time.
        */
-      void timeout(double to = -1.0);
+      virtual void timeout(double to = -1.0) = 0;
 
-    private:
-      View(Manager &, Expr::Manager::View &);
+    protected:
+      View(Manager & _man, Expr::Manager::View & _ev) : man(_man), exprView(_ev) { }
+
+      void cleanClause(Clause & clause);
+
+      bool tt() { return man.tt; }
+      uint64_t & satTime() { return man.sat_time; }
+      unsigned int & satCount() { return man.sat_count; }
 
       Manager & man;
       Expr::Manager::View & exprView;
@@ -196,24 +204,6 @@ namespace SAT {
 #ifdef MTHREADS
       typedef tbb::spin_mutex VMuxType;
       VMuxType mux;
-#endif
-
-#ifdef USE_MINISAT
-      typedef std::unordered_map<ID, Minisat::Var> VMap;
-      typedef std::unordered_map<Minisat::Var, ID> IVMap;
-#else
-      typedef std::unordered_map<ID, int> VMap;
-      typedef std::unordered_map<int, ID> IVMap;
-#endif
-      VMap vmap;
-      IVMap ivmap;
-
-#ifdef USE_MINISAT
-      Minisat::Solver satMan;
-      std::set<Minisat::Lit> _assumps;
-#else
-      SAT_Manager satMan;
-      int _lits[MAX_LITS];
 #endif
     };
 

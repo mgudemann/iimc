@@ -19,7 +19,7 @@ AG (
    | (~ibuf_ctl.iu_shift_e<7> &  ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | ( ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    ) 
-    U
+    U (
    ( (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> &  ibuf_ctl.iu_shift_e<0>) 
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> &  ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> &  ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
@@ -59,7 +59,7 @@ AG (
     ~ic_fill_sel<12> & ic_fill_sel<11> |
     ~ic_fill_sel<13> & ic_fill_sel<12> |
     ~ic_fill_sel<14> & ic_fill_sel<13> |
-    ~ic_fill_sel<15> & ic_fill_sel<14>))
+    ~ic_fill_sel<15> & ic_fill_sel<14>)))
 
 #PASS: (1)
 ~E 
@@ -72,7 +72,7 @@ AG (
    | (~ibuf_ctl.iu_shift_e<7> &  ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | ( ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    ) 
-   U 
+   U (
    ( (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> &  ibuf_ctl.iu_shift_e<0>) 
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> &  ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> &  ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
@@ -83,9 +83,9 @@ AG (
    | ( ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    ) 
    &
-  (~valid<0> & (~ibuf_ctl.iu_shift_e<0> | ~ic_fill_sel<0>))
+  (~valid<0> & (~ibuf_ctl.iu_shift_e<0> | ~ic_fill_sel<0>)))
 
-#FAIL: (2)
+#PASS: (2)
 ~E 
    ( (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> &  ibuf_ctl.iu_shift_e<0>) 
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> &  ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
@@ -96,7 +96,7 @@ AG (
    | (~ibuf_ctl.iu_shift_e<7> &  ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | ( ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    ) 
- U
+ U (
    ( (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> &  ibuf_ctl.iu_shift_e<0>) 
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> &  ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
    | (~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> &  ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ~ibuf_ctl.iu_shift_e<0>)
@@ -109,4 +109,4 @@ AG (
  &
    ((~ibuf_ctl.iu_shift_e<7> & ~ibuf_ctl.iu_shift_e<6> & ~ibuf_ctl.iu_shift_e<5> & ~ibuf_ctl.iu_shift_e<4> & ~ibuf_ctl.iu_shift_e<3> & ~ibuf_ctl.iu_shift_e<2> & ~ibuf_ctl.iu_shift_e<1> & ibuf_ctl.iu_shift_e<0>) & 
     (ic_fill_sel<15> ^ valid<15>) &
-    (ic_fill_sel<14> ^ valid<14>))
+    (ic_fill_sel<14> ^ valid<14>)))

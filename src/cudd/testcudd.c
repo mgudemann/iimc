@@ -619,6 +619,7 @@ main(int argc, char * const *argv)
     assert(Cudd_DebugCheck(dd) == 0);
     assert(Cudd_CheckKeys(dd) == 0);
     if (pr == 0) {
+        fclose(Cudd_ReadStdout(dd));
         Cudd_SetStdout(dd,savefp);
     }
 

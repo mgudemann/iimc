@@ -1,0 +1,18 @@
+aig 22 3 4 1 15
+2
+4
+40
+1
+44
+	i0 L0
+i1 L1
+i2 I
+l0 L0p
+l1 L1p
+l2 valid
+l3 init
+o0 bad
+c
+bliftoaig
+1.9
+reverseRel2.blif

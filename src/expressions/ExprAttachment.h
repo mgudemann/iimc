@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -41,6 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 //#include <ostream>
 #include "AIGAttachment.h"
+#include "Automaton.h"
 #include "Model.h"
 
 /**
@@ -48,7 +49,8 @@ POSSIBILITY OF SUCH DAMAGE.
  *
  * This is a tuple of sets of expressions describing input, output, and
  * state variables, as well as next-state and output functions, initial
- * conditions and constraints.
+ * conditions, bad-state outputs, and various forms of constraints
+ * supported by the AIGER 1.9 format: invariant, justice, and fairness.
  */
 class ExprAttachment : public Model::Attachment {
 public:
@@ -72,6 +74,12 @@ public:
   void addInputs(const std::vector<ID>&);
   /** Discard the current inputs of the model. */
   void clearInputs();
+  /** Mark an existing state variable as an automaton state variable. */
+  void addAutStateVar(const ID);
+  /** Mark existing state variables as automaton state variables. */
+  void addAutStateVars(const std::vector<ID>&);
+  /** Clear all marked automaton state variables. */
+  void clearAutStateVars();
   /** Add a state variable and its update function to the model. */
   void setNextStateFn(const ID, const ID);
   /** Add state variables and their update functions to the model. */
@@ -99,9 +107,9 @@ public:
   /** Discard the current initial conditions of the model. */
   void clearInitialConditions();
   /** Add one expression to the list of constraints. */
-  void addConstraint(const ID);
+  void addConstraint(const ID, const ID);
   /** Add expressions to the list of constraints. */
-  void addConstraints(const std::vector<ID>&);
+  void addConstraints(const std::vector<ID>&, const std::vector<ID>&);
   /** Discard the current relational constraints of the model. */
   void clearConstraints();
   /** Add bad variable and its defining function to the model. */
@@ -129,8 +137,16 @@ public:
   void addCtlProperties(const std::vector<ID> &);
   /** Discard the current CTL properties of the model. */
   void clearCtlProperties();
+  /** Add one automaton */
+  void addAutomaton(const Automaton &);
+  /** Add automata */
+  void addAutomata(const std::vector<Automaton> &);
+  /** Discard the current automata of the model. */
+  void clearAutomata();
   /** Return a vector with the input variables of the model. */
   const std::vector<ID>& inputs() const { return _inputs; }
+  /** Return a vector with the state variables of the automaton. */
+  const std::vector<ID>& autStateVars() const { return _aut_state_vars; }
   /** Return a vector with the state variables of the model. */
   const std::vector<ID>& stateVars() const { return _state_vars; }
   /** Return a vector with the next state functionss of the model. */
@@ -143,19 +159,21 @@ public:
   const std::vector<ID>& bad() const { return _bad; }
   /** Return a vector with the bad functions of the model. */
   const std::vector<ID>& badFns() const { return _bad_fns; }
-  /** Return a vector with the fairness variables of the model. */
-  const std::vector<ID>& fairness() const { return _fairness; }
-  /** Return a vector with the fairness functions of the model. */
-  const std::vector<ID>& fairnessFns() const { return _fairness_fns; }
+  /** Return a vector with the justice variables of the model. */
+  const std::vector<ID>& constraints() const { return _constraints; }
+  /** Return a vector with the invariant constraints. */
+  const std::vector<ID>& constraintFns() const { return _constraint_fns; }
   /** Return a vector with the justice variables of the model. */
   const std::vector<ID>& justice() const { return _justice; }
   /** Return a vector with the justice sets of the model. */
   const std::vector< std::vector<ID> >& justiceSets() const { return _justice_fn_sets; }
+  /** Return a vector with the fairness variables of the model. */
+  const std::vector<ID>& fairness() const { return _fairness; }
+  /** Return a vector with the fairness functions of the model. */
+  const std::vector<ID>& fairnessFns() const { return _fairness_fns; }
   /** Return a vector with the initial conditions of the model. */
   const std::vector<ID>& initialConditions() const { return _initial_cond; }
-  /** Return a vector with the constraints on the transition relation. */
-  const std::vector<ID>& constraints() const { return _constraints; }
-  /** Return a vector with the fairness constraints of the model. */
+  /** Look up the function associated with the given state variable. */
   ID nextStateFnOf(const ID varId) const;
   /** Vectorized "nextStateFnOf(ID)". */
   std::vector<ID> nextStateFnOf(const std::vector<ID>&) const;
@@ -167,6 +185,10 @@ public:
   ID badFnOf(const ID varId) const;
   /** Vectorized "badFnOf(ID)". */
   std::vector<ID> badFnOf(const std::vector<ID>&) const;
+  /** Look up the function associated with the given constraint variable. */
+  ID constraintFnOf(const ID varId) const;
+  /** Vectorized "constraintFnOf(ID)". */
+  std::vector<ID> constraintFnOf(const std::vector<ID>&) const;
   /** Look up the function associated with the given Buechi fairness variable. */
   ID fairnessFnOf(const ID varId) const;
   /** Vectorized "fairnessFnOf(ID)". */
@@ -177,6 +199,8 @@ public:
   const std::vector<ID> & justiceSetOf(const ID varId) const;
   /** Return a vector with the CTL properties. */
   const std::vector<ID>& ctlProperties() const { return _ctl_properties; }
+  /** Return a vector with the automata. */
+  const std::vector<Automaton>& automata() const { return _automata; }
   /** True if id is an input, output, or state variable of the model. */
   bool isVariable(const ID id) const;
   /** True if id is an input of the model. */
@@ -205,8 +229,16 @@ public:
   std::string verilog() const;
   /** Describes a model in Blif-MV. */
   std::string blifMv() const;
+  /** Describes a model in AIGER. */
+  void AIGER(std::string filename) const;
   /** Output status information of a model **/
   void info() const;
+  /** Return the set of state variables in the support of an expression **/
+  void supportStateVars(Expr::Manager::View & v, ID id, std::set<ID> & stateVars) const;
+  void supportStateVars(Expr::Manager::View & v, std::vector<ID> ids, std::set<ID> & stateVars) const;
+  /** Return the set of latches + internal nodes in the support of an expression **/
+  void supportNodes(Expr::Manager::View & v, ID id, std::set<ID> & intNodes) const;
+  void supportNodes(Expr::Manager::View & v, std::vector<ID> ids, std::set<ID> & intNodes) const;
 
   class Factory : public Model::AttachmentFactory {
   public:
@@ -225,7 +257,39 @@ private:
   typedef std::unordered_map<ID, v_size> mod_map;
   typedef mod_map::iterator m_iter;
   typedef mod_map::const_iterator const_m_iter;
-  typedef std::vector< std::vector<ID> > mod_vec_vec;
+  typedef std::vector<mod_vec> mod_vec_vec;
+
+  class var_folder : public Expr::Manager::View::Folder {
+    public:
+      var_folder(Expr::Manager::View & v, const mod_map & vars_map,
+          std::set<ID> & vars) : 
+        Expr::Manager::View::Folder(v), _vars_map(vars_map), _vars(vars) {}
+      virtual ID fold(ID id, int n, const ID * const args) {
+        if (view().op(id) == Expr::Var && _vars_map.find(id) != _vars_map.end())
+          _vars.insert(id);
+        return id;
+      }
+
+    private:
+      const mod_map & _vars_map;
+      std::set<ID> & _vars;
+  };
+
+
+  class node_folder : public Expr::Manager::View::Folder {
+    public:
+      node_folder(Expr::Manager::View & v, std::set<ID> & nodes) : 
+        Expr::Manager::View::Folder(v),  _nodes(nodes) {}
+      virtual ID fold(ID id, int n, const ID * const args) {
+        if (view().op(id) != Expr::Not && view().op(id) != Expr::True)
+          _nodes.insert(id);
+        return id;
+      }
+
+    private:
+      std::set<ID> & _nodes;
+  };
+
 
   void addOrUpdate(const ID vid, const ID fid, mod_vec& vvec, mod_vec& fvec, mod_map& var_to_fn);
   void addOrUpdate(const mod_vec& vids, const mod_vec& fids,
@@ -233,12 +297,14 @@ private:
   bool isVarWithType(const ID id, const mod_vec& vm, const mod_map& vtf) const;
 
   mod_vec _inputs;
+  mod_vec _aut_state_vars;
   mod_vec _state_vars;
   mod_vec _next_state_fns;
   mod_vec _outputs;
   mod_vec _output_fns;
   mod_vec _initial_cond;
   mod_vec _constraints;
+  mod_vec _constraint_fns;
   mod_vec _bad;
   mod_vec _bad_fns;
   mod_vec _fairness;
@@ -247,12 +313,14 @@ private:
   mod_vec_vec _justice_fn_sets;
   mod_vec _ctl_properties;
   mod_map _input_var_to_fn;
+  mod_map _aut_state_var_to_fn;
   mod_map _state_var_to_fn;
   mod_map _output_var_to_fn;
   mod_map _bad_var_to_fn;
   mod_map _constraint_var_to_fn;
   mod_map _justice_var_to_fn_set;
   mod_map _fairness_var_to_fn;
+  std::vector<Automaton> _automata;
 };
 
 #endif // _ExprAttachment_

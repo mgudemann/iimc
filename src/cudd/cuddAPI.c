@@ -12,6 +12,7 @@
 		<li> Cudd_addNewVarAtLevel()
 		<li> Cudd_bddNewVar()
 		<li> Cudd_bddNewVarAtLevel()
+		<li> Cudd_bddIsVar()
 		<li> Cudd_addIthVar()
 		<li> Cudd_bddIthVar()
 		<li> Cudd_zddIthVar()
@@ -376,6 +377,28 @@ Cudd_bddNewVarAtLevel(
     return(res);
 
 } /* end of Cudd_bddNewVarAtLevel */
+
+
+/**Function********************************************************************
+
+  Synopsis    [Returns 1 if the given node is a BDD variable.]
+
+  Description [Returns 1 if the given node is a BDD variable; 0 otherwise.]
+
+  SideEffects [None]
+
+  SeeAlso     []
+
+******************************************************************************/
+int
+Cudd_bddIsVar(
+  DdManager * dd,
+  DdNode * f)
+{
+    DdNode *one = DD_ONE(dd);
+    return(f != 0 && cuddT(f) == one && cuddE(f) == Cudd_Not(one));
+
+} /* end of Cudd_bddIsVar */
 
 
 /**Function********************************************************************

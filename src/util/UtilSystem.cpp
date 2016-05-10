@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -59,6 +59,11 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
+#endif
+
+#ifdef __APPLE__
+#include <sys/types.h>
+#include <sys/sysctl.h>
 #endif
 
 using namespace std;
@@ -187,7 +192,12 @@ namespace Util {
   long int get_physical_memory()
   {
     long int ret = 0;
-#if HAVE_SYSCONF && HAVE_UNISTD_H && HAVE_DECL__SC_PAGESIZE && HAVE_DECL__SC_PHYS_PAGES
+#ifdef __APPLE__
+    int mib[2] = {CTL_HW, HW_MEMSIZE};
+    size_t length;
+    length = sizeof(long);
+    sysctl(mib, 2, &ret, &length, NULL, 0);
+#elif HAVE_SYSCONF && HAVE_UNISTD_H && HAVE_DECL__SC_PAGESIZE && HAVE_DECL__SC_PHYS_PAGES
     ret = sysconf(_SC_PHYS_PAGES);
     if (ret >= 0)
       ret *= sysconf(_SC_PAGESIZE);
@@ -234,7 +244,7 @@ namespace Util {
     struct rusage usage;
     int status = getrusage(RUSAGE_SELF,&usage);
     if (status == 0) {
-      return usage.ru_maxrss * 1024;
+      return usage.ru_maxrss * RU_MAXRSS_SCALE;
     }
 #endif
     return -1;

@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "IC3.h"
 #include "MC.h"
 #include "Model.h"
+#include "options.h"
 #include "ProofAttachment.h"
 #include "RchAttachment.h"
 
@@ -96,9 +97,12 @@ typedef std::unordered_map<ID, int> IDIntMap;
 struct IICTLOptions {
 public:
   IICTLOptions(const boost::program_options::variables_map & opts) : 
-    ic3_opts(opts), fair_opts(opts) {
+    ic3_opts(opts), reach_opts(opts), fair_opts(opts) {
+      ic3_opts.lift = false;
+      reach_opts.lift = false;
   }
   IC3::IC3Options ic3_opts;
+  IC3::IC3Options reach_opts;
   Fair::FairOptions fair_opts;
 };
 
@@ -107,8 +111,8 @@ class LabelInitFolder;
 class IICTLAction : public Model::Action {
 public:
   friend class LabelInitFolder;
-  IICTLAction(Model & m, IICTLOptions * _opts = NULL) : Model::Action(m),
-      _opts(_opts), isDescendantOf(descendants), ic3Factor(20), bmcFactor(10) {
+  IICTLAction(Model & m) : Model::Action(m), _opts(NULL),
+      isDescendantOf(descendants), ic3Factor(20), bmcFactor(10) {
     ExprAttachment::Factory eaf;
     requires(Key::EXPR, &eaf);
     ProofAttachment::Factory paf;
@@ -126,6 +130,7 @@ public:
     numIC3calls = 0;
     fairnessConstraints = false;
     multiInit = false;
+    haveExactRch = false;
   }
 
   ~IICTLAction();
@@ -165,11 +170,11 @@ public:
                          std::vector<Transition> & cex,
                          std::vector<SAT::Clauses> & proofs,
                          bool incremental, bool propagate);
-  bool fair(const std::vector<ID> & source, SAT::Clauses & constraints,
+  bool fair(const std::vector<ID> & source, SAT::Clauses & constraints, SAT::Clauses & negConstraints,
             IC3::ProofProcType grppt, bool globalLast,
             std::vector<SAT::Clauses> & proofs, Lasso & cex, ID id);
   bool reach(const std::vector<ID> & source, ID targetID,
-             SAT::Clauses & targetCNF, std::vector<SAT::Clauses> & constraints,
+             SAT::Clauses & targetCNF, std::vector<SAT::Clauses> & constraints, SAT::Clauses & negConstraints,
              IC3::ProofProcType ppt, std::vector<SAT::Clauses> & proofs,
              std::vector<Transition> & cex, ID id, bool isEU = false);
   bool isUndecided(const std::vector<ID> & state, ID id);
@@ -189,6 +194,8 @@ public:
   void countPRStates();
 
 private:
+
+  static ActionRegistrar action;
 
   class IsDescendantOf {
   public: 
@@ -267,6 +274,8 @@ private:
 
   const int ic3Factor;
   const int bmcFactor;
+
+  bool haveExactRch;
 
 };
 

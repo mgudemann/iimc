@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,49 +43,62 @@ using namespace std;
 
 // TODO: make less conservative?
 
-void COI::build(Expr::Manager::View & v, const IDpv & rltn, ID prop, Options::Verbosity vrb) {
+void COI::build(Expr::Manager::View & v, ExprAttachment * const eat,
+                vector<ID> props, bool internal, Options::Verbosity vrb) {
+
   if (vrb > Options::Terse)
     cout << "Building k-step COI" << endl;
 
-  // 0. Construct set of latches.
-  set<ID> latches;
-  for (IDpv::const_iterator it = rltn.begin(); it != rltn.end(); ++it)
-    latches.insert(it->first);
+  kCOI_.clear();
+  kCOIplusInt_.clear();
+  markers_.clear();
+  markersInt_.clear();
 
-  // 1. Construct map of latches to fan-in latches.
-  typedef unordered_map<ID, set<ID> > VMap;
-  VMap vmap;
-  for (IDpv::const_iterator it = rltn.begin(); it != rltn.end(); ++it) {
-    set<ID> all_vars, vars;
-    Expr::variables(v, it->second, all_vars);
-    set_intersection(latches.begin(), latches.end(), all_vars.begin(), all_vars.end(), inserter(vars, vars.end()));
-    vmap.insert(VMap::value_type(it->first, vars));
+  // 1. Construct 0-COI.
+  set<ID> latchSet;
+  eat->supportStateVars(v, props, latchSet);
+  copy(latchSet.begin(), latchSet.end(), back_inserter(kCOI_));
+  markers_.push_back(kCOI_.size());
+
+  set<ID> nodeSet; // latches and internal nodes (somewhat redundant)
+  if (internal){
+    eat->supportNodes(v, props, nodeSet);
+    copy(nodeSet.begin(), nodeSet.end(), back_inserter(kCOIplusInt_));
+    markersInt_.push_back(kCOIplusInt_.size());
   }
 
-  // 2. Construct 0-COI.
-  set<ID> all_init, init;
-  Expr::variables(v, prop, all_init);
-  set_intersection(latches.begin(), latches.end(), all_init.begin(), all_init.end(), inserter(init, init.end()));
-  _kCOI.push_back(init);
-
-  // 3. Iterate until convergence.
-  set<ID> delta = _kCOI.back();
-  for (;;) {
-    const set<ID> & prev = _kCOI.back();
-    if (vrb > Options::Informative) cout << " " << prev.size() << endl;
-    set<ID> curr;
-    for (set<ID>::const_iterator it = delta.begin(); it != delta.end(); ++it) {
-      VMap::const_iterator vit = vmap.find(*it);
-      set_union(curr.begin(), curr.end(), vit->second.begin(), vit->second.end(), inserter(curr, curr.end()));
-    }
+  // 2. Iterate until convergence.
+  vector<ID> delta(latchSet.begin(), latchSet.end());
+  while (delta.size() > 0) {
+    vector<ID> nsfs = eat->nextStateFnOf(delta);
+    set<ID> newLatches;
+    eat->supportStateVars(v, nsfs, newLatches);
     delta.clear();
-    set_difference(curr.begin(), curr.end(), prev.begin(), prev.end(), inserter(delta, delta.end()));
-    set_union(curr.begin(), curr.end(), prev.begin(), prev.end(), inserter(curr, curr.end()));
-    if (curr.size() == prev.size())
-      return;
-    _kCOI.push_back(curr);
+    for (set<ID>::const_iterator it = newLatches.begin(); it != newLatches.end(); ++it) {
+      if (latchSet.find(*it) == latchSet.end()) {
+        delta.push_back(*it);
+      }
+    }
+    copy(delta.begin(), delta.end(), inserter(latchSet, latchSet.end()));
+    copy(delta.begin(), delta.end(), back_inserter(kCOI_));
+    markers_.push_back(kCOI_.size());
+
+    set<ID> newNodes;
+    vector<ID> delta2;
+    if (internal){
+      eat->supportNodes(v, nsfs, newNodes);
+      for (set<ID>::const_iterator it = newNodes.begin(); it != newNodes.end(); ++it) {
+	if (nodeSet.find(*it) == nodeSet.end()) {
+	  delta2.push_back(*it);
+	}
+      }
+      copy(delta2.begin(), delta2.end(), inserter(nodeSet, nodeSet.end()));
+      copy(delta2.begin(), delta2.end(), back_inserter(kCOIplusInt_));
+      markersInt_.push_back(kCOIplusInt_.size());
+    }
   }
 }
+
 
 void COIAction::exec() {
   COIAttachment * const cat = (COIAttachment *) model().constAttachment(Key::COI);
@@ -93,7 +106,8 @@ void COIAction::exec() {
   ExprAttachment * const eat = (ExprAttachment *) model().attachment(Key::EXPR);
 
   vector<ID> latches, nsfs;
-  set<ID> coil = cat->coi().cCOI();
+  COI::range coirng = cat->coi().cCOI();
+  set<ID> coil(coirng.first,coirng.second);
   bool changed = false;
   int initLatches = eat->stateVars().size();
   if (model().verbosity() > Options::Silent)
@@ -128,13 +142,16 @@ void COIAction::exec() {
     for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
       set<ID> vars, inter;
       Expr::variables(*ev, *it, vars);
-      set_intersection(vars.begin(), vars.end(), coil.begin(), coil.end(), inserter(inter, inter.end()));
-      if (inter.size() > 0)
-        eat->addInitialCondition(*it);
+      for (set<ID>::const_iterator vit = vars.begin(); vit != vars.end(); ++vit) {
+        if (coil.find(*vit) != coil.end()) {
+          eat->addInitialCondition(*it);
+          break;
+        }
+      }
     }
 
     nsfs.insert(nsfs.end(), eat->outputFns().begin(), eat->outputFns().end());
-    nsfs.insert(nsfs.end(), eat->constraints().begin(), eat->constraints().end());
+    nsfs.insert(nsfs.end(), eat->constraintFns().begin(), eat->constraintFns().end());
     nsfs.insert(nsfs.end(), eat->badFns().begin(), eat->badFns().end());
     nsfs.insert(nsfs.end(), eat->fairnessFns().begin(), eat->fairnessFns().end());
     for (size_t i = 0; i < eat->justiceSets().size(); ++i) {
@@ -174,13 +191,10 @@ void COIAttachment::build() {
 
   // If we read CTL properties, the attachment is modified.
   ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
-  vector<ID> latches(eat->stateVars());
-  vector<ID> nsfs(eat->nextStateFnOf(latches));
-
   Expr::Manager::View * v = model().newView();
 
   vector<ID> props;
-  vector<ID> constraints = eat->constraints();
+  vector<ID> constraints = eat->constraintFns();
   vector<ID> bad = eat->badFns();
   vector<ID> fairness = eat->fairnessFns();
   vector< vector<ID> > justice = eat->justiceSets();
@@ -192,15 +206,7 @@ void COIAttachment::build() {
   props.insert(props.end(), ctlprops.begin(), ctlprops.end());
   for (size_t i = 0; i < justice.size(); ++i)
     props.insert(props.end(), justice[i].begin(), justice[i].end());
-  // conjoin w/o simplifying to get one big expression
-  ID all_props = v->apply(Expr::And, props, false);
-  COI::IDpv rltn;
-  for (vector<ID>::const_iterator it1 = latches.begin(), it2 = nsfs.begin(); 
-       it1 != latches.end(); 
-       ++it1, ++it2)
-    rltn.push_back(COI::IDp(*it1, *it2));
-  COI coi(*v, rltn, all_props, model().verbosity());
-  _coi = coi;
+  _coi.build(*v, eat, props, model().options().count("ic3_intNodes"), model().verbosity());
 
   delete v;
   model().constRelease(eat);

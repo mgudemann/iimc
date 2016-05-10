@@ -10,6 +10,7 @@ mc_MC_sources = \
   src/mc/BddReach.h \
   src/mc/BddReach.cpp \
   src/mc/TacticMisc.h \
+  src/mc/TacticMisc.cpp \
   src/mc/ProofAttachment.h \
   src/mc/ProofAttachment.cpp \
   src/mc/RchAttachment.h \
@@ -20,7 +21,10 @@ mc_MC_sources = \
   src/mc/IICTL.cpp \
   src/mc/FCBMC.h \
   src/mc/FCBMC.cpp \
-  src/mc/IIC.h
+  src/mc/IIC.h \
+  src/mc/IIC.cpp \
+  src/mc/BddGSH.h \
+  src/mc/BddGSH.cpp
 
 iimc_SOURCES += $(mc_MC_sources)
 

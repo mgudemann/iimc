@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -116,6 +116,7 @@ public:
   {
     _nodes.resize(new_size);
   }
+  void clear();
 
   NodeIndex addNode();
   NodeIndex addNode(NodeRef arg0, NodeRef arg1);

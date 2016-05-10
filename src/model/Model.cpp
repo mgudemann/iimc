@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -40,6 +40,14 @@ using namespace std;
 TS Model::_stamp = 0;
 bool Model::_usedNextTS = false;
 
+ostream & operator<<(ostream & os, Model::Mode m) {
+  os << (m == Model::mNONE ? "mNONE" :
+         m == Model::mIC3 ? "mIC3" :
+         m == Model::mFAIR ? "mFAIR" : "mIICTL");
+  return os;
+}
+
+
 Model::~Model() {
   //cout << "Model Destructor" << endl;
   for (at_map::iterator i = _attachments.begin();
@@ -47,6 +55,20 @@ Model::~Model() {
     delete i->second;
   }
   if (_owns_manager) delete _manager;
+}
+
+void Model::setOptionValue(const std::string & option,
+                           const boost::any & value) {
+  boost::program_options::variables_map::iterator it = 
+    _options.find(option);
+  assert(it != _options.end());
+  it->second.value() = value;
+}
+
+void Model::setOption(const std::string & option) {
+  _options.insert(boost::program_options::variables_map::value_type(
+                    option,
+                    boost::program_options::variable_value(true,false)));
 }
 
 /**
@@ -97,6 +119,17 @@ std::string Model::blifMv() const
   std::string ret = (eat == 0) ? "" : eat->blifMv();
   constRelease(eat);
   return ret;
+}
+
+/**
+ * Describes the expressions of a model in AIGER.
+ */
+void Model::AIGER(std::string filename) const
+{
+  Attachment const *eat = constAttachment(Key::EXPR);
+  assert(eat);
+  eat->AIGER(filename);
+  constRelease(eat);
 }
 
 /**
@@ -194,6 +227,44 @@ void Model::cloneAttachments(const Model& from)
   }
 }
 
+/**
+ * Add a tactic to the end of the line.
+ */
+void Model::pushBackTactic(Action * tactic)
+{
+  _tactics.push_back(tactic);
+}
+
+/**
+ * Add a tactic to the beginning of the line.
+ */
+void Model::pushFrontTactic(Action * tactic)
+{
+  _tactics.push_front(tactic);
+}
+
+/**
+ * Dequeue the tactic that is first in line.
+ */
+Model::Action * Model::popTactic()
+{
+  if (_tactics.empty()) return 0;
+  Action * tactic = _tactics.front();
+  _tactics.pop_front();
+  return tactic;
+}
+
+/**
+ * Squash remaining tactics.
+ */
+void Model::clearTactics()
+{
+  while (!_tactics.empty()) {
+    delete _tactics.front();
+    _tactics.pop_front();
+  }
+}
+
 void Model::Action::make() {
   _make(true);
   Model::endEpoch();
@@ -281,4 +352,8 @@ void Model::Action::done(bool needLast) {
     _dep.push_back(keys);
     _reqBuild.clear();
   }
+}
+
+void Model::Attachment::exec() {
+  build();
 }

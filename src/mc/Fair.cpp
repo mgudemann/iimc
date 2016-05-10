@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -86,7 +86,7 @@ namespace {
       full_fairM(NULL), full_fairV(NULL), 
       fairIndex(0), k(opts.k), c_k(opts.k),
       gd(1.0), lcnt(0), ld(2.0), consM(NULL), consV(NULL), trivial(false),
-      records(_records)
+      records(_records), recordProofs(true)
     {
       for (vector<Record>::const_iterator it = records.begin();
            it != records.end(); ++it)
@@ -158,6 +158,8 @@ namespace {
           return;
         }
         if(!(opts.constraints->size() == 1 && (*opts.constraints)[0].size() == 1 && (*opts.constraints)[0][0] == ev.btrue())) {
+          if (!opts.constraints->empty())
+            recordProofs = false;
           trltn.insert(trltn.end(), opts.constraints->begin(), opts.constraints->end());
           allConstraints.push_back(*opts.constraints);
           //SAT::Clauses clauses;
@@ -174,6 +176,11 @@ namespace {
       consM = m.newSATManager();
       consV = consM->newView(ev);
       consV->add(trltn);
+
+      if (opts.negConstraints)
+        negrconstraints = *opts.negConstraints;
+      else
+        negrconstraints.push_back(SAT::Clause()); //initially false
     }
     ~State() {
       if (fairV) delete fairV;
@@ -214,6 +221,7 @@ namespace {
     vector<SAT::Clauses> nproofs;
     vector<SAT::Clauses> rproofs;
     vector<SAT::Clauses> rconstraints;
+    SAT::Clauses negrconstraints; //negation of some (not all) rconstraints plus those from IICTL
     vector<SAT::Clauses> allConstraints;
 
     float gd;
@@ -229,6 +237,7 @@ namespace {
     bool trivial; //If a fairness constraint is false
 
     vector<Record> & records;
+    bool recordProofs;
   };
 
   void printVector(State & st, const vector<ID> & c) {
@@ -252,6 +261,12 @@ namespace {
   ID choiceVar(State & st, unsigned i) {
     ostringstream nm;
     nm << "cv@" << i;
+    return st.ev.newVar(nm.str());
+  }
+
+  ID repVar(State & st, unsigned i) {
+    ostringstream nm;
+    nm << "rep@" << i;
     return st.ev.newVar(nm.str());
   }
 
@@ -460,6 +475,10 @@ namespace {
       }
     }
 
+    if (!st.opts.iictl) {
+      st.opts.ic3_opts.abs_patterns.clear();
+    }
+
     if (st.m.verbosity() > Options::Terse) 
       cout << "Fair: " << st.fairIndex << "/" << st.fairSets.size() << endl;
 
@@ -509,7 +528,8 @@ namespace {
     st.rconstraints.push_back(proof);
     st.consV->add(st.rconstraints.back());
     st.rproofs.push_back(proof);
-    st.records.push_back(Record(proof, Stem));
+    if (st.recordProofs)
+      st.records.push_back(Record(proof, Stem));
     for (unsigned i = 1; i <= st.fairIndex; ++i) {
       SAT::Clauses iproof;
       ficnf(st, proof, i, iproof);
@@ -549,6 +569,7 @@ namespace {
     //true; // lcnt <= st.ld * ((float) st.lcnt) / ((float) (st.pproofs.size()+1));
 
     SAT::Clauses nproof, reach;
+    SAT::Clauses nreach; //used by IC3 for lifting
     if (proof.size() == 1) {
       for (unsigned i = 0; i < proof[0].size(); ++i) {
         vector<ID> cls;
@@ -562,6 +583,12 @@ namespace {
         ID root = Expr::tseitin(st.ev, st.ev.apply(Expr::And, npp), reach, NULL, false);
         _rc.push_back(root);
         reach.push_back(_rc);
+      }
+      if (st.opts.ic3_opts.lift) {
+        nreach = nproof;
+        vector<ID> pp(proof[0]);
+        primeFormulas(st.ev, pp);
+        nreach.push_back(pp);
       }
     }
     else {
@@ -586,7 +613,7 @@ namespace {
       }
     }
 
-    bool nempty = false;
+    bool nempty = false; //no skeletons on negative side
 #if 1
     if (source) {
       SAT::GID gid = st.consV->newGID();
@@ -636,6 +663,12 @@ namespace {
 
       if (!pside) {
         if (st.m.verbosity() > Options::Terse) cout << "PSIDE" << endl;
+        if (st.opts.ic3_opts.lift) {
+          nreach = proof;
+          for (SAT::Clauses::iterator it = nreach.begin(); it != nreach.end(); ++it) {
+            primeFormulas(st.ev, *it);
+          }
+        }
         proof.clear();
         proof.push_back(vector<ID>());
         crc = true;
@@ -645,6 +678,8 @@ namespace {
       }
       if (!nside) {
         if (st.m.verbosity() > Options::Terse) cout << "NSIDE" << endl;
+        if (st.opts.ic3_opts.lift)
+          nreach = nproof;
         nproof.clear();
         nproof.push_back(vector<ID>());
         crc = true;
@@ -656,14 +691,30 @@ namespace {
     }
 
     if (crc) {
+      //proof is a single clause OR one side is empty
       st.ld *= 0.995;
       if (!nempty) compress(st, reach);
       st.rconstraints.push_back(nempty ? proof : reach);
       st.consV->add(st.rconstraints.back());
+      if (st.opts.ic3_opts.lift) {
+        //Pop the OR clause
+        SAT::Clause orClause = st.negrconstraints.back();
+        st.negrconstraints.pop_back();
+        //Create a rep
+        ID rep = repVar(st, st.rconstraints.size() - 1);
+        SAT::Clauses & tmp = nempty ? nproof : nreach;
+        for (SAT::Clauses::const_iterator it = tmp.begin(); it != tmp.end(); ++it) {
+          SAT::Clause cls(*it);
+          cls.push_back(st.ev.apply(Expr::Not, rep));
+          st.negrconstraints.push_back(cls);
+        }
+        orClause.push_back(rep);
+        st.negrconstraints.push_back(orClause);
+      }
     }
     st.pproofs.push_back(proof);
     st.nproofs.push_back(nproof);
-    if (rec) {
+    if (rec && st.recordProofs) {
       st.records.push_back(Record(proof, CycleP));
       st.records.push_back(Record(nproof, CycleN));
     }
@@ -711,11 +762,13 @@ namespace {
     }
     st.opts.ic3_opts.constraints = st.opts.constraints ? &constraints :
                                                          &st.rconstraints;
+    //TODO: handle constraints passed down from IICTL
+    st.opts.ic3_opts.negConstraints = &st.negrconstraints; 
+    st.opts.ic3_opts.fair = true;
     st.opts.ic3_opts.bmcsz = same;
     st.opts.ic3_opts.proofProc = IC3::SHRINK;
     st.opts.ic3_opts.printCex = st.opts.printCex;
 
-    //MC::ReturnValue rv = IC3::reach(st.m, st.opts.ic3_opts, proofs, trace);
     IC3::CubeSet indCubes;
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
@@ -723,6 +776,7 @@ namespace {
     int64_t startTime = Util::get_user_cpu_time();
     MC::ReturnValue rv = IC3::reach2(st.m, st.opts.ic3_opts, trace, &proofs, &incr, 
                                      &dummy, &indCubes);
+    st.opts.ic3_opts.negConstraints = NULL;
     if(st.m.verbosity() > Options::Informative)
       cout << "IC3 query CPU time: "
            << (Util::get_user_cpu_time() - startTime) / 1000000.0
@@ -769,7 +823,6 @@ namespace {
     st.opts.ic3_opts.printCex = st.opts.printCex;
 
     vector<SAT::Clauses> proofs;
-    //MC::ReturnValue rv = IC3::reach(st.m, st.opts.ic3_opts, proofs, trace);
     IC3::CubeSet indCubes;
     vector<IC3::LevClauses> dummy;
     st.opts.ic3_opts.incremental = true;
@@ -937,10 +990,38 @@ namespace {
               if (sofar / 1000000 >= st.opts.timeout) {
                 if (st.m.verbosity() > Options::Terse)
                   cout << "Fair: timeout" << endl;
+                // HACK: clear LR patterns' resumption memory
+                if (!st.opts.iictl) {
+                  for (unsigned i = 0; i < sched.size(); ++i)
+                    if (st.opts.ic3_opts.abs_patternMap.find(i+1) != 
+                        st.opts.ic3_opts.abs_patternMap.end())
+                      st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[i+1]].
+                        resume.clear();
+                }
+                else {
+                  uint64_t v = st.opts.ic3_opts.abs_pattern;
+                  if (v%2) --v;
+                  if (st.opts.ic3_opts.abs_patternMap.find(v) != 
+                      st.opts.ic3_opts.abs_patternMap.end())
+                    st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[v]].
+                      resume.clear();
+                  if (st.opts.ic3_opts.abs_patternMap.find(v+1) != 
+                      st.opts.ic3_opts.abs_patternMap.end())
+                    st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[v+1]].
+                      resume.clear();
+                }
                 throw Timeout();
               }
             }
             try {
+              // HACK: LR patterns
+              if (!st.opts.iictl)
+                st.opts.ic3_opts.abs_pattern = i+1;
+              else {
+                uint64_t v = st.opts.ic3_opts.abs_pattern;
+                if (v%2) --v;
+                st.opts.ic3_opts.abs_pattern = i == 0 ? v+1 : v;
+              }
               if (i == 0) {
                 SAT::Clauses proof;
                 vector<Transition> trace;
@@ -1016,6 +1097,26 @@ namespace {
           }
         }
       SAFE:
+        // HACK: clear LR patterns' resumption memory
+        if (!st.opts.iictl) {
+          for (unsigned i = 0; i < sched.size(); ++i)
+            if (st.opts.ic3_opts.abs_patternMap.find(i+1) != 
+                st.opts.ic3_opts.abs_patternMap.end())
+              st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[i+1]].
+                resume.clear();
+        }
+        else {
+          uint64_t v = st.opts.ic3_opts.abs_pattern;
+          if (v%2) --v;
+          if (st.opts.ic3_opts.abs_patternMap.find(v) != 
+              st.opts.ic3_opts.abs_patternMap.end())
+            st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[v]].
+              resume.clear();
+          if (st.opts.ic3_opts.abs_patternMap.find(v+1) != 
+              st.opts.ic3_opts.abs_patternMap.end())
+            st.opts.ic3_opts.abs_patterns[st.opts.ic3_opts.abs_patternMap[v+1]].
+              resume.clear();
+        }
         if (rcsz < st.rconstraints.size())
           sliceNDice(st);
         rcsz = st.rconstraints.size();

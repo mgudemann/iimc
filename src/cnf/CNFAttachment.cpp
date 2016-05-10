@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -277,7 +277,11 @@ void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * vi
     tr.push_back(view->apply(Expr::Equiv, 
                              view->prime(latches[i]),
                              fns[i]));
-  vector<ID> constraints = eat->constraints();
+  Expr::tseitin(*view, tr, _cnf, &satIdOfId);
+  _core_cnf_no_constraints = _cnf;
+
+  const vector<ID> & constraints = eat->constraintFns();
+  vector<ID> fltrdConstraints;
   //Modified by Zyad 112211
   //tr.insert(tr.end(), constraints.begin(), constraints.end());
   //Expr::primeFormulas(*view, constraints);
@@ -285,20 +289,29 @@ void CNFAttachment::tseitin(const ExprAttachment * eat, Expr::Manager::View * vi
   for(vector<ID>::const_iterator it = constraints.begin();
       it != constraints.end(); ++it) {
     if(*it != view->btrue()) { //Ignore trivial constraints
-      tr.push_back(*it);
-      tr.push_back(Expr::primeFormula(*view, *it));
+      vector<ID> lits;
+      if (isClause(*view, *it, &lits)) {
+        _cnf.push_back(lits);
+        for (vector<ID>::iterator it = lits.begin(); it != lits.end(); ++it)
+          *it = view->prime(*it);
+        _cnf.push_back(lits);
+      }
+      else {
+        fltrdConstraints.push_back(*it);
+        fltrdConstraints.push_back(Expr::primeFormula(*view, *it));
+      }
     }
   }
 
   // convert to CNF
-  Expr::tseitin(*view, tr, _cnf);
+  Expr::tseitin(*view, fltrdConstraints, _cnf, &satIdOfId);
 
   // convert property separately
   if (eat->outputs().size() > 0) {
     ID npi = eat->outputFnOf(eat->outputs()[0]);
     _last_npi = npi;
     ID pi = view->apply(Expr::Not, npi);
-    Expr::tseitin(*view, pi, _pi_cnf);
+    Expr::tseitin(*view, pi, _pi_cnf, &satIdOfId);
   }
 }
 
@@ -314,7 +327,7 @@ void CNFAttachment::wilson(const ExprAttachment * eat, Expr::Manager::View * vie
     tr.push_back(view->apply(Expr::Equiv, 
                              view->prime(latches[i]),
                              fns[i]));
-  vector<ID> constraints = eat->constraints();
+  vector<ID> constraints = eat->constraintFns();
   for(vector<ID>::const_iterator it = constraints.begin();
       it != constraints.end(); ++it) {
     if(*it != view->btrue()) { //Ignore trivial constraints
@@ -353,6 +366,10 @@ void CNFAttachment::build()
   // create constant ExprAttachment.  It is used by all CNF conversions
   ExprAttachment const * eat = static_cast<ExprAttachment const *>(_model.constAttachment(Key::EXPR));
   vector<vector<ID> > tmp;
+  cnf.clear();
+  _core_cnf.clear();
+  _core_cnf_no_constraints.clear();
+  _pi_cnf.clear();
   vector<vector<ID> >& _cnf = disable_simp ? cnf : tmp;
 
   // create a view of the model
@@ -372,11 +389,6 @@ void CNFAttachment::build()
       nice(eat, view, latches, inputs, fns, _cnf);
       break;
     case WILSON:
-      tseitin(eat, view, latches, inputs, fns, _cnf);
-      if (model().verbosity() > Options::Terse)
-        cnf_stats("CNFAttachment:", _cnf); 
-      _cnf.clear();
-      _pi_cnf.clear();
       wilson(eat, view, latches, inputs, fns, _cnf);
       break;
     case TSEITIN:

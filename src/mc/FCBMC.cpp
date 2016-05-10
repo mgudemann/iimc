@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -51,7 +51,9 @@ FCBMC::FCBMC(Model & m, const FCBMCOptions & _opts) :
   ev = model.newView();
 
   SAT::Manager * satMan = model.newSATManager();
-  satView = satMan->newView(*ev);
+  if (m.verbosity() > Options::Terse)
+    cout << "FCBMC: Using " << opts.backend << " as backend" << endl;
+  satView = satMan->newView(*ev, SAT::toSolver(opts.backend));
 
   //Add initial condition
   const vector<ID> & init = eat->initialConditions();

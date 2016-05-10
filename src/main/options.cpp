@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -36,12 +36,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <vector>
 
+#include "options.h"
 #include "CutSweep.h"
 #include "BddReach.h"
 #include "BMC.h"
 #include "COI.h"
 #include "IC3.h"
-#include "IIC.h"
 #include "IICTL.h"
 #include "Error.h"
 #include "Expr.h"
@@ -49,20 +49,98 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Fair.h"
 #include "FCBMC.h"
 #include "FSIS.h"
-#include "options.h"
+#include "BddGSH.h"
 #include "SAT.h"
 #include "SATSweep.h"
 #include "SequentialEquivalence.h"
+#include "Slice.h"
 #include "StuckAt.h"
-#include "TacticMisc.h"
+#include "PhaseAbstraction.h"
+#include "Simplifier.h"
+#include "AbsInt.h"
+#include "Decode.h"
 #include "CNFTestAction.h"
 #include "CNFDummyAction.h"
 #include "DIMACSAction.h"
+#include "TacticMisc.h"
+#include "IIC.h"
 
 using namespace std;
 using namespace boost::program_options;
 
+//Proof Engines
+namespace IIC {
+ActionRegistrar IIC::IICAction::action("check", "Competition tactic");
+}
+namespace BMC {
+ActionRegistrar BMC::BMCAction::action("bmc", "Bounded Model Checker");
+}
+ActionRegistrar BddFwReachAction::action("bdd_fw_reach", "BDD Forward Reachability");
+ActionRegistrar BddBwReachAction::action("bdd_bw_reach", "BDD Backward Reachability");
+ActionRegistrar BddGSHAction::action("gsh", "BDD Cycle Detection");
+namespace IC3 {
+ActionRegistrar IC3Action::action("ic3", "IC3");
+ActionRegistrar IC3Action::actionRev("ic3r", "Reverse IC3");
+ActionRegistrar IC3Action::actionLR("ic3lr", "Localization Reduction IC3");
+}
+namespace FSIS {
+ActionRegistrar FSISAction::action("fsis", "FSIS");
+}
+namespace Fair {
+ActionRegistrar FairAction::action("fair", "Fair");
+}
+namespace IICTL {
+ActionRegistrar IICTLAction::action("iictl", "Incremental Inductive CTL Model Checker");
+}
+namespace FCBMC {
+ActionRegistrar FCBMCAction::action("fcbmc", "Fair-Cycle Bounded Model Checker");
+}
+//Proof Engines
+
+//Simplification Engines
+ActionRegistrar BddSweepAction::action("bddsweep", "BDD Sweeping");
+namespace Action {
+ActionRegistrar CutSweepAction::action("cutsweep", "Cut Sweeping");
+ActionRegistrar SATSweepAction::action("satsweep", "SAT Sweeping");
+}
+ActionRegistrar COIAction::action("coi", "Cone-Of-Influence Reduction");
+ActionRegistrar SequentialEquivalenceAction::action("se", "Latch Sequential Equivalence");
+ActionRegistrar StuckAtAction::action("stuck", "Latch Stuck-At Value Detection");
+ActionRegistrar PhaseAbstractionAction::action("phase", "Phase Abstraction");
+ActionRegistrar TvSimplifierAction::action("tvsim", "TV Simplification");
+ActionRegistrar AbsIntAction::action("absint", "Abstract Interpretation");
+ActionRegistrar DecodeAction::action("decode", "Decode model");
+ActionRegistrar IIC::SequentialReductionAction::action("sr", "Sequential Reduction");
+ActionRegistrar IIC::PreProcessAction::action("pp", "Preprocessing");
+ActionRegistrar SliceAction::action("slice", "Find simple inductive invariants");
+//Printers
+ActionRegistrar PrintExprAction::action("print_expr", "Print model expressions");
+ActionRegistrar PrintDotAction::action("print_dot", "Print model in dot format");
+ActionRegistrar PrintCircuitGraphAction::action("print_graph", "Print the circuit graph in dot format");
+ActionRegistrar PrintVerilogAction::action("print_verilog", "Print the model in Verilog");
+ActionRegistrar PrintBlifMvAction::action("print_blif_mv", "Print the model in Blif-MV");
+ActionRegistrar PrintAIGERAction::action("print_aiger", "Print the model in AIGER");
+ActionRegistrar PrintSystemInfoAction::action("print_info", "Print system information");
+ActionRegistrar PrintCpuTimeAction::action("print_time", "Print CPU time");
+ActionRegistrar Conclusion::action("conclude", "Print conclusion");
+ActionRegistrar AnalyzeSccs::action("sccs", "Analyze SCCs");
+ActionRegistrar PrintCircuitSccGraph::action("print_scc_graph", "Print SCC quotient graph");
+ActionRegistrar PrintExprInfo::action("print_expr_info", "Print some statistics on model expressions");
+ActionRegistrar PrintExprSize::action("print_expr_size", "Print the number of expressions");
+ActionRegistrar PrintOutputExpressions::action("print_outputs", "Print output expressions");
+ActionRegistrar PrintStateGraph::action("print_state_graph", "Print state graph");
+namespace CNF {
+ActionRegistrar DIMACSAction::action("dimacs", "Print CNF in DIMACS format");
+}
+
+//Other
+ActionRegistrar BddBuildAction::action("bdd_build", "Build BDDs");
+namespace IIC {
+ActionRegistrar FixRoots::action("fixroots", "Fix the roots of the model");
+}
+
 namespace {
+
   enum Filetype { AIGER };
 
   // Returns the Filetype based on the filename's extension.
@@ -75,6 +153,17 @@ namespace {
       return AIGER;
     throw InputError("The filetype of " + name + ", as indicated by its extension, is unknown.");
   }
+
+  //Formats the actions help to be displayed in iimc's help
+  string getActionsHelp() {
+    const StrStrMap & actions = ActionRegistrar::registry();
+    string rv = "Specify a tactic sequence. Available tactics:\n";
+    for (StrStrMap::const_iterator it = actions.begin(); it != actions.end(); ++it) {
+      rv += "- " + it->first + ": " + it->second + "\n";
+    }
+    return rv;
+  }
+
 }
 
 namespace Options {
@@ -129,7 +218,8 @@ namespace Options {
 
       ("tactic,t",
        value< vector<string> >(&tacticSpec_),
-       "Specify a tactic sequence")
+       getActionsHelp().c_str())
+       //"Specify a tactic sequence")
 
       ("bmc_bound",
        value<unsigned int>()->default_value(1000),
@@ -141,6 +231,17 @@ namespace Options {
       ("bmc_timeout",
        value<int>()->default_value(30),
        "BMC option: set timeout")
+
+      ("bmc_backend",
+       value<string>()->default_value("minisat"),
+#ifdef DISABLE_ZCHAFF
+       "BMC option: select SAT solver (Available options: \"minisat\")")
+#else
+       "BMC option: select SAT solver (Available options: \"zchaff\", \"minisat\")")
+#endif
+
+      ("ic3_verify",
+       "IC3 option: verify IC3's proof")
 
       ("ic3_nRuns",
        value<unsigned int>()->default_value(20),
@@ -170,8 +271,8 @@ namespace Options {
        value<int>()->default_value(20),
        "ic3r option: set timeout")
 
-      ("ic3_lift",
-       "ic3 option: lift CTIs")
+      ("ic3_xlift",
+       "ic3 option: Disable lifting of CTIs")
 
       ("ic3_laggr",
        value<int>()->default_value(0),
@@ -183,12 +284,78 @@ namespace Options {
        ("ic3_weak_inf",
         "ic3 option: Check for truly inductive clauses and store them separately without interfering with IC3's normal operation. Is not useful unless used in conjunction with ic3_lift")
 
-       ("ic3_try_unlifted",
-        "ic3 option: If lifting is enabled, try inductiveness of unlifted cube as well and take the most forward of the two (lifted and unlifted)")
+      ("ic3_vweak_inf",
+        "ic3 option: ")
 
        ("ic3_stats",
         "ic3 option: Extract and print statistics about the ic3 run")
- 
+
+       ("ic3_intNodes",
+        "ic3 option: use internal nodes of the circuit in lemmas")
+
+      ("ic3_leapfrog",
+       "ic3 option")
+
+      ("ic3_gen",
+       value<int>()->default_value(0),
+       "ic3 option")
+
+      ("ic3_abstract",
+       value<int>()->default_value(0),
+       "ic3 option")
+
+      ("ic3_absstrict",
+       value<int>()->default_value(0),
+       "ic3 option")
+
+      ("ic3_absonedrop",
+       "ic3 option")
+
+      ("ic3_absbmc",
+       value<int>()->default_value(30),
+       "ic3 option")
+
+      ("ic3_absbmctimeout",
+       value<int>()->default_value(10),
+       "ic3 option")
+
+      ("ic3_absprunelo",
+       value<int>()->default_value(-1),
+       "ic3 option")
+
+      ("ic3_absprunehi",
+       value<int>()->default_value(-1),
+       "ic3 option")
+
+      ("ic3_propagate",
+       "ic3 option: in case of a timeout, propagate clauses to find truly inductive clauses and add them as constraints to the model")
+
+      ("ic3_ctg",
+       value<int>()->default_value(3),
+       "ic3 option: handle CTGs in down. The number specifies the maximum number of CTGs after which to give up")
+
+      ("ic3_stem",
+       value<int>()->default_value(0),
+       "stem length")
+
+      ("ic3_tvstem",
+       "obtain stem length from tvsim")
+
+      ("ic3_backend",
+#ifdef DISABLE_ZCHAFF
+       value<string>()->default_value("minisat"),
+       "ic3 option: select SAT solver (Available options: \"minisat\")")
+#else
+       value<string>()->default_value("zchaff"),
+       "ic3 option: select SAT solver (Available options: \"zchaff\", \"minisat\")")
+#endif
+
+      ("ic3_pushLast",
+       "ic3 option: attempt to push the clause forward after applying mic (requires --ic3_gen 3)")
+
+      ("ic3_minCex",
+       "ic3 option: only find minimum-length counterexamples")
+
       ("iictl_verbosity",
        value<int>(),
        "IICTL Option: verbosity level for IICTL")
@@ -211,7 +378,7 @@ namespace Options {
 
       ("iictl_gen_aggr",
         value<int>()->default_value(1),
-       "IICTL Option: Agression level for generalization traces (0-2)")
+       "IICTL Option: Aggression level for generalization traces (0-2)")
 
       ("iictl_fair_grppt", 
        value<int>()->default_value(3),
@@ -234,6 +401,16 @@ namespace Options {
 
       ("parse_graph",
        "print the parse graph of the property in dot format")
+
+      ("auto",
+       value<std::string>(),
+       "Automaton file")
+
+      ("print_auto",
+       "print the automaton in dot format")
+
+      ("auto_xpre",
+       "Use the automaton bad state(s) as the target rather than their precondition")
 
       ("fsis_disable_lifting",
        "FSIS option: disable lifting of CTI state")
@@ -268,6 +445,14 @@ namespace Options {
 
       ("satsweep_assumeProperty",
        "SAT sweeping option: assume property while sweeping")
+
+      ("satsweep_backend",
+       value<string>()->default_value("minisat"),
+#ifdef DISABLE_ZCHAFF
+       "SAT sweeping option: select SAT solver (Available options: \"minisat\")")
+#else
+       "SAT sweeping option: select SAT solver (Available options: \"zchaff\", \"minisat\")")
+#endif
 
       ("cutsweep_nodeMax",
        value<int>(),
@@ -324,6 +509,10 @@ namespace Options {
        value<unsigned long>(),
        "Time limit for BDD-based backward analysis (in s)")
 
+      ("gsh_timeout",
+       value<unsigned long>(),
+       "Time limit for BDD-based cycle detection (in s)")
+
       ("bdd_tr_cluster",
        value<unsigned int>()->default_value(2500),
        "Size limit for transition relation clusters")
@@ -340,6 +529,12 @@ namespace Options {
       ("bdd_save_fw_reach",
        "Save BDD for reachable states after successful reachability analysis")
 
+      ("bdd_save_bw_reach",
+       "Save BDD for backward reachable states after successful reachability analysis")
+
+      ("gsh_fw",
+       "Use forward operators in GSH.")
+
       ("bdd_info",
        "Add BDD info to summary")
 
@@ -354,6 +549,10 @@ namespace Options {
       ("bdd_sw_timeout",
        value<unsigned long>(),
        "Time limit for BDD sweeping (in s)")
+
+      ("check_bdd_max",
+       value<size_t>()->default_value(500),
+       "Maximum number of state variables for BDD reachability")
 
       ("tmcnf_k", value<unsigned>()->default_value(8),
        "Technology Mapping CNF Conversion: maximum cut size")
@@ -382,15 +581,45 @@ namespace Options {
 
       ("fair_timeout", value<int>()->default_value(-1), "fair option: set timeout")
 
+      ("fair_weakenPfEfrt", value<int>()->default_value(0), "fair option: 0 disables joining-like behavior in proof weakening")
+
+      ("fair_pp_timeout", value<int>()->default_value(-1), "fair option: timeout for proof strengthening/weakening")
+
       ("fcbmc_timeout", value<int>()->default_value(60), "FCBMC: set timeout") 
 
       ("fcbmc_bound", value<int>()->default_value(8191), "FCBMC: set bound for k") 
+
+      ("fcbmc_backend",
+       value<string>()->default_value("minisat"),
+#ifdef DISABLE_ZCHAFF
+       "FCBMC option: select SAT solver (Available options: \"minisat\")")
+#else
+       "FCBMC option: select SAT solver (Available options: \"zchaff\", \"minisat\")")
+#endif
+
+      ("tv_narrow", "No widening in ternary simulation")
+
+      ("tv_nocheck", "No output check in ternary simulation")
+
+      ("phase_max", value<unsigned>()->default_value(64), "PhaseAbs: set maximum number of phases")
+
+      ("phase_layered", "PhaseAbs: use layered network approach")
+
+      ("slice_timeout",
+       value<int>()->default_value(20),
+       "Slice option: timeout")
+
+      ("aiger_output",
+       value<std::string>(),
+       "Output file for print_aiger.  Extension should be .aig or .aag\n"
+       "Default is test.aig")
 
       ("pi", value<unsigned>()->default_value(0), "Property index")
       ;
     hidden.add_options()
       ("input-file", value<string>(&inputFileName), "Input file");
     cmdline_options.add(visible).add(hidden);
+    ActionRegistrar::registry(true);
   }
 
   int CommandLineOptions::parseCommandLineOptions(Model& model, int argc, char * argv[]) {
@@ -428,6 +657,24 @@ namespace Options {
              << ") out of range (0-4)" << endl;
         ret |= 1;
       }
+    }
+
+    string bmc_backend = varMap["bmc_backend"].as<string>();
+    if (!SAT::isValidBackend(bmc_backend)) {
+      cout << "Unknown backend " << bmc_backend << endl;
+      return 1;
+    }
+
+    string ic3_backend = varMap["ic3_backend"].as<string>();
+    if (!SAT::isValidBackend(ic3_backend)) {
+      cout << "Unknown backend " << ic3_backend << endl;
+      return 1;
+    }
+
+    string satsweep_backend = varMap["satsweep_backend"].as<string>();
+    if (!SAT::isValidBackend(satsweep_backend)) {
+      cout << "Unknown backend " << satsweep_backend << endl;
+      return 1;
     }
 
     if (varMap.count("improve_proof")) {
@@ -470,7 +717,7 @@ namespace Options {
 
     /* Register tactics. */
     bool standard = false;
-    tactics_.push_back(new IIC::FixRoots(model));
+    model.pushBackTactic(new IIC::FixRoots(model));
     if (varMap.count("tactic")) {
       for (vector<string>::iterator it = tacticSpec_.begin();
            it != tacticSpec_.end(); it++) {
@@ -478,6 +725,7 @@ namespace Options {
         if      (*it == "bmc")             t = new BMC::BMCAction(model);
         else if (*it == "ic3")             t = new IC3::IC3Action(model);
         else if (*it == "ic3r")            t = new IC3::IC3Action(model, true);
+        else if (*it == "ic3lr")            t = new IC3::IC3Action(model, false, true);
         else if (*it == "fsis")            t = new FSIS::FSISAction(model);
         else if (*it == "bdd_build")       t = new BddBuildAction(model);
         else if (*it == "bdd_fw_reach")    t = new BddFwReachAction(model);
@@ -489,8 +737,11 @@ namespace Options {
         else if (*it == "print_scc_graph") t = new PrintCircuitSccGraph(model);
         else if (*it == "print_verilog")   t = new PrintVerilogAction(model);
         else if (*it == "print_blif_mv")   t = new PrintBlifMvAction(model);
+        else if (*it == "print_aiger")     t = new PrintAIGERAction(model);
         else if (*it == "print_expr_info") t = new PrintExprInfo(model);
         else if (*it == "print_expr_size") t = new PrintExprSize(model);
+        else if (*it == "print_outputs")   t = new PrintOutputExpressions(model);
+        else if (*it == "print_state_graph") t = new PrintStateGraph(model);
         else if (*it == "sccs")            t = new AnalyzeSccs(model);
         else if (*it == "cnftest")         t = new CNF::CNFTestAction(model);
         else if (*it == "cnfdummy")        t = new CNF::CNFDummyAction(model);
@@ -499,12 +750,13 @@ namespace Options {
         else if (*it == "coi")             t = new COIAction(model);
         else if (*it == "se")              t = new SequentialEquivalenceAction(model);
         else if (*it == "stuck")           t = new StuckAtAction(model);
-        else if (*it == "sr")            {
-          tactics_.push_back(new COIAction(model));
-          tactics_.push_back(new StuckAtAction(model));
-          tactics_.push_back(new SequentialEquivalenceAction(model));
-          t = new COIAction(model);
-        }
+        else if (*it == "phase")           t = new PhaseAbstractionAction(model);
+        else if (*it == "tvsim")           t = new TvSimplifierAction(model);
+        else if (*it == "absint")          t = new AbsIntAction(model);
+        else if (*it == "decode")          t = new DecodeAction(model);
+        else if (*it == "sr")              t = new IIC::SequentialReductionAction(model);
+        else if (*it == "slice")           t = new SliceAction(model);
+        else if (*it == "pp")              t = new IIC::PreProcessAction(model);
         else if (*it == "print_info")      t = new PrintSystemInfoAction(model);
         else if (*it == "print_time")      t = new PrintCpuTimeAction(model);
         else if (*it == "conclude")        t = new Conclusion(model);
@@ -513,25 +765,21 @@ namespace Options {
         else if (*it == "iictl")           t = new IICTL::IICTLAction(model);
         else if (*it == "check")           t = new IIC::IICAction(model);
         else if (*it == "fcbmc")           t = new FCBMC::FCBMCAction(model);
+        else if (*it == "gsh")             t = new BddGSHAction(model);
         else if (*it == "standard")        standard = true;
-        else throw InputError("Unknown tactic: " + *it);
+        else {
+          model.clearTactics();
+          throw InputError("Unknown tactic: " + *it);
+        }
         if(!standard)
-          tactics_.push_back(t);
+          model.pushBackTactic(t);
       }
     }
     else standard = true;
 
     if (standard) {
-      tactics_.push_back(new COIAction(model));
-      tactics_.push_back(new StuckAtAction(model));
-      tactics_.push_back(new SequentialEquivalenceAction(model));
-      tactics_.push_back(new COIAction(model));
-      tactics_.push_back(new BddSweepAction(model));
-      tactics_.push_back(new Action::SATSweepAction(model));
-      tactics_.push_back(new StuckAtAction(model));
-      tactics_.push_back(new SequentialEquivalenceAction(model));
-      tactics_.push_back(new COIAction(model));
-      tactics_.push_back(new IIC::IICAction(model));
+      model.pushBackTactic(new IIC::PreProcessAction(model));
+      model.pushBackTactic(new IIC::IICAction(model));
     }
 
     return 0;

@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -84,7 +84,7 @@ public:
       delete local;
     }
 
-    virtual const ID * const arguments(ID id, int * nChildren) = 0;
+    virtual const ID * arguments(ID id, int * nChildren) = 0;
 
     /**
      * Begins a thread-local expression creation context.  Expressions
@@ -409,7 +409,7 @@ public:
   // NOT THREAD SAFE, even with MTHREADS
   void clean() {
     bool only_kept = true;
-    for (unsigned int i = low; i < gid; ++i ) {
+    for (ID i = low; i < gid; ++i ) {
       if (local || !_HAS_THREADS) {
         if (!KEEP_SET(id2n[i])) {
           only_kept = false;
@@ -468,9 +468,9 @@ private:
 
   class keep_fold : public Folder {
   public:
-    keep_fold(typename HSManager<N>::HSView * v, HashedStructure<N> * hs) { 
-      this->v = v;
-      this->hs = hs;
+    keep_fold(typename HSManager<N>::HSView * vi, HashedStructure<N> * hst) { 
+      this->v = vi;
+      this->hs = hst;
     }
     virtual bool filter(ID id, N * _e) {
       id = v->hsID(id);

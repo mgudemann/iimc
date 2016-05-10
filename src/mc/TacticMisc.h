@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -39,11 +39,18 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** @file TacticMisc.h */
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "Model.h"
+#include "options.h"
 #include "ExprAttachment.h"
+#include "ProofAttachment.h"
 #include "Util.h"
 
+#include <cmath>
+
 typedef boost::program_options::variables_map options_map;
+
 /**
  * Action to print the expressions for a model.
  */
@@ -59,10 +66,13 @@ public:
   /**
    * Print expressions.
    */
-  virtual void exec() {
+  void exec() {
     std::cout << model().string();
   }
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to print a dot file for a model.
@@ -79,10 +89,13 @@ public:
   /**
    * Print dot.
    */
-  virtual void exec() {
+  void exec() {
     std::cout << model().dot();
   }
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Class to print the circuit graph in dot format.
@@ -99,13 +112,15 @@ public:
   /**
    * Print circuit graph in dot format.
    */
-  virtual void exec() {
+  void exec() {
     ExprAttachment const *eat = 
       (ExprAttachment const *) _model.constAttachment(Key::EXPR);
     assert(eat != 0);
     std::cout << eat->circuitGraph();
     _model.constRelease(eat);
   }
+private:
+  static ActionRegistrar action;
 };
 
 
@@ -124,10 +139,13 @@ public:
   /**
    * Print model.
    */
-  virtual void exec() {
+  void exec() {
     std::cout << model().verilog();
   }
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to print Blif-MV for a model.
@@ -144,10 +162,45 @@ public:
   /**
    * Print expressions.
    */
-  virtual void exec() {
+  void exec() {
     std::cout << model().blifMv();
   }
+private:
+  static ActionRegistrar action;
 };
+
+
+/**
+ * Action to print AIGER for a model.
+ */
+class PrintAIGERAction : public Model::Action {
+public:
+  /**
+   * Constructor used in initialization.
+   */
+  PrintAIGERAction(Model & m) : Model::Action(m) {
+    ExprAttachment::Factory ef;
+    requires(Key::EXPR, &ef);
+  }
+  /**
+   * Print AIGER.
+   */
+  void exec() {
+    try {
+      std::string filename;
+      if (_model.options().count("aiger_output") > 0)
+        filename =  _model.options()["aiger_output"].as<std::string>();
+      else
+        filename = "test.aig";
+      model().AIGER(filename);
+    } catch (std::runtime_error& e) {
+      std::cout << "print_aiger failed: " << e.what() << std::endl;
+    }
+  }
+private:
+  static ActionRegistrar action;
+};
+
 
 /**
  * Action to print system information.
@@ -158,10 +211,13 @@ public:
   /**
    * Print system info.
    */
-  virtual void exec() {
+  void exec() {
     Util::printSystemInfo();
   }
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to print CPU time.
@@ -172,9 +228,11 @@ public:
   /**
    * Print CPU time.
    */
-  virtual void exec() {
+  void exec() {
     Util::printCpuTime();
   }
+private:
+  static ActionRegistrar action;
 };
 
 
@@ -192,8 +250,11 @@ public:
    *
    * The whole point of this action is to instantiate the proof attachment.
    */
-  virtual void exec() {}
+  void exec() {}
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to analyze SCCs in the COI of primary outputs.
@@ -207,18 +268,11 @@ public:
   /**
    * Analyze SCCs.
    */
-  virtual void exec() {
-    Expr::Manager::View *v = model().newView();
-    ExprAttachment const *eat = 
-      (ExprAttachment const *) model().constAttachment(Key::EXPR);
-    std::vector<ID> const &nsfv = eat->nextStateFns();
-    std::vector<ID> const &roots = eat->outputFns();
-    std::vector<ID> const &leaves = eat->stateVars();
-    analyzeSccs(*v, roots, leaves, nsfv);
-    model().constRelease(eat);
-    delete v;
-  }
+  void exec();
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to print quotient graph for the circuit SCCs in the COI of primary
@@ -233,18 +287,11 @@ public:
   /**
    * Print circuit SCCs
    */
-  virtual void exec() {
-    Expr::Manager::View *v = model().newView();
-    ExprAttachment const *eat = 
-      (ExprAttachment const *) model().constAttachment(Key::EXPR);
-    std::vector<ID> const &nsfv = eat->nextStateFns();
-    std::vector<ID> const &roots = eat->outputFns();
-    std::vector<ID> const &leaves = eat->stateVars();
-    std::cout << printSccQuotientGraph(*v, roots, leaves, nsfv);
-    model().constRelease(eat);
-    delete v;
-  }
+  void exec();
+private:
+  static ActionRegistrar action;
 };
+
 
 /**
  * Action to print out the status info of an Expr attachment, such as
@@ -257,14 +304,20 @@ public:
     ExprAttachment::Factory eaf;
     requires(Key::EXPR, &eaf);
   }
-  virtual void exec()
+  void exec()
   {
     ExprAttachment const *eat = (ExprAttachment *)model().constAttachment(Key::EXPR);
     eat->info();
     model().constRelease(eat);
   }
+private:
+  static ActionRegistrar action;
 };
 
+
+/**
+ * Action to print the number of nodes in the expressions of a model
+ */
 class PrintExprSize : public Model::Action {
 public:
   PrintExprSize(Model & m) : Model::Action(m) {
@@ -272,25 +325,42 @@ public:
     requires(Key::EXPR, &f);
   }
 
-  virtual void exec() {
-    ExprAttachment const * const eat =
-      (ExprAttachment const *) model().constAttachment(Key::EXPR);
+  void exec();
+private:
+  static ActionRegistrar action;
+};
 
-    std::vector<ID> ids = eat->nextStateFns();
-    ids.insert(ids.end(), eat->outputFns().begin(), eat->outputFns().end());
-    ids.insert(ids.end(), eat->badFns().begin(), eat->badFns().end());
-    ids.insert(ids.end(), eat->constraints().begin(), eat->constraints().end());
-    for(vector< vector<ID> >::const_iterator it = eat->justiceSets().begin();
-        it != eat->justiceSets().end(); ++it) {
-      ids.insert(ids.end(), it->begin(), it->end());
-    }
-    ids.insert(ids.end(), eat->fairnessFns().begin(), eat->fairnessFns().end());
 
-    Expr::Manager::View *v = model().newView();
-    std::cout << "Model has " << sizeOf(*v, ids) << " nodes" << std::endl;
-
-    delete v;
+/**
+ * Action to print the expressions that define the outputs
+ */
+class PrintOutputExpressions : public Model::Action {
+public:
+  PrintOutputExpressions(Model & m) : Model::Action(m) {
+    ExprAttachment::Factory f;
+    requires(Key::EXPR, &f);
   }
+
+  void exec();
+private:
+  static ActionRegistrar action;
+};
+
+
+/**
+ * Action to print a dot file describing the state graph of the model
+ * (if it is small enough)
+ */
+class PrintStateGraph : public Model::Action {
+public:
+  PrintStateGraph(Model & m) : Model::Action(m) {
+    ExprAttachment::Factory f;
+    requires(Key::EXPR, &f);
+  }
+
+  void exec();
+private:
+  static ActionRegistrar action;
 };
 
 #endif // _TacticMisc_

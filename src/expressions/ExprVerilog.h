@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -41,15 +41,32 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <vector>
 #include "Expr.h"
+extern "C" {
+#include "aiger19.h"
+}
+
+namespace {
+/**
+ * Expunge the priming bits from a (global) ID for use in AIGER
+ * generation.  Since the AIGER library (unlike the AIGER format)
+ * is limited to 32-bit literals, we try to recover as much room
+ * as possible.
+ */
+unsigned AIGERlit(ID id) {
+  unsigned x = (unsigned) (((id >> 15) & ~ID(1)) | (id & ID(1)));
+  return x == 0 ? 1 : x == 1 ? 0 : x;
+}
+}
 
 namespace Expr {
-  /**
-   * Convert one or more expressions to either Verilog or Blif-MV.
-   */
-  std::string verilogOf(Manager::View& v, ID id);
-  std::string verilogOf(Manager::View& v, std::vector<ID> & ids);
-  std::string blifMvOf(Manager::View& v, ID id);
-  std::string blifMvOf(Manager::View& v, std::vector<ID> & ids);
+/**
+ * Convert one or more expressions to either Verilog or Blif-MV.
+ */
+std::string verilogOf(Manager::View& v, ID id);
+std::string verilogOf(Manager::View& v, std::vector<ID> & ids);
+std::string blifMvOf(Manager::View& v, ID id);
+std::string blifMvOf(Manager::View& v, std::vector<ID> & ids);
+void AIGEROf(Manager::View& v, std::vector<ID> & ids, aiger * aig);
 }
 
 #endif // _ExprVerilog_

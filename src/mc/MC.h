@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -40,6 +40,7 @@ POSSIBILITY OF SUCH DAMAGE.
 /** @file IC3.h **/
 
 #include "Expr.h"
+#include "SAT.h"
 
 #include <vector>
 
@@ -52,6 +53,16 @@ namespace MC {
     ReturnType returnType;
     std::vector< std::vector<ID> > counterexample;
     ID proof;
+  };
+
+  struct AlternateModel {
+    std::vector<ID> init;
+    std::vector<ID> inputs;
+    std::vector<ID> latches;
+    std::vector<ID> fns;
+    ID err;
+    SAT::Clauses tr;
+    SAT::Clauses ptr;
   };
 
 }

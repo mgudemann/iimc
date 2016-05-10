@@ -161,9 +161,9 @@ using namespace std;
   solver->prefer(v_idx, val);
 }
 
- int SAT_UA(SAT_Manager mng, int * lits) {
+ void SAT_UA(SAT_Manager mng, vector<int> & lits) {
   CSolver * solver = (CSolver*) mng;
-  return solver->unit_antecedents(lits);
+  solver->unit_antecedents(lits);
 }
 //AARON
 

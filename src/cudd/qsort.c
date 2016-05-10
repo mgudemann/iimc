@@ -40,9 +40,9 @@ static char rcsid[] UNUSED = "$Id: qsort.c,v 1.5 2002/08/25 05:30:13 fabio Exp $
 
 static  int		(*qcmp)(const void *, const void *);
 						/* the comparison routine */
-static  int		qsz;			/* size of each record */
-static  int		thresh;			/* THRESHold in chars */
-static  int		mthresh;		/* MTHRESHold in chars */
+static  ptrdiff_t		qsz;			/* size of each record */
+static  ptrdiff_t		thresh;			/* THRESHold in chars */
+static  ptrdiff_t		mthresh;		/* MTHRESHold in chars */
 static	void		qst(char *base, char *max);
 
 /*---------------------------------------------------------------------------*/
@@ -73,17 +73,17 @@ qsort(
   size_t size,
   int (*compar)(const void *, const void *))
 {
-	register char c, *i, *j, *lo, *hi;
+	char c, *i, *j, *lo, *hi;
 	char *min, *max, *base;
 
 	if (n <= 1)
 		return;
 	base = (char *) vbase;
-	qsz = size;
+	qsz = (ptrdiff_t) size;
 	qcmp = compar;
 	thresh = qsz * THRESH;
 	mthresh = qsz * MTHRESH;
-	max = base + n * qsz;
+	max = base + (ptrdiff_t) n * qsz;
 	if (n >= THRESH) {
 		qst(base, max);
 		hi = base + thresh;
@@ -155,10 +155,10 @@ qsort(
 static void
 qst(char *base, char *max)
 {
-	register char c, *i, *j, *jj;
-	register int ii;
+	char c, *i, *j, *jj;
+	ptrdiff_t ii;
 	char *mid, *tmp;
-	int lo, hi;
+	ptrdiff_t lo, hi;
 
 	/*
 	 * At the top here, lo is the number of characters of elements in the

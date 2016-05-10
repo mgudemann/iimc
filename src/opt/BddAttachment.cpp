@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -73,15 +73,15 @@ ID BddAttachment::ithVar(unsigned int i) const {
 }
 
 namespace {
-  string idVectorString(Model &m, vector<ID> const &ids)
-  {
-    ostringstream buf;
-    Expr::Manager::View *v = m.newView();
-    shortStringOfID(*v, ids, buf);
-    buf << endl;
-    delete v;
-    return buf.str();
-  }
+string idVectorString(Model &m, vector<ID> const &ids)
+{
+  ostringstream buf;
+  Expr::Manager::View *v = m.newView();
+  shortStringOfID(*v, ids, buf);
+  buf << endl;
+  delete v;
+  return buf.str();
+}
 }
 
 string BddAttachment::orderString() const {
@@ -338,7 +338,7 @@ void BddAttachment::collectRoots(
   roots.insert(roots.end(), nsfv.begin(), nsfv.end());
   const vector<ID>& of = eat->outputFns();
   roots.insert(roots.end(), of.begin(), of.end());
-  const vector<ID>& cv = eat->constraints();
+  const vector<ID>& cv = eat->constraintFns();
   roots.insert(roots.end(), cv.begin(), cv.end());
   const vector<ID>& bv = eat->badFns();
   roots.insert(roots.end(), bv.begin(), bv.end());
@@ -363,33 +363,33 @@ void BddAttachment::updateExprAttachment(ExprAttachment *eat,
   for (vector<ID>::size_type j = 0; j < n_ic; ++j, ++i)
     eat->addInitialCondition(roots[i]);
 
-  vector<ID> vars(eat->stateVars());
+  vector<ID> const vars(eat->stateVars());
   eat->clearNextStateFns();
   for (vector<ID>::size_type j = 0; j < vars.size(); ++j, ++i)
     eat->setNextStateFn(vars[j], roots[i]);
 
-  vector<ID> outputs(eat->outputs());
+  vector<ID> const outputs(eat->outputs());
   eat->clearOutputFns();
   for (vector<ID>::size_type j = 0; j < outputs.size(); ++j, ++i)
     eat->setOutputFn(outputs[j], roots[i]);
 
-  size_t n_cs = eat->constraints().size();
+  vector<ID> const constraints(eat->constraints());
   eat->clearConstraints();
-  for (vector<ID>::size_type j = 0; j < n_cs; ++j, ++i)
-    eat->addConstraint(roots[i]);
+  for (vector<ID>::size_type j = 0; j < constraints.size(); ++j, ++i)
+    eat->addConstraint(constraints[j], roots[i]);
 
-  vector<ID> bad(eat->bad());
+  vector<ID> const bad(eat->bad());
   eat->clearBadFns();
   for (vector<ID>::size_type j = 0; j < bad.size(); ++j, ++i)
     eat->setBadFn(bad[j], roots[i]);
 
-  vector<ID> fairness(eat->fairness());
+  vector<ID> const fairness(eat->fairness());
   eat->clearFairnessFns();
   for (vector<ID>::size_type j = 0; j < fairness.size(); ++j, ++i)
     eat->setFairnessFn(fairness[j], roots[i]);
 
-  vector<ID> justice(eat->justice());
-  vector< vector<ID> > justiceS(eat->justiceSets());
+  vector<ID> const justice(eat->justice());
+  vector< vector<ID> > const justiceS(eat->justiceSets());
   eat->clearJusticeSets();
   for (vector<ID>::size_type j = 0; j < justice.size(); ++j) {
     vector<ID> js;
@@ -417,9 +417,9 @@ void BddAttachment::updateExprAttachment(ExprAttachment *eat,
 /**
  * Create an expression from a BDD.
  */
-ID BddAttachment::exprOf(BDD f, Expr::Manager::View& v) const
+ID exprOf(BDD f, Expr::Manager::View& v, vector<ID> const & order)
 {
-  unordered_map<DdNode*,ID> mp;
+  unordered_map<DdNode const *,ID> mp;
   DdGen *gen;
   DdNode *node;
   DdManager *manager = f.manager();
@@ -431,12 +431,12 @@ ID BddAttachment::exprOf(BDD f, Expr::Manager::View& v) const
       ID id = v.btrue();
       mp[node] = id;
     } else {
-      DdNode *T = Cudd_T(node);
-      DdNode *E = Cudd_E(node);
+      DdNode const *T = Cudd_T(node);
+      DdNode const *E = Cudd_E(node);
       bool complement = Cudd_IsComplement(E);
       unsigned int index = Cudd_NodeReadIndex(node);
       vector<ID> ops;
-      ops.push_back(_order[index]);
+      ops.push_back(order[index]);
       assert(mp.find(T) != mp.end());
       ops.push_back(mp[T]);
       assert(mp.find(Cudd_Regular(E)) != mp.end());
@@ -454,9 +454,30 @@ ID BddAttachment::exprOf(BDD f, Expr::Manager::View& v) const
     return rid;
   }
 
-} // BddAttachment::exprOf
+} // exprOf
 
-void BddAttachment::countStates(const vector< vector<ID> > & cnf, Expr::Manager::View& _view) const {
+BDD BddAttachment::cubeToBdd(const vector<ID> & cube, Expr::Manager::View& _view) const {
+  assert(hasBdds());
+
+  size_t n = cube.size();
+  BDD *vars = new BDD[n];
+  for (vector<ID>::size_type i = 0; i != n; ++i) {
+    ID literal = cube[i];
+    bool complement = _view.op(literal) != Expr::Var;
+    assert((complement && _view.op(literal) == Expr::Not)
+           || (!complement && _view.op(literal) == Expr::Var));
+    ID var = complement ? _view.apply(Expr::Not, literal) : literal;
+    assert(hasBdd(var));
+    BDD b = bdd(var);
+    vars[i] = complement ? !b : b;
+  }
+  BDD c = bddManager().bddComputeCube(vars, 0, n);
+  delete[] vars;
+  return c;
+}
+
+
+BDD BddAttachment::cnfToBdd(const vector< vector<ID> > & cnf, Expr::Manager::View& _view) const {
   //Build BDD for cnf
   assert(hasBdds());
 
@@ -465,23 +486,25 @@ void BddAttachment::countStates(const vector< vector<ID> > & cnf, Expr::Manager:
   int j = 0;
   for(vector< vector<ID> >::const_iterator it = cnf.begin(); it != cnf.end();
       ++it) {
-    const vector<ID> & cube = *it;
-    size_t n = cube.size();
-    BDD *vars = new BDD[n];
-    for (vector<ID>::size_type i = 0; i != n; ++i) {
-      ID literal = cube[i];
-      bool complement = _view.op(literal) != Expr::Var;
-      assert((complement && _view.op(literal) == Expr::Not)
-             || (!complement && _view.op(literal) == Expr::Var));
-      ID var = complement ? _view.apply(Expr::Not, literal) : literal;
-      assert(hasBdd(var));
-      BDD b = bdd(var);
-      vars[i] = complement ? b : !b;
-    }
-    clauses[j++] = !bddManager().bddComputeCube(vars, 0, n);
-    delete[] vars;
+    const vector<ID> & cls = *it;
+    vector<ID> cube(cls);
+    //Complement clause
+    for(vector<ID>::iterator it2 = cube.begin(); it2 != cube.end(); ++it2)
+      *it2 = _view.apply(Expr::Not, *it2);
+    clauses[j++] = !cubeToBdd(cube, _view);
   }
   BDD cnfBdd = bddManager().bddComputeCube(clauses, 0, numClauses);
+  delete[] clauses;
+  return cnfBdd;
+}
+
+
+
+void BddAttachment::countStates(const vector< vector<ID> > & cnf, Expr::Manager::View& _view) const {
+  //Build BDD for cnf
+  assert(hasBdds());
+
+  BDD cnfBdd = cnfToBdd(cnf, _view);
   ExprAttachment const * eat = (ExprAttachment *) _model.constAttachment(Key::EXPR);
   int numSV = eat->stateVars().size();
   _model.constRelease(eat);
@@ -508,7 +531,7 @@ vector<ID> BddAttachment::readOrder(
   SeqAttachment const *seat =
     (SeqAttachment const *) _model.constAttachment(Key::SEQ);
   unordered_set<ID> original(seat->inputs.begin(), seat->inputs.end());
-  for (auto it = seat->optimized.begin(); it != seat->optimized.end(); ++it)
+  for (unordered_map<ID, ID>::const_iterator it = seat->optimized.begin(); it != seat->optimized.end(); ++it)
     original.insert(it->first);
   _model.constRelease(seat);
   // Read order file.
@@ -553,6 +576,8 @@ void BddSweepAction::exec() {
 
   int64_t startTime = Util::get_user_cpu_time();
 
+  // Use a temporary manager for sweeping because sweeping
+  // is likely to create many auxiliary variables.
   Cudd saveBddMgr = _model.newBddManager(Cudd());
 
   BddAttachment *bat = new BddAttachment(_model);
@@ -581,6 +606,7 @@ void BddSweepAction::exec() {
 
   if (verbosity > Options::Terse) {
     vector<BDD> bv;
+    bv.reserve(bat->_map.size());
     for (Expr::IdBddMap::const_iterator i = bat->_map.begin(); i != bat->_map.end(); ++i)
       bv.push_back(i->second);
     cout << bddManager().SharingSize(bv) << " BDD nodes" << endl;

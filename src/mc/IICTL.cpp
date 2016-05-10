@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -915,12 +915,12 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
         if(verb > Options::Verbose)
           cout << "Cube has a previous CTG that ";
         //Check if CTG still lacks an L-successor
-        SAT::GID gid = faeSatView->newGID();
-        faeSatView->add(q2clauses, gid);
+        SAT::GID faegid = faeSatView->newGID();
+        faeSatView->add(q2clauses, faegid);
         vector<ID> assumps2 = *it;
         resetAssign(fullAsgn);
         bool sat = faeSatView->sat(&assumps2, &fullAsgn);
-        faeSatView->remove(gid);
+        faeSatView->remove(faegid);
         if(!sat) {
           //Still lacks an L-successor. Dropping literal is not going to work.
           if(verb > Options::Verbose)
@@ -972,20 +972,20 @@ bool IICTLAction::forAllExistsEF(Transition & tr1, SAT::Clauses & q2clauses, ID 
       else {
         Transition tr;
         fullAssignOf(*ev, model(), fullAsgn, tr.state, tr.inputs);
-        SAT::GID gid = faeSatView->newGID();
-        faeSatView->add(q2clauses, gid);
+        SAT::GID faegid = faeSatView->newGID();
+        faeSatView->add(q2clauses, faegid);
         //T & L'
         vector<ID> assumps2 = tr.state;
         resetAssign(fullAsgn);
         bool sat = faeSatView->sat(&assumps2, &fullAsgn);
-        faeSatView->remove(gid);
+        faeSatView->remove(faegid);
         //T
         if(!sat) {
           if(!reach) {
             dropLit = false;
             break;
           }
-          else if(model().options().count("iictl_use_bdd_reach")) {
+          else if(haveExactRch) {
             //This is a true CTG
             ctgs.insert(tr.state);
             dropLit = false;
@@ -1270,11 +1270,11 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
           }
         }
         //q2 is UNSAT
-        SAT::GID gid = faeSatView->newGID();
-        faeSatView->add(q3clauses, gid);
+        SAT::GID faegid = faeSatView->newGID();
+        faeSatView->add(q3clauses, faegid);
         resetAssign(fullAsgn);
         sat = faeSatView->sat(&assumps2, &fullAsgn);
-        faeSatView->remove(gid);
+        faeSatView->remove(faegid);
         if(!sat) {
           //Still lacks an L-successor. Dropping literal is not going to work.
           if(verb > Options::Verbose)
@@ -1334,12 +1334,12 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
           q2sat = q2->sat(&assumps2);
         bool q3sat;
         if(!q2sat) {
-          SAT::GID gid = faeSatView->newGID();
-          faeSatView->add(q3clauses, gid);
+          SAT::GID faegid = faeSatView->newGID();
+          faeSatView->add(q3clauses, faegid);
           //T & L'
           resetAssign(fullAsgn);
           q3sat = faeSatView->sat(&assumps2, &fullAsgn);
-          faeSatView->remove(gid);
+          faeSatView->remove(faegid);
           //T
         }
         if(q2sat || !q3sat) {
@@ -1347,7 +1347,7 @@ bool IICTLAction::forAllExistsEG(Transition & tr1, SAT::Clauses & q3clauses, ID 
             dropLit = false;
             break;
           }
-          else if(model().options().count("iictl_use_bdd_reach")) {
+          else if(haveExactRch) {
             //This is a true CTG
             ctgs.insert(tr.state);
             dropLit = false;
@@ -1664,7 +1664,7 @@ bool IICTLAction::forAllExistsEX(Transition & tr1, ID id, bool reach, bool ic3) 
             dropLit = false;
             break;
           }
-          else if(model().options().count("iictl_use_bdd_reach")) {
+          else if(haveExactRch) {
             //This is a true CTG
             ctgs.insert(tr.state);
             dropLit = false;
@@ -2932,7 +2932,7 @@ MC::ReturnValue IICTLAction::runIC3(IC3::IC3Options & opts, ID targetID,
 }
 
 
-bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints,
+bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints, SAT::Clauses & negConstraints,
                        IC3::ProofProcType grppt, bool globalLast,
                        vector<SAT::Clauses> & proofs, Lasso & cex, ID id) {
   ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
@@ -2966,8 +2966,10 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints,
   FCBMC::FCBMC fcbmc(model(), fcbmcOpts);
 
   //Prepare Fair
-  Fair::FairOptions opts(model().options());
+  Fair::FairOptions & opts = _opts->fair_opts;
+  //Fair::FairOptions opts(model().options());
   opts.constraints = &constraints;
+  opts.negConstraints = &negConstraints;
   opts.printCex = true;
   opts.ic3_opts.silent = true;
   opts.proofProc = grppt;
@@ -2985,7 +2987,6 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints,
       rv = Fair::fairPath(model(), opts, &cex, &proofs);
     }
   }
-
  
 #if 0
   int timeout = 1;
@@ -3043,6 +3044,7 @@ bool IICTLAction::fair(const vector<ID> & source, SAT::Clauses & constraints,
 bool IICTLAction::reach(const vector<ID> & source, ID targetID,
                         SAT::Clauses & targetCNF,
                         vector<SAT::Clauses> & constraints,
+                        SAT::Clauses & negConstraints,
                         IC3::ProofProcType ppt, vector<SAT::Clauses> & proofs,
                         vector<Transition> & cex, ID id, bool isEU) {
 
@@ -3072,10 +3074,12 @@ bool IICTLAction::reach(const vector<ID> & source, ID targetID,
   bopts.iictl_clauses = &targetCNF;
 
   //Prepare IC3
-  IC3::IC3Options opts(model().options());
+  IC3::IC3Options & opts = _opts->reach_opts;
+  //IC3::IC3Options opts(model().options());
   opts.iictl = true;
   opts.iictl_clauses = &targetCNF;
   opts.constraints = &constraints;
+  opts.negConstraints = &negConstraints;
   opts.printCex = true;
   opts.proofProc = ppt;
   bool propagate = !model().options().count("iictl_xic3propagate");
@@ -3380,6 +3384,9 @@ bool IICTLAction::updateAncestorsBounds(ID id, RefineType refinement) {
 }
 
 bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
+
+  _opts->reach_opts.abs_pattern = id;
+  _opts->fair_opts.ic3_opts.abs_pattern = id;
 
   if(lbContainsStates(id, state))
     return true;
@@ -3705,6 +3712,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         assert(UB.find(child[0]) != UB.end());
         //Add UB[id] & UB'[id] & GR as constraints
         vector<SAT::Clauses> constraints(1, GR);
+        SAT::Clauses negConstraints(1, SAT::Clause()); //all constraints are optional, so set to false
         if(UBId[id] != ev->btrue()) {
           constraints[0].insert(constraints[0].end(), UB[id].begin(), UB[id].end());
           for(vector< vector<ID> >::const_iterator it = UB[id].begin();
@@ -3720,7 +3728,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
 
         vector<SAT::Clauses> proofs;
         int64_t startTime = Util::get_user_cpu_time(); 
-        bool ubReachable = reach(state, UBId[child[0]], UB[child[0]], constraints,
+        bool ubReachable = reach(state, UBId[child[0]], UB[child[0]], constraints, negConstraints,
                                  proofProc, proofs, ubCex, id);
         if(verbosity > Options::Informative) {
           cout << "EF UB: " << (ubReachable ? "SAT " : "UNSAT ")
@@ -3788,6 +3796,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         SAT::Clauses target;
         Expr::CNFIZE(*ev, targetID, target);
         vector<SAT::Clauses> constraints(1, GR);
+        SAT::Clauses negConstraints(1, SAT::Clause()); //all constraints are optional, so set to false
         if(UBId[id] != ev->btrue()) {
           constraints[0].insert(constraints[0].end(), UB[id].begin(), UB[id].end());
           for(vector< vector<ID> >::const_iterator it = UB[id].begin();
@@ -3802,7 +3811,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
                                        IC3::NONE : IC3::WEAKEN;
 
         int64_t startTime = Util::get_user_cpu_time(); 
-        bool lbReachable = reach(state, targetID, target, constraints, proofProc,
+        bool lbReachable = reach(state, targetID, target, constraints, negConstraints, proofProc,
                                  proofs, lbCex, id);
         if(verbosity > Options::Informative)
           cout << "EF LB: " << (lbReachable ? "SAT " : "UNSAT ")
@@ -3915,6 +3924,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         oldUBId = UBId[id];
         assert(UB.find(id) != UB.end());
         SAT::Clauses constraints = GR;
+        SAT::Clauses negConstraints; //UB[id] is necessary
         if(UBId[id] != ev->btrue()) {
           constraints.insert(constraints.end(), UB[id].begin(), UB[id].end());
           for(vector< vector<ID> >::const_iterator it = UB[id].begin(); it != UB[id].end(); ++it) {
@@ -3922,6 +3932,11 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
             primeVector(*ev, *it, cls);
             constraints.push_back(cls);
           }
+          Expr::tseitin(*ev, ev->apply(Expr::Not,
+                             ev->apply(Expr::And, UBId[id], primeFormula(*ev, UBId[id]))), negConstraints);
+        }
+        else {
+          negConstraints.push_back(SAT::Clause());
         }
 
         IC3::ProofProcType proofProc = (IC3::ProofProcType) model().options()["iictl_fair_grppt"].as<int>();
@@ -3934,7 +3949,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
 
         vector<SAT::Clauses> proofs;
         int64_t startTime = Util::get_user_cpu_time(); 
-        bool ubFairCycle = fair(state, constraints, proofProc, globalLast,
+        bool ubFairCycle = fair(state, constraints, negConstraints, proofProc, globalLast,
                                 proofs, ubLasso, id);
         if(verbosity > Options::Informative)
           cout << "EG UB: " << (ubFairCycle ? "SAT " : "UNSAT ")
@@ -4005,6 +4020,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           //  which is stronger
           assert(QLB.find(child[0]) != QLB.end());
           SAT::Clauses constraints = GR;
+          SAT::Clauses negConstraints;
           //Add UB and UB'
           if(UBId[id] != ev->btrue()) {
             constraints.insert(constraints.end(), UB[id].begin(), UB[id].end());
@@ -4023,6 +4039,12 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
               constraints.push_back(cls);
             }
           }
+          vector<ID> conj;
+          conj.push_back(UBId[id]);
+          conj.push_back(primeFormula(*ev, UBId[id]));
+          conj.push_back(QLBId[child[0]]);
+          conj.push_back(primeFormula(*ev, QLBId[child[0]]));
+          Expr::tseitin(*ev, ev->apply(Expr::Not, ev->apply(Expr::And, conj)), negConstraints);
           IC3::ProofProcType proofProc = (IC3::ProofProcType)
               model().options()["iictl_fair_grppt"].as<int>();
           bool globalLast = !model().options().count("iictl_fair_global_first");
@@ -4034,7 +4056,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
 
           vector<SAT::Clauses> proofs;
           int64_t startTime = Util::get_user_cpu_time();
-          bool lbFairCycle = fair(state, constraints, proofProc, globalLast,
+          bool lbFairCycle = fair(state, constraints, negConstraints, proofProc, globalLast,
                                   proofs, lbLasso, id);
           if(verbosity > Options::Informative)
             cout << "EG LB: " << (lbFairCycle ? "SAT " : "UNSAT ")
@@ -4119,6 +4141,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         assert(UB.find(child[1]) != UB.end());
         //Add UB[id] & UB'[id] & GR & UB[child[0]] as constraints
         vector<SAT::Clauses> constraints(1, GR);
+        SAT::Clauses negConstraints; //only UB[child[0]] is necessary
         if(UBId[id] != ev->btrue()) {
           constraints[0].insert(constraints[0].end(), UB[id].begin(), UB[id].end());
           for(vector< vector<ID> >::const_iterator it = UB[id].begin();
@@ -4131,13 +4154,16 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         if(UBId[child[0]] != ev->btrue()) {
           constraints[0].insert(constraints[0].end(), UB[child[0]].begin(),
                                 UB[child[0]].end());
+          Expr::CNFIZE(*ev, ev->apply(Expr::Not, UBId[child[0]]), negConstraints);
         }
+        else
+          negConstraints.push_back(SAT::Clause());
         IC3::ProofProcType proofProc = (skipGen == SkipForUpper ||
                                        skipGen == SkipForBoth) ?
                                        IC3::NONE : IC3::WEAKEN;
           
         int64_t startTime = Util::get_user_cpu_time(); 
-        bool ubReachable = reach(state, UBId[child[1]], UB[child[1]], constraints,
+        bool ubReachable = reach(state, UBId[child[1]], UB[child[1]], constraints, negConstraints,
                                  proofProc, proofs, ubCex, id, true);
         if(verbosity > Options::Informative) {
           cout << "EU UB: " << (ubReachable ? "SAT " : "UNSAT ")
@@ -4220,6 +4246,7 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
         SAT::Clauses target;
         Expr::CNFIZE(*ev, targetID, target);
         vector<SAT::Clauses> constraints(1, GR);
+        SAT::Clauses negConstraints; //only QLB[child[0]] & UB[child[0]] are necessary
         if(UBId[id] != ev->btrue()) {
           constraints[0].insert(constraints[0].end(), UB[id].begin(), UB[id].end());
           for(vector< vector<ID> >::const_iterator it = UB[id].begin();
@@ -4234,9 +4261,12 @@ bool IICTLAction::decide(const vector<ID> & state, ID id, BoundChange skipGen) {
           constraints[0].insert(constraints[0].end(), UB[child[0]].begin(), 
                                 UB[child[0]].end());
         }
+        Expr::CNFIZE(*ev, ev->apply(Expr::Or, ev->apply(Expr::Not, QLBId[child[0]]),
+                                              ev->apply(Expr::Not, UBId[child[0]])),
+                                              negConstraints);
 
         int64_t startTime = Util::get_user_cpu_time(); 
-        bool lbReachable = reach(state, targetID, target, constraints, IC3::NONE,
+        bool lbReachable = reach(state, targetID, target, constraints, negConstraints, IC3::NONE,
                            proofs, lbCex, id, true);
         if(verbosity > Options::Informative)
           cout << "EU LB: " << (lbReachable ? "SAT " : "UNSAT ")
@@ -4340,7 +4370,10 @@ MC::ReturnValue IICTLAction::check() {
       //bound because with the bdd_save_fw_reach option, the lower bound is
       //only saved if forward reachability has completed
       BDD rch = rat->forwardBddLowerBound(); 
-      rat->bddToCnf(rch, GR);
+      if(rch) {
+        rat->bddToCnf(rch, GR);
+        haveExactRch = true;
+      }
       model().constRelease(rat);
       //Add reachability info to all lifting SAT databases
       for(IDSatViewMap::iterator it = liftSatViews.begin();
@@ -4350,9 +4383,10 @@ MC::ReturnValue IICTLAction::check() {
     }
   }
 
-  vector<ID> state;
 
   while(true) {
+
+    vector<ID> state;
 
     //Check if all initial states are in LB (I => LB)
     if(lbContainsInitStates(state)) {

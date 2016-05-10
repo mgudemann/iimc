@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ExprAttachment.h"
 #include "Key.h"
 #include "Model.h"
+#include "options.h"
 #include "SeqAttachment.h"
 
 class StuckAtAction : public Model::Action {
@@ -50,11 +51,15 @@ public:
   StuckAtAction(Model & model) : Model::Action(model) {
     SeqAttachment::Factory seqFactory;
     ExprAttachment::Factory f;
+    AIGAttachment::Factory aigFactory;
     requires(Key::SEQ, &seqFactory);
     requires(Key::EXPR, &f);
+    requires(Key::AIG, &aigFactory);
   }
 
   virtual void exec();
+private:
+  static ActionRegistrar action;
 };
 
 #endif

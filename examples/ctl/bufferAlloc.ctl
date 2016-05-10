@@ -19,3 +19,5 @@ AG((free & ~free_addr<3> & ~free_addr<2> & ~free_addr<1> & ~free_addr<0>) -> AX 
 AG((free & ~free_addr<3> & ~free_addr<2> & ~free_addr<1> & ~free_addr<0> & busy<*0*>) -> AX ~busy<*0*>)
 #PASS: (9)
 AG((~busy<*0*> | ~busy<*1*> | ~busy<*2*> | ~busy<*3*>) & ~busy<*4*> -> AX ~busy<*4*>)
+#PASS: (10)
+AG((alloc & ~nack & ~alloc_addr<3> & ~alloc_addr<2> & ~alloc_addr<1> & alloc_addr<0>) -> AX ~(alloc & ~nack & ~alloc_addr<3> & ~alloc_addr<2> & ~alloc_addr<1> & alloc_addr<0>))

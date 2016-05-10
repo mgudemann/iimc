@@ -2,8 +2,7 @@ main_Main_sources = \
   src/main/options.cpp \
   src/main/main.cpp \
   src/main/options.h \
-  src/main/Verbosity.h \
-  src/main/Tactic.h
+  src/main/Verbosity.h
 
 iimc_SOURCES += $(main_Main_sources)
 

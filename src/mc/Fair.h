@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -57,9 +57,11 @@ namespace Fair {
   public:
     FairOptions(const boost::program_options::variables_map & opts) : 
       ic3_opts(opts), k(0) {
+      ic3_opts.lift = false;
       k = opts["fair_k"].as<int>();
       printCex = false;
       constraints = NULL;
+      negConstraints = NULL;
       proofProc = IC3::STRENGTHEN;
       global_last = false;
       iictl = false;
@@ -69,6 +71,7 @@ namespace Fair {
     int k;
     bool printCex;
     SAT::Clauses * constraints;
+    SAT::Clauses * negConstraints;
     IC3::ProofProcType proofProc;
     bool global_last;
     bool iictl;
@@ -83,7 +86,7 @@ namespace Fair {
 
   class FairAction : public Model::Action {
   public:
-    FairAction(Model & m, FairOptions * _opts = NULL) : Model::Action(m), _opts(_opts) {
+    FairAction(Model & m, FairOptions * _opts = NULL) : Model::Action(m), _opts(_opts ? new FairOptions(*_opts) : NULL) {
       ExprAttachment::Factory eaf;
       requires(Key::EXPR, &eaf);
       ProofAttachment::Factory paf;
@@ -94,6 +97,10 @@ namespace Fair {
       requires(Key::COI, &caf);
       RchAttachment::Factory raf;
       requires(Key::RCH, &raf);
+    }
+    ~FairAction() {
+      if(_opts)
+        delete _opts;
     }
     virtual void exec() {
       FairOptions opts(options());
@@ -111,6 +118,7 @@ namespace Fair {
     }
   private:
     FairOptions * _opts;
+    static ActionRegistrar action;
   };
 
 }

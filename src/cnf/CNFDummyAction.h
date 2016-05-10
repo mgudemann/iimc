@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -34,7 +34,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <boost/program_options.hpp>
 #include "options.h"
-#include "Tactic.h"
 #include "CNFAttachment.h"
 #include <cstdlib>
 

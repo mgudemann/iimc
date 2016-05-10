@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -105,16 +105,19 @@ public:
             Cudd const & bddMgr, Options::Verbosity verb) :
     Manager::View::Folder(v), roots(ids), av2index(auxVarMap),
     i2b(id2bdd), bddMgr(bddMgr), nequiv(0), verbosity(verb) {
-    DdNode *one = bddMgr.bddOne().getNode();
-    b2i[one] = 0;
+    BDD bdd_true = bddMgr.bddOne();
+    ID id_true = v.btrue();
+    DdNode *one = bdd_true.getNode();
+    b2i[one] = id_true;
+    i2b[id_true] = bdd_true;
   }
 
   ID fold(ID id, int n, const ID * const args) {
     // Check if this is the first element of its equivalence class.
-    // If so, it becomes the representative.  Only even-numbered IDs
-    // can be representatives.
+    // If so, it becomes the representative.
     DdNode *tag = tags(id);
     DdNode *regtag = Cudd_Regular(tag);
+    assert(regtag != 0);
     DdIdMap::const_iterator irep = b2i.find(regtag);
     bool replace = irep != b2i.end();
     ID replacement;
@@ -128,7 +131,7 @@ public:
       }
       if (replacement != id && view().op(id) != Not) {
         nequiv++;
-        if (verbosity > Options::Informative)
+        if (verbosity > Options::Verbose)
           cout << id << (reptag == tag ? " is equivalent to " :
                          " is the negation of ") << representative << endl;
       }
@@ -136,16 +139,18 @@ public:
       replacement = Manager::View::Folder::fold(id, n, args);
       // If the function of id is an auxiliary variable,
       // the replacement may have a different BDD.
-      if (i2b.find(replacement) != i2b.end() && tags(replacement) != tag) {
+      DdNode *reptag = tags(replacement);
+      if (i2b.find(replacement) != i2b.end() && reptag != tag) {
+        assert(b2i.find(Cudd_Regular(reptag)) != b2i.end());
         replace = true;
         nequiv++;
-        if (verbosity > Options::Informative)
+        if (verbosity > Options::Verbose)
           cout << id << " is equivalent to " << replacement << endl;
-      } else if (regtag != 0) {
+      } else {
         b2i[regtag] = replacement;
       }
     }
-    if (replacement != id && regtag != 0) {
+    if (replacement != id) {
       // Adjust the auxiliary variable map if this ID is in it.
       unordered_map<ID,int>::iterator iav = av2index.find(id);
       if (iav != av2index.end()) {
@@ -178,7 +183,7 @@ public:
       rootset.insert(*it);
       if (i2b.find(*it) == i2b.end()) {
         ID negation = view().apply(Not, *it);
-        if (negation == 0) {
+        if (negation == view().btrue()) {
           i2b[*it] = bddMgr.bddZero();
         } else {
           IdBddMap::const_iterator bit = i2b.find(negation);
@@ -211,6 +216,8 @@ public:
 private:
   typedef unordered_map<DdNode *, ID> DdIdMap;
 
+  /** The unique DdNode address of the BDD is used as tag of
+   *  an equivalence class. */
   DdNode* tags(ID id) {
     IdBddMap::const_iterator iter = i2b.find(id);
     if (iter == i2b.end())
@@ -277,7 +284,7 @@ public:
    * assigned to variables as they are encountered.
    */
   ID fold(ID id, int n, const ID * const args) {
-    assert(i2b.find(id) == i2b.end() || id == 0);
+    assert(i2b.find(id) == i2b.end());
     Op op = view().op(id);
     BDD f;
     switch(op) {
@@ -299,25 +306,17 @@ public:
       f = ~bdd(args[0]);
       break;
     case And:
-      assert(n>0);
-      if (n == 1) {
-        f = bdd(args[0]);
-      } else {
-        f = bdd(args[0]) & bdd(args[1]);
-        for (int i = 2; i != n; ++i) {
-          f &= bdd(args[i]);
-        }
+      assert(n>1);
+      f = bdd(args[0]) & bdd(args[1]);
+      for (int i = 2; i != n; ++i) {
+        f &= bdd(args[i]);
       }
       break;
     case Or:
-      assert(n>0);
-      if (n == 1) {
-        f = bdd(args[0]);
-      } else {
-        f = bdd(args[0]) | bdd(args[1]);
-        for (int i = 2; i != n; ++i) {
-          f |= bdd(args[i]);
-        }
+      assert(n>1);
+      f = bdd(args[0]) | bdd(args[1]);
+      for (int i = 2; i != n; ++i) {
+        f |= bdd(args[i]);
       }
       break;
     case Equiv:
@@ -334,9 +333,18 @@ public:
     i2b[id] = f;
     // Check if an auxiliary variable should be inserted.
     if (limit > 0 && f.nodeCount() > (int) limit) {
-      if (verbosity > Options::Informative)
-        cout << "Auxiliary variable for " << id << endl;
-      auxVarMap[id] = bddMgr.bddVar().NodeReadIndex();
+      unordered_map<DdNode *, int>::const_iterator ait = nodeToVarIndex.find(f.getNode());
+      if (ait == nodeToVarIndex.end()) {
+        if (verbosity > Options::Verbose)
+          cout << "Auxiliary variable for " << id << endl;
+        int newIndex = bddMgr.bddVar().NodeReadIndex();
+        auxVarMap[id] = newIndex;
+        nodeToVarIndex[f.getNode()] = newIndex;
+      } else {
+        if (verbosity > Options::Verbose)
+          cout << "Shared auxiliary variable for " << id << endl;
+        auxVarMap[id] = ait->second;
+      }
       if (!sweep)
         count[id]++;
     }
@@ -356,6 +364,9 @@ public:
   }
 private:
   typedef IdBddMap::iterator b_iter;
+  /** Find the BDD for an ID.  First check whether an auxiliary variable
+   *  has been created for this ID or its negation.  If not, then the
+   *  ID must have an entry in the index-to-BDD map. */
   BDD bdd(ID argId) {
     unordered_map<ID, int>::const_iterator it = auxVarMap.find(argId);
     if (it == auxVarMap.end()) {
@@ -372,6 +383,7 @@ private:
   Cudd const & bddMgr;
   unordered_map<ID, int>& orderMap;
   unordered_map<ID, int>& auxVarMap;
+  unordered_map<DdNode *, int> nodeToVarIndex;
   IdBddMap& i2b;
   unordered_map<ID, unsigned int>& count;
   unsigned int limit;
@@ -398,7 +410,7 @@ BDD bddOf(Manager::View & v, ID id, Model const & model,
 
 
 IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model, 
-               unordered_map<ID, int>& orderMap, 
+               unordered_map<ID, int>& orderMap,
                unordered_map<ID, int>& auxVarMap, unsigned int limit,
                bool sweep, Options::Verbosity verbosity)
 {
@@ -443,6 +455,53 @@ IdBddMap bddOf(Manager::View & v, vector<ID> & ids, Model const & model,
                          bdds.equivalentPairs());
   }
   if (timedOut) {
+    id2bdd.clear();
+    auxVarMap.clear();
+  }
+  assert(id2bdd.size() <= ids.size() + auxVarMap.size());
+  return id2bdd;
+
+} // bddOf
+
+
+BDD bddOf(Manager::View & v, ID id, Cudd const & bddMgr,
+          unordered_map<ID, int>& orderMap,
+          unordered_map<ID, int>& auxVarMap, unsigned int limit,
+          Options::Verbosity verbosity)
+{
+  vector<ID> ids(1,id);
+  IdBddMap id2bdd = bddOf(v, ids, bddMgr, orderMap, auxVarMap,
+                          limit, verbosity);
+  // In case of timeout, we may not have a BDD for id.
+  IdBddMap::iterator it = id2bdd.find(id);
+  if (it == id2bdd.end())
+    return BDD();
+  else
+    return it->second;
+}
+
+
+IdBddMap bddOf(Manager::View & v, vector<ID> & ids,
+               Cudd const & bddMgr, unordered_map<ID, int>& orderMap,
+               unordered_map<ID, int>& auxVarMap, unsigned int limit,
+               Options::Verbosity verbosity)
+{
+  unordered_map<ID, unsigned int> count;
+  for (vector<ID>::const_iterator i = ids.begin(); i != ids.end(); ++i)
+    count[*i] = 1;
+  node_fanout nfo(v, count);
+  v.fold(nfo, ids);
+  IdBddMap id2bdd;
+  bdd_folder bddf(v, bddMgr, orderMap, auxVarMap, id2bdd,
+                  count, limit, false, verbosity);
+  try {
+    v.fold(bddf, ids);
+  } catch (Timeout& e) {
+    if (verbosity > Options::Silent)
+      cout << e.what() << endl;
+    bddMgr.ClearErrorCode();
+    bddMgr.UnsetTimeLimit();
+    bddMgr.ResetStartTime();
     id2bdd.clear();
     auxVarMap.clear();
   }

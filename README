@@ -1,18 +1,23 @@
-This is release 1.1 of IImc, an Incremental Inductive model checker. IImc
+This is release 1.3 of IImc, an Incremental Inductive model checker. IImc
 features novel formal engines such as IC3[1,2], FAIR[3], and IICTL[4].
 
 IImc is developed by MC@CU, the model checking group at the University of
-Colorado at Boulder. IImc's authors are Aaron Bradley, Arlen Cox, Zyad Hassan,
-Fabio Somenzi, and Yan Zhang.
+Colorado at Boulder. IImc's authors are Aaron Bradley, Arlen Cox,
+Michael Dooley, Zyad Hassan, Fabio Somenzi, and Yan Zhang.
 
 To build IImc, you will need
 
-  * GNU C++ (g++) version 4.3 or later (to support -std=c++0x option)
+  * GNU C++ (g++) version 4.4.5 or later (to support the -std=c++0x option)
+  * Alternatively, IImc can be compiled with clang++ 3.0 or higher
   * GNU's make utility
-  * The boost library (at the very least, the "Boost Program Options" and the
-    "Boost Random" libraries)
+  * The boost library (at the very least, the "Boost Program Options",
+    "Boost Random", and "Boost Regex" libraries)
   * GNU Flex
-  * GNU Bison
+  * GNU Bison version 2.4.1 or higher
+  * zlib (needed by minisat)
+
+IImc can be built with or without zchaff.  For details, please refer to
+LICENSE.zchaff.
 
 -------------------------------------------------------------------------------
 * Useful Addresses
@@ -41,24 +46,63 @@ The most recent version of the boost libraries:
 2. Move to where you would like to build IImc and unpack the distribution:
 
     $ cd /home/iimc                           # for example
-    $ tar xvzf /tmp/iimc-1.1.tar.gz
+    $ tar xvzf /tmp/iimc-1.3.tar.gz
 
-3. Move into the iimc-1.1 directory and run configure, which will determine
+3. Move into the iimc-1.3 directory and run configure, which will determine
    some system-specific parameters and create the Makefile
 
-    $ cd iimc-1.1
+    $ cd iimc-1.3
     $ ./configure
+
+   You may want to pass --enable-silent-rules to configure.
 
 4. Build IImc by running make:
 
     $ make
 
-   This builds an executable "iimc" in the current directory.
+   This builds an executable "iimc" in the current directory.  Parallel build
+   trees are also supported.
 
-5. Verify IImc works by running it on some of the examples included
+5. Verify that IImc works by running it on some of the examples included
    in the distribution:
 
     $ make check
+
+-------------------------------------------------------------------------------
+* Building IImc on OS X (a.k.a. YMMV)
+
+To build IImc on Apple's OS X you need to have the boost libraries
+installed.  This is what worked for us:
+
+1. Download from www.boost.org a recent version (e.g., 1.55.0)
+
+2. Untar
+
+3. Run ./boostrap.sh
+
+4. Install using 
+     sudo ./b2 toolset=clang cxxflags="-stdlib=libc++" linkflags="-stdlib=libc++" install
+
+You may need to add "address-model=64" to the b2 invocation.
+
+You also need to have a recent version of bison (IImc requires 2.4.1
+or higher):
+
+1. Download from www.gnu.org/software/bison a recent version. (E.g.,
+   2.7.  Xcode currently ships bison 2.3, which is too old.)
+
+2. Untar, configure, make, make install
+
+By default, the new bison will be installed in /usr/local and will not
+overwrite what is already on your system.
+
+Installation of IImc now takes the following steps:
+
+1. Configure IImc using ./configure CXXFLAGS="-stdlib=libc++ -g -O3" YACC="/usr/local/bin/bison -y"
+
+2. make
+
+3. make check
 
 -------------------------------------------------------------------------------
 * Quick-start guide for using IImc
@@ -135,15 +179,17 @@ The most recent version of the boost libraries:
   This is the list of formal engines currently available in IImc with the
   corresponding tactic name:
 
-  a. BDD Backward Reachability: bdd_bw_reach
-  b. BDD Forward Reachability:  bdd_fw_reach
-  c. BMC:                       bmc
-  d. BMC for fair cycles:       fcbmc
-  e. Fair[3]:                   fair
-  f. FSIS[7]:                   fsis
-  g. IC3:                       ic3
-  h. Reverse IC3:               ic3r
-  i. IICTL:                     iictl
+  a. BDD Backward Reachability:  bdd_bw_reach
+  b. BDD Forward Reachability:   bdd_fw_reach
+  c. BMC:                        bmc
+  d. BMC for fair cycles:        fcbmc
+  e. Fair[3]:                    fair
+  f. FSIS[7]:                    fsis
+  g. BDD-based cycle detection:  gsh
+  h. IC3:                        ic3
+  i. Reverse IC3:                ic3r
+  j. Localization reduction IC3: ic3lr
+  k. IICTL:                      iictl
 
   Invoking IImc without any tactics invokes the default "check" tactic, which
   runs the appropriate formal engine depending on the property type (Fair for a
@@ -159,12 +205,19 @@ The most recent version of the boost libraries:
   c. Cone-of-Influence Reduction:                         coi
   d. Latch Sequential Equivalence (Latch Correspondence): se
   e. Latch Stuck-at-Value Detection:                      stuck
-  f. Sequential Reduction (applies coi, stuck, and se):   sr
+  f. Phase Abstraction:                                   phase
+  g. Ternary simulation:                                  tvsim
+  h. Abstract interpretation:                             absint
+  i. Decoding:                                            decode
+  j. Slicing:                                             slice
+  k. Sequential Reduction (applies coi, stuck, and se):   sr
+  l. Preprocessing (applies coi, absint, tvsim, satsweep,
+                    bddsweep, se, and stuck):             pp
 
   For each tactic, there are usually multiple options available (e.g., timeout,
   parameters, etc.). Supplying options can be done using
-  --<option-name> <option-value-if-available>, which can be written anywhere in
-  the command-line arguments. For example:
+  --<option-name> <option-value-if-available>, 
+  which can be written anywhere in the command-line arguments. For example:
 
     -t ic3 --ic3_timeout 10
 
@@ -176,7 +229,7 @@ The most recent version of the boost libraries:
 
     ./iimc -h
 
-  OR
+  or use the long form
    
     ./iimc --help
 
@@ -191,8 +244,8 @@ The most recent version of the boost libraries:
 
     1
 
-   indicating that the property is SAT. To run with more verbosity, use -v
-   <1-4> with 1 indicating less verbose and 4 indicating maximum verbosity.
+   indicating that the property is SAT. To control verbosity, use -v
+   <0-4> with 0 being the default and 4 indicating maximum verbosity.
 
 2. To perform cone-of-influence reduction and follow that by 10 seconds of
    BMC and 5 seconds of IC3 on the smult8aflat example, and run that with
@@ -358,6 +411,8 @@ The most recent version of the boost libraries:
 
 [7] A. R. Bradley and Z. Manna, "Checking safety by inductive generalization of
     counterexamples to induction.", In Formal Methods in Computer Aided Design
-    (FMCAD'07), pages 173-180, Austin, TX, Nov. 2007
+    (FMCAD'07), pages 173-180, Austin, TX, Nov. 2007.
 
-
+[8] Z. Hassan, A. R. Bradley, and F. Somenzi, "Better Generalization in IC3."
+    In Formal Methods in Computer Aided Design (FMCAD'13), pages 157-164, 
+    Potland, OR, Oct. 2013.

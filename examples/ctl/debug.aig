@@ -1,0 +1,19 @@
+aig 10 0 6 1 4
+3
+1
+4
+6
+8
+20
+12
+l0 p
+l1 e
+l2 d
+l3 c
+l4 b
+l5 a
+o0 out
+c
+bliftoaig
+1.9
+debug.blif

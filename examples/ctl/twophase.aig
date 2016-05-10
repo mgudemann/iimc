@@ -1,0 +1,30 @@
+aig 60 4 9 1 47
+11
+38
+50
+62
+74
+84
+94
+104
+114
+120
+	$#+0-	'7<7
+BG?JQGR[OZeZ^bi0 in<3>
+i1 in<2>
+i2 in<1>
+i3 in<0>
+l0 phase
+l1 ph0reg<3>
+l2 ph0reg<2>
+l3 ph0reg<1>
+l4 ph0reg<0>
+l5 ph1reg<3>
+l6 ph1reg<2>
+l7 ph1reg<1>
+l8 ph1reg<0>
+o0 out
+c
+bliftoaig
+1.9
+twophase.blif

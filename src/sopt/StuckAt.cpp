@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -36,6 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ExprUtil.h"
 #include "StuckAt.h"
 #include "ThreeValuedSimulation.h"
+#include "Util.h"
 
 #include <set>
 
@@ -47,79 +48,83 @@ void StuckAtAction::exec() {
     cout << "StuckAtAction starting" << endl;
 
   ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
-  vector<ID> latches(eat->stateVars());
-  vector<ID> fns(eat->nextStateFnOf(latches));
-  vector<TV> tvs;
-  tvs.resize(latches.size(), TVFalse);
+  AIGAttachment * const aat = (AIGAttachment *) model().constAttachment(Key::AIG);
+  AIGTVSim tvsim(aat);
+  Opt::RefIDMap & idOfAigRef = aat->ref2id;
 
   Expr::Manager::View * v = model().newView();
 
   // assumes AIGER 1.9
   vector<ID> init(eat->initialConditions());
-  set<ID> tl, fl;
-  for (size_t i = 0; i < init.size(); ++i)
-    if (v->op(init[i]) == Expr::Not)
-      fl.insert(v->apply(Expr::Not, init[i]));
-    else
-      tl.insert(init[i]);
-  for (size_t i = 0; i < tvs.size(); ++i)
-    if (tl.find(latches[i]) != tl.end())
-      tvs[i] = TVTrue;
-    else if (fl.find(latches[i]) == fl.end())
-      tvs[i] = TVX;
+  tvsim.reset(*v, init);
 
   bool changed = true;
+  vector<TV> latchTVs(tvsim.latchBegin(), tvsim.latchEnd());
+  int64_t start = Util::get_user_cpu_time();
+  int64_t iter = 0;
   while (changed) {
-    Map map;
-    for (unsigned int i = 0; i < latches.size(); ++i)
-      map.insert(Map::value_type(latches[i], tvs[i]));
-    Folder f(*v, map);
-    v->fold(f, fns);
+    ++iter;
+    tvsim.step();
     changed = false;
-    for (unsigned int i = 0; i < fns.size(); ++i) {
-      Map::const_iterator it = map.find(fns[i]);
-      assert (it != map.end());
-      if (it->second != tvs[i]) {
-        changed = changed || tvs[i] != TVX;
-        tvs[i] = TVX;
+    const vector<TV> & nsValues = tvsim.getNSValues();
+    for (unsigned i = 0; i < nsValues.size(); ++i) {
+      if (nsValues[i] != latchTVs[i]) {
+        changed = changed || (latchTVs[i] != TVX);
+        latchTVs[i] = TVX;
+      }
+      else {
+        latchTVs[i] = nsValues[i];
       }
     }
+    copy(latchTVs.begin(), latchTVs.end(), tvsim.latchBegin());
   }
   model().constRelease(eat);
+  if (model().verbosity() > Options::Terse)
+    cout << "StuckAtAction: performed " << iter << " tvsim iterations in " << (Util::get_user_cpu_time() - start) / 1000000.0 << "s" << endl;
 
   Expr::IDMap sub;
   bool reduce = false;
-  for (unsigned int i = 0; i < latches.size(); ++i)
-    if (tvs[i] != TVX) {
+  for (unsigned i = 0; i < latchTVs.size(); ++i)
+    if (latchTVs[i] != TVX) {
       reduce = true;
-      sub.insert(Expr::IDMap::value_type(latches[i], 
-                                         tvs[i] == TVFalse ? v->bfalse() : v->btrue()));
+      ID latchID = idOfAigRef[Opt::refOf(i + 1 + aat->aig.numInputs(), false)];
+      sub.insert(Expr::IDMap::value_type(latchID, latchTVs[i] == TVFalse ? 
+                                                  v->bfalse() : v->btrue()));
     }
   if (reduce) {
     SeqAttachment * seqat = (SeqAttachment *) model().attachment(Key::SEQ);
     ExprAttachment * eat = (ExprAttachment *) model().attachment(Key::EXPR);
 
     int cnt = 0;
-    for (unsigned int i = 0; i < latches.size(); ++i)
-      if (tvs[i] != TVX) {
+    vector<ID> toSub;
+    for (unsigned int i = 0; i < latchTVs.size(); ++i) {
+      ID latchID = idOfAigRef[Opt::refOf(i + 1 + aat->aig.numInputs(), false)];
+      if (latchTVs[i] != TVX) {
         ++cnt;
-        eat->setNextStateFn(latches[i], tvs[i] == TVTrue ? v->btrue() : v->bfalse());
-        seqat->optimized.insert(unordered_map<ID, ID>::value_type(latches[i],
-            tvs[i] == TVTrue ? v->btrue() : v->bfalse()));
+        eat->setNextStateFn(latchID, latchTVs[i] == TVTrue ? v->btrue() : v->bfalse());
+        seqat->optimized.insert(unordered_map<ID, ID>::value_type(latchID,
+            latchTVs[i] == TVTrue ? v->btrue() : v->bfalse()));
       }
-      else
-        eat->setNextStateFn(latches[i], Expr::varSub(*v, sub, fns[i]));
+      else {
+        toSub.push_back(latchID);
+      }
+    }
+    vector<ID> nnsfs = eat->nextStateFnOf(toSub);
+    Expr::varSub(*v, sub, nnsfs);
+    eat->setNextStateFns(toSub, nnsfs);
     v->keep(eat->nextStateFnOf(eat->stateVars()));
 
     if (model().verbosity() > Options::Silent)
       cout << "StuckAt: Found " << cnt << " stuck-at latches" << endl;
 
     vector<ID> constraints(eat->constraints());
+    vector<ID> constraintFns(eat->constraintFns());
     eat->clearConstraints();
-    for (vector<ID>::iterator it = constraints.begin(); it != constraints.end(); ++it)
-      if (Expr::varSub(*v, sub, *it) == *it)
-        eat->addConstraint(*it);
-    v->keep(eat->constraints());
+    for (vector<ID>::size_type i = 0; i != constraintFns.size(); ++i) {
+      ID f = Expr::varSub(*v, sub, constraintFns[i]);
+      eat->addConstraint(constraints[i], f);
+    }
+    v->keep(eat->constraintFns());
 
     vector<ID> outputs(eat->outputs());
     vector<ID> outputFns(eat->outputFnOf(outputs));

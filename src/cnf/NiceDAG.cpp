@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -434,7 +434,6 @@ namespace {
           {
             // if it's a union count for all children
             pair<unsigned long, unsigned long> result = make_pair(0UL, 0UL);
-            typedef pair<bool, ID> respair;
 
             for(vector<pair<bool, ID> >::const_iterator i = cs.unioned.begin();
                   i != cs.unioned.end(); ++i) {

@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -36,6 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define DIMACSACTION_H
 
 #include "Model.h"
+#include "options.h"
 
 namespace CNF
 {
@@ -43,6 +44,8 @@ namespace CNF
   public:
     DIMACSAction(Model& model);
     virtual void exec();
+  private:
+    static ActionRegistrar action;
   };
 
 }

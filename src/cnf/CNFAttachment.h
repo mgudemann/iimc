@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -104,6 +104,11 @@ public:
     return _core_cnf;
   }
 
+  const std::vector<std::vector<ID> > & getPlainCNFNoConstraints() const
+  {
+    return _core_cnf_no_constraints;
+  }
+
   const std::vector<std::vector<ID> > getCNFNoRoots() const
   {
     std::vector<std::vector<ID> > result(cnf);
@@ -115,6 +120,7 @@ public:
   const std::vector<ID> & getRoots() const
   { return roots; }
 
+  Expr::IDMap satIdOfId;
 
 protected:
   virtual CNFAttachment* clone() const
@@ -129,7 +135,7 @@ private:
   void transitionRelation(AIGAttachment& aat, const ExprAttachment& eat);
 
   ID _last_npi;
-  std::vector<std::vector<ID> > _core_cnf, _pi_cnf;
+  std::vector<std::vector<ID> > _core_cnf, _core_cnf_no_constraints, _pi_cnf;
 };
 
 #endif

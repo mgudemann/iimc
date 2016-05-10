@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CombAttachment.h"
 #include "ExprBdd.h"
 #include "Model.h"
+#include "options.h"
 
 /**
  * A class to attach BDDs to a model.
@@ -82,9 +83,11 @@ public:
   BDD bdd(ID id) const;
   ID ithVar(unsigned int i) const;
   std::string orderString() const;
+  std::vector<ID> const & order() const { return _order; }
   const std::unordered_map<ID, int>& auxiliaryVars() const { return _auxVar; }
   void build();
-  ID exprOf(BDD f, Expr::Manager::View& v) const;
+  BDD cubeToBdd(const std::vector<ID> & cube, Expr::Manager::View& _view) const;
+  BDD cnfToBdd(const std::vector< std::vector<ID> > & cnf, Expr::Manager::View& _view) const;
   void countStates(const std::vector< std::vector<ID> > & cnf, Expr::Manager::View& _view) const;
 
   class Factory : public Model::AttachmentFactory {
@@ -111,6 +114,8 @@ private:
   std::unordered_map<ID, int> _auxVar;
 };
 
+ID exprOf(BDD f, Expr::Manager::View& v, std::vector<ID> const & order);
+
 /**
  * Class to build BDDs for the model.
  */
@@ -121,6 +126,8 @@ public:
     requires(Key::BDD, &baf);
   }
   void exec() {}
+private:
+  static ActionRegistrar action;
 };
 
 
@@ -136,6 +143,8 @@ public:
     requires(Key::COMB, &caf);
   }
   void exec();
+private:
+  static ActionRegistrar action;
 };
 
 #endif // _BddAttachment_

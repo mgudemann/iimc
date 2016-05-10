@@ -15,7 +15,7 @@ IFS=:
 argslist="\
 -t print_expr -t print_dot -t print_verilog ${aigdir}/counter3.aig > /dev/null,:\
 -t sr -t ic3 ${aigdir}/counter3.aig,0:\
--t sr -t ic3 --cnf_techmap ${aigdir}/gaxb.aig,0:\
+-t sr -t ic3 --ic3_xlift --cnf_techmap ${aigdir}/gaxb.aig,0:\
 -t bmc --bmc_bound 10 ${aigdir}/sss.aig,2:\
 -t sr -t bdd_fw_reach --bdd_sweeping ${aigdir}/gaxb.aig,0:\
 -t bddsweep -t fair ${aigdir}/cnt3bits.aig,0:\
@@ -24,7 +24,8 @@ argslist="\
 -t sr -t iictl --ctl ${ctldir}/cube.ctl ${ctldir}/cube.aig,1:\
 --ctl ${ctldir}/gcd.ctl ${ctldir}/gcd.aig --pi 1,0:\
 -t coi -t check --ctl ${ctldir}/simple4.ctl ${ctldir}/simple4.aig --pi 7,0:\
--t sr -t fcbmc ${aigdir}/hanoi4.aig,1"
+-t sr -t fcbmc ${aigdir}/hanoi4.aig,1:\
+-t pp -t gsh ${aigdir}/hanoi4.aig --pi 1,1"
 
 verbosity=0
 

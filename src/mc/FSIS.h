@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -69,6 +69,7 @@ namespace FSIS {
     }
     virtual void exec() {
       IC3::IC3Options opts(options(), false);
+      opts.ctgs = 0;
       MC::ReturnValue rv;
       std::vector<Transition> cex;
       std::vector< std::vector<ID> > proof;
@@ -91,6 +92,8 @@ namespace FSIS {
       }
       model().release(pat);
     }
+  private:
+    static ActionRegistrar action;
   };
 
 

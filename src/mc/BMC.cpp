@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -61,19 +61,29 @@ namespace {
 
   class State {
   public:
-    State(Model & m, const Clauses & _cnf) : m(m), _cnf(_cnf) {
-      v = m.newView();
+    State(Model & m, const Clauses & _cnf, const Clauses & _pcnf,
+          const BMC::BMCOptions & opts) : 
+      m(m), opts(opts), _cnf(_cnf), _pcnf(_pcnf) {
+      v = opts.ev ? opts.ev : m.newView();
 
       COIAttachment const * cat = (COIAttachment *) m.constAttachment(Key::COI);
       coi = cat->coi();
       m.constRelease(cat);
 
-      ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
-      latches = eat->stateVars();
-      functions = eat->nextStateFnOf(latches);
+      vector<ID> init;
+      if (opts.am) {
+        latches = opts.am->latches;
+        functions = opts.am->fns;
+        init = opts.am->init;
+      }
+      else {
+        ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+        latches = eat->stateVars();
+        functions = eat->nextStateFnOf(latches);
+        init = eat->initialConditions();
+        m.constRelease(eat);
+      }
       slatches = set<ID>(latches.begin(), latches.end());
-      vector<ID> init = eat->initialConditions();
-      m.constRelease(eat);
 
       // 1. build initial value map
       ThreeValued::Map sval;
@@ -95,16 +105,18 @@ namespace {
       litOccur(lito, _cnf);
     }
     ~State() {
-      delete v;
+      if (!opts.ev) delete v;
     }
 
     void nextFrontier() {
+      assert (_pcnf.empty());
+
       if (frontier_cnf.size() >= coi.size()) return;
 
-      set<ID> kcoi = coi.kCOI(frontier_cnf.size());
+      COI::range kcoi = coi.kCOI(frontier_cnf.size());
       set<unsigned int> curri;
       deque<unsigned int> q;
-      for (set<ID>::const_iterator it = kcoi.begin(); it != kcoi.end(); ++it)
+      for (vector<ID>::const_iterator it = kcoi.first; it != kcoi.second; ++it)
         add_clauses(q, v->prime(*it));
 
       // 1. find clauses not included in (k-1) frontier that should be in k frontier
@@ -129,6 +141,7 @@ namespace {
 
     const Clauses & cnf(unsigned int kf, bool _frontier = true) {
       if (_frontier && kf < frontier_cnf.size()) return frontier_cnf[kf];
+      if (kf == 0 && !_pcnf.empty()) return _pcnf;
       return _cnf;
     }
 
@@ -225,12 +238,13 @@ namespace {
 
   private:
     Model & m;
+    const BMC::BMCOptions & opts;
     Expr::Manager::View * v;
     vector<ID> latches;
     vector<ID> functions;
     set<ID> slatches;
     COI coi;
-    Clauses _cnf;
+    Clauses _cnf, _pcnf;
 
     LitOccurMap lito;
 
@@ -345,8 +359,10 @@ namespace {
 
 namespace BMC {
 
-  MC::ReturnValue check(Model & m, const BMCOptions & opts, vector<Transition> * cexTrace,
-                        vector< vector<ID> > * proofCNF) {
+  MC::ReturnValue check(Model & m, const BMCOptions & opts, 
+                        vector<Transition> * cexTrace,
+                        vector< vector<ID> > * proofCNF,
+                        SAT::Clauses * unrolling1, SAT::Clauses * unrolling2) {
     if (m.verbosity() > Options::Silent && !opts.silent)
       cout << "BMC: Checking up to " << *(opts.bound) << endl;
     int rseed = m.options()["rand"].as<int>();
@@ -357,18 +373,28 @@ namespace BMC {
 
     MC::ReturnValue rv;
 
+    Expr::Manager::View * v = opts.ev ? opts.ev : m.newView();
+
     ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
-    Expr::Manager::View * v = m.newView();
-
-    // assumes AIGER 1.0
-    // get initial condition and property
-    vector<ID> init = eat->initialConditions();
-    vector<ID> latches(eat->stateVars());
-    vector<ID> inputs(eat->inputs());
-    vector<ID> constraints(eat->constraints());
-    ID npi = eat->outputFnOf(eat->outputs()[0]);
+    vector<ID> constraints(eat->constraintFns());
+    vector<ID> init, latches, inputs;
+    ID npi;
+    if (opts.am) {
+      init = opts.am->init;
+      latches = opts.am->latches;
+      inputs = opts.am->inputs;
+      npi = opts.am->err;
+    }
+    else {
+      // assumes AIGER 1.0
+      // get initial condition and property
+      init = eat->initialConditions();
+      latches = eat->stateVars();
+      inputs = eat->inputs();
+      npi = eat->outputFnOf(eat->outputs()[0]);
+    }
+    set<ID> sinputs(inputs.begin(), inputs.end());
     ID pi = v->apply(Expr::Not, npi);
-
     m.constRelease(eat);
 
     if (pi == v->btrue()) {
@@ -376,7 +402,7 @@ namespace BMC {
         cout << "BMC: The property holds trivially. (0)" << endl;
       rv.returnType = MC::Proof;
       //Proof is just true!
-      delete v;
+      if (!opts.ev) delete v;
       return rv;
     }
     else if (pi == v->bfalse()) {
@@ -387,19 +413,32 @@ namespace BMC {
         cexTrace->resize(1);
         (*cexTrace)[0].state = init;
       }
-      delete v;
+      if (!opts.ev) delete v;
       return rv;
     }
 
     // Get CNF encoding for next-state functions.
-    CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
-    vector< vector<ID> > cons_clauses = opts.useCOI ? cnfat->getCNF() : cnfat->getPlainCNF();
-    m.constRelease(cnfat);
+    SAT::Clauses cons_clauses, pcons_clauses;
+    if (opts.am) {
+      cons_clauses = opts.am->tr;
+      if (!opts.am->ptr.empty())
+        pcons_clauses = opts.am->ptr;
+    }
+    else {
+      CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
+      cons_clauses = opts.useCOI ? cnfat->getCNF() : cnfat->getPlainCNF();
+      m.constRelease(cnfat);
+    }
 
     if(opts.constraints) {
       for (unsigned i = 0; i < opts.constraints->size(); ++i) {
-        cons_clauses.insert(cons_clauses.end(), (*opts.constraints)[i].begin(),
-                                                (*opts.constraints)[i].end());
+        cons_clauses.insert(cons_clauses.end(), 
+                            (*opts.constraints)[i].begin(),
+                            (*opts.constraints)[i].end());
+        if (!pcons_clauses.empty())
+          pcons_clauses.insert(pcons_clauses.end(), 
+                               (*opts.constraints)[i].begin(),
+                               (*opts.constraints)[i].end());
       }
     }
 
@@ -420,9 +459,12 @@ namespace BMC {
       npi = v->apply(Expr::Or, ex);
     }
 
-    State s(m, cons_clauses);
+    State s(m, cons_clauses, pcons_clauses, opts);
     SAT::Manager * sman = m.newSATManager();
-    SAT::Manager::View * sv = sman->newView(s.view());
+    string backend = m.options()["bmc_backend"].as<string>();
+    if (m.verbosity() > Options::Terse)
+      cout << "BMC: Using " << backend << " as backend" << endl;
+    SAT::Manager::View * sv = sman->newView(s.view(), SAT::toSolver(backend));
 
     Clauses npi_cnf;
     if(!opts.iictl) {
@@ -447,6 +489,7 @@ namespace BMC {
         Clause c;
         c.push_back(*it);
         sv->add(c);
+        if (unrolling1) unrolling1->push_back(c);
       }
     else {
       set<ID> sim_cubes;
@@ -457,6 +500,8 @@ namespace BMC {
       Expr::tseitin(s.view(), v->apply(Expr::Or, ic), ic_cnf);
       cout << ic_cnf.size() << endl;
       sv->add(ic_cnf);
+      if (unrolling1) 
+        unrolling1->insert(unrolling1->end(), ic_cnf.begin(), ic_cnf.end());
     }
 
     int64_t stime = Util::get_user_cpu_time();
@@ -485,7 +530,9 @@ namespace BMC {
         if (use_frontier) s.nextFrontier();
         Clauses new_cnf;
         bool trivial = false;
-        for (unsigned int i = k; i > 0 && k-i < s.fsize(); --i) {
+        for (unsigned int i = k; 
+             i == k || (use_frontier && i > 0 && k-i < s.fsize()); 
+             --i) {
           Clauses icnf = s.cnf(k-i, use_frontier);
           if (!opts.sim) {
             if (m.verbosity() > Options::Informative)
@@ -513,10 +560,8 @@ namespace BMC {
                     SAT::Manager * satMan = m.newSATManager();
                     SAT::Manager::View * satView = satMan->newView(s.view());
 
-                    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
-                    ID target = eat->outputFns()[0];
                     Clauses targetClauses;
-                    Expr::wilson(s.view(), target, targetClauses);
+                    Expr::wilson(s.view(), npi, targetClauses);
                     ostringstream targetEnaName, otherEnaName;
                     targetEnaName << "__tEna__";
                     ID targetEna = s.view().newVar(targetEnaName.str());
@@ -570,6 +615,12 @@ namespace BMC {
         if (trivial) break;
         try {
           sv->add(new_cnf);
+          if (unrolling1) {
+            if (k < *(opts.bound))
+              unrolling1->insert(unrolling1->end(), new_cnf.begin(), new_cnf.end());
+            else if (unrolling2)
+              unrolling2->insert(unrolling2->end(), new_cnf.begin(), new_cnf.end());
+          }
         }
         catch (SAT::Trivial tv) {
           if (!tv.value()) {
@@ -650,8 +701,8 @@ namespace BMC {
         // 3. check sat
         bool sat;
         if(!opts.printCex) {
-          for (vector<ID>::const_iterator it = latches.begin(); it != latches.end(); ++it)
-            asgn.insert(SAT::Assignment::value_type(v->prime(*it, k), SAT::Unknown));
+          for (vector<ID>::const_iterator i = latches.begin(); i != latches.end(); ++i)
+            asgn.insert(SAT::Assignment::value_type(v->prime(*i, k), SAT::Unknown));
         }
         try {
           sat = trivial ? false : sv->sat(NULL, &asgn);
@@ -668,14 +719,13 @@ namespace BMC {
           rv.returnType = MC::CEX;
           if(opts.printCex) {
             cexTrace->resize(k + 1);
-            ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
             for (SAT::Assignment::const_iterator it = asgn.begin();
                 it != asgn.end(); ++it) {
               if(it->second != SAT::Unknown) {
                 unsigned numPrimes = v->nprimes(it->first);
                 assert(numPrimes <= k);
                 ID id = v->unprime(it->first, numPrimes);
-                if(eat->isInput(id)) {
+                if(sinputs.find(id) != sinputs.end()) {
                   (*cexTrace)[numPrimes].inputs.push_back(
                       it->second == SAT::False ?
                       v->apply(Expr::Not, id) :
@@ -689,14 +739,13 @@ namespace BMC {
                 }
               }
             }
-            m.constRelease(eat);
           }
           else {
             vector<ID> cube;
-            for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it)
-              if (it->second != SAT::Unknown) {
-                ID var = v->primeTo(it->first, 0);
-                cube.push_back(it->second == SAT::False ? 
+            for (SAT::Assignment::const_iterator i = asgn.begin(); i != asgn.end(); ++i)
+              if (i->second != SAT::Unknown) {
+                ID var = v->primeTo(i->first, 0);
+                cube.push_back(i->second == SAT::False ? 
                                v->apply(Expr::Not, var) :
                                var);
               }
@@ -708,9 +757,17 @@ namespace BMC {
       if (k == *(opts.bound))
         rv.returnType = MC::Unknown;
     }
+
+    if (unrolling1)
+      for (SAT::Clauses::iterator i = unrolling1->begin(); i != unrolling1->end(); ++i)
+        Expr::primeFormulas(*v, *i, -(*(opts.bound)-1));
+    if (unrolling2)
+      for (SAT::Clauses::iterator i = unrolling2->begin(); i != unrolling2->end(); ++i)
+        Expr::primeFormulas(*v, *i, -(*(opts.bound)-1));
+
     *(opts.bound) = k;
 
-    delete v;
+    if (!opts.ev) delete v;
     delete sv;
     delete sman;
     return rv;
@@ -742,6 +799,7 @@ namespace BMC {
         if (rat->kBackwardUpperBound(i, bwd))
           prime(*ev, -i, bwd, opts.bwd);
       }
+
       if (model().verbosity() > Options::Informative) {
         cout << "BMC: using " << fwd.size() << " forward clauses\n";
         cout << "BMC: using " << bwd.size() << " backward clauses\n";

@@ -23,3 +23,12 @@ AG EF(~P0.state<1> & ~P0.state<0> & ~P1.state<1> & ~P1.state<0> &
       ~P2.state<1> & ~P2.state<0> & ~P3.state<1> & ~P3.state<0> &
       ~P4.state<1> & ~P4.state<0> & ~P5.state<1> & ~P5.state<0> &
       ~P6.state<1> & ~P6.state<0> & ~P7.state<1> & ~P7.state<0>)
+
+#PASS: (17-23)
+AG (~P0.state<1> | P0.state<0> | ~P1.state<1> | P1.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P2.state<1> | P2.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P3.state<1> | P3.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P4.state<1> | P4.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P5.state<1> | P5.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P6.state<1> | P6.state<0>)
+AG (~P0.state<1> | P0.state<0> | ~P7.state<1> | P7.state<0>)

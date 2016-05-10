@@ -1,0 +1,18 @@
+#! /bin/sh
+
+EXE=@EXEEXT@
+srcdir=@srcdir@
+
+datafiles=${@:-"gg.auto gx.auto multAuto.auto multBad.auto multInit.auto syntaxError.auto"}
+count=`echo $datafiles | wc -w`
+
+exitstatus=0
+for file in $datafiles
+do
+  ./test_Auto$EXE ${srcdir}/src/automata/tests/$file
+  failed=`expr $? != 0`
+  exitstatus=`expr $exitstatus + $failed`
+done
+echo "$exitstatus failed sub-tests out of $count"
+
+exit $exitstatus

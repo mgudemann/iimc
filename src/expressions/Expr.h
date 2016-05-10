@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -166,7 +166,7 @@ namespace Expr {
        * return value is a constant pointer to a constant array of
        * "*nArgs" elements.
        */
-      const ID * const arguments(ID id, int * nArgs);
+      const ID * arguments(ID id, int * nArgs);
 
       /**
        * An interface for folding over DAG-compressed expressions.
@@ -213,7 +213,7 @@ namespace Expr {
 
       class fold_fold : public HashedStructure<Expr>::Folder {
       public:
-	fold_fold(Manager::View::Folder & f) : f(f) {}
+	fold_fold(Manager::View::Folder & fo) : f(fo) {}
 	virtual bool filter(ID id, Expr * e) {
 	  return f.filter(id);
 	}

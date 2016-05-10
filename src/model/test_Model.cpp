@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -185,7 +185,7 @@ int main(int argc, char **argv)
   Manager::View *v = model.newView();
   v->begin_local();
   BDD init = tat->initialCondition();
-  ID initE = bat->exprOf(init, *v);
+  ID initE = exprOf(init, *v, bat->order());
   if (verbosity > Options::Silent) {
     cout << "Conversion of initial condition from BDD to expression\n"
          << stringOf(*v, initE) << endl;

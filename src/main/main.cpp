@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -44,27 +44,27 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SimUtil.h"
 
 using namespace std;
+using namespace boost::program_options;
 using namespace Options;
 
 namespace {
 
-  /** Apply tactics to model. */
-  void dispatcher(Model & model, CommandLineOptions & options) {
+/** Apply tactics to model. */
+void dispatcher(Model & model) {
 
-    vector<Model::Action *> tactics = options.tactics();
-    for (vector<Model::Action *>::const_iterator it = tactics.begin(); it != tactics.end(); it++) {
-      (*it)->make();
-      delete *it;
-      ProofAttachment * const pat = (ProofAttachment *) model.constAttachment(Key::PROOF);
-      bool done = pat && pat->hasConclusion();
-      model.constRelease(pat);
-      if (done) {
-        for (++it; it != tactics.end(); ++it)
-          delete *it;
-        break;
-      }
+  Model::Action * tactic;
+  while ((tactic = model.popTactic())) {
+    tactic->make();
+    delete tactic;
+    ProofAttachment * const pat = (ProofAttachment *) model.constAttachment(Key::PROOF);
+    bool done = pat && pat->hasConclusion();
+    model.constRelease(pat);
+    if (done) {
+      model.clearTactics();
+      break;
     }
   }
+}
 
 }
 
@@ -104,7 +104,7 @@ int main(int argc, char * argv[]) {
 
   int ret = 1;
   try { 
-    dispatcher(model, options);
+    dispatcher(model);
     ret = 0;
   } catch (Exception& e) {
     cerr << e.what() << endl;

@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -242,7 +242,7 @@ namespace Expr {
 
   void primeFormulas(Manager::View & v, IDVector & ids, int n) {
     prime_folder pf(v, n);
-    return v.fold(pf, ids);
+    v.fold(pf, ids);
   }
 
   class sub_folder : public Manager::View::Folder {
@@ -272,7 +272,7 @@ namespace Expr {
 
   void varSub(Manager::View & v, const IDMap & sub, IDVector & ids) {
     sub_folder sf(v, sub);
-    return v.fold(sf, ids);
+    v.fold(sf, ids);
   }
 
   class  tseitin_folder : public Manager::View::Folder {
@@ -682,7 +682,12 @@ namespace Expr {
         else {
           vector<ID> vargs;
           vOf(n, args, vargs);
-          return view().apply(And, vargs);
+          //return view().apply(And, vargs);
+          ID conj = view().btrue();
+          for(unsigned i = 0; i < vargs.size(); ++i) {
+            conj = view().apply(And, conj, vargs[i]);
+          }
+          return conj;
         }
       case Or: {
         vector<ID> vargs;
@@ -700,6 +705,9 @@ namespace Expr {
                                                                         view().apply(Not, id0), 
                                                                         view().apply(Not, id1)))));
       }
+      case Implies:
+        return view().apply(Not,
+                            view().apply(And, args[0], view().apply(Not, args[1])));
       case ITE: {
         ID c = args[0];
         ID a = args[1];
@@ -868,7 +876,7 @@ namespace Expr {
     if (subgraph)
       dotf << "{\n";
     else {
-      dotf << "digraph " << name << " {\nedge [dir=none];\n";
+      dotf << "digraph \"" << name << "\" {\nedge [dir=none];\n";
     }
     v.fold(dotf, idv);
     dotf << "}\n";
@@ -914,7 +922,7 @@ namespace Expr {
           Op fop = view().op(fanin);
           if (fop == Not) {
             ID negation = view().apply(Not, fanin);
-            _buf << negation << " -> " << id << " [style = dotted];\n";
+            _buf << negation << " -> " << id << " [style = dashed];\n";
           } else {
             _buf << fanin << " -> " << id << ";\n";
           }
@@ -939,7 +947,7 @@ namespace Expr {
     if (subgraph)
       cgf << "{\n";
     else {
-      cgf << "digraph " << name << " {\nedge [dir=none];\n";
+      cgf << "digraph \"" << name << "\" {\nedge [dir=none];\n";
     }
     v.fold(cgf, idv);
     cgf << "}\n";
@@ -1039,8 +1047,7 @@ namespace Expr {
 
     void visit(const ID id)
     {
-      DfsNode n(true,count,count);
-      ndInfo.insert(pair<const ID,DfsNode>(id,n));
+      ndInfo.insert(pair<const ID,DfsNode>(id,DfsNode(true,count,count)));
       count++;
       stk.push(id);
     }
@@ -1172,11 +1179,7 @@ namespace Expr {
     }
  
     //Build set of state variables
-    unordered_set<ID> vars;
-    for(vector<ID>::const_iterator i = leaves.begin();
-        i != leaves.end(); ++i) {
-      vars.insert(*i);
-    }
+    unordered_set<ID> vars(leaves.begin(), leaves.end());
 
     set<unsigned> seqSccIndices;
     for(unsigned i = 0; i < sccs.size(); ++i) {
@@ -1203,11 +1206,7 @@ namespace Expr {
       unsigned depth = 0;
       vector<ID> const &component = *i;
       //Build set of elements in this component
-      unordered_set<ID> elements;
-      for(vector<ID>::const_iterator j = component.begin();
-          j != component.end(); ++j) {
-        elements.insert(*j);
-      }
+      unordered_set<ID> elements(component.begin(), component.end());
       //Loop over the elements of this SCC
       for(vector<ID>::const_iterator j = component.begin();
           j != component.end(); ++j) {
@@ -1324,11 +1323,7 @@ namespace Expr {
     }
  
     //Build set of state variables
-    unordered_set<ID> vars;
-    for(vector<ID>::const_iterator i = leaves.begin();
-        i != leaves.end(); ++i) {
-      vars.insert(*i);
-    }
+    unordered_set<ID> vars(leaves.begin(), leaves.end());
 
     unordered_map<ID, unsigned> idToSccIndex;
     set<unsigned> seqSccIndices;
@@ -1366,11 +1361,7 @@ namespace Expr {
     for(int i = sccs.size() - 1; i >= 0; --i) {
       vector<ID> const &component = sccs[i];
       //Build set of elements in this component
-      unordered_set<ID> elements;
-      for(vector<ID>::const_iterator j = component.begin();
-          j != component.end(); ++j) {
-        elements.insert(*j);
-      }
+      unordered_set<ID> elements(component.begin(), component.end());
       //Loop over the elements of this SCC
       for(vector<ID>::const_iterator j = component.begin();
           j != component.end(); ++j) {
@@ -1468,11 +1459,7 @@ namespace Expr {
     }
     
     //Build set of state variables
-    unordered_set<ID> vars;
-    for(vector<ID>::const_iterator i = leaves.begin();
-        i != leaves.end(); ++i) {
-      vars.insert(*i);
-    }
+    unordered_set<ID> vars(leaves.begin(), leaves.end());
 
     unordered_map<ID, unsigned> idToSccIndex;
     vector<unsigned> seqSccIndices;

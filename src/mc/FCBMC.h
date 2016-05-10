@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -53,12 +53,14 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace FCBMC {
   struct FCBMCOptions {
     FCBMCOptions(SAT::Clauses * _constraints = NULL) :
-      constraints(_constraints) {}
+      constraints(_constraints), silent(false), backend("minisat") {}
     FCBMCOptions(const boost::program_options::variables_map & opts) : 
-      extractCex(opts.count("print_cex")), constraints(NULL), silent(false) {}
+      extractCex(opts.count("print_cex")), constraints(NULL), silent(false),
+      backend(opts["fcbmc_backend"].as<std::string>()) {}
     bool extractCex;
     SAT::Clauses * constraints;
     bool silent;
+    std::string backend;
   };
 
   class FCBMC {
@@ -120,6 +122,8 @@ namespace FCBMC {
         }
       }
     }
+  private:
+    static ActionRegistrar action;
   };
 }
 

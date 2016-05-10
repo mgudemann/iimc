@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -37,8 +37,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 #include "SimplifyCNF.h"
 
-#include "minisat/simp/SimpSolver.h"
-#include "minisat/mtl/Vec.h"
+#include "minisat20/simp/SimpSolver.h"
+#include "minisat20/mtl/Vec.h"
 
 using namespace std;
 
@@ -54,16 +54,17 @@ namespace CNF {
                 vector<ID> inputs,
                 vector<ID> latches,
                 vector<ID> fns,
-                bool replace)
+                bool replace,
+                Expr::Manager::View * _ev)
   {
     ID2VAR id2var;
     VAR2ID var2id;
 
-    Expr::Manager::View * ev = m.newView();
+    Expr::Manager::View * ev = _ev ? _ev : m.newView();
 
     // 1. load solver with in; build var2id and id2var maps
     SimpSolver solver;
-    for (vector< vector<ID> >::const_iterator it = in.begin(); it != in.end(); ++it) {
+    for (vector< vector<ID> >::const_reverse_iterator it = in.rbegin(); it != in.rend(); ++it) {
       vec<Lit> mscl;
       for (vector<ID>::const_iterator lit = it->begin(); lit != it->end(); ++lit) {
         ID v = ev->op(*lit) == Expr::Not ? ev->apply(Expr::Not, *lit) : *lit;
@@ -98,11 +99,16 @@ namespace CNF {
     }
 
     // 3. simplify
-    solver.eliminate(false, 5);
-    MSCNF * mscnf = solver.simplifiedClauses();
+    bool success = solver.eliminate(false, 5);
+    if (!success) {
+      out = in;
+      return;
+    }
+    vec<Lit> assigns;
+    MSCNF * mscnf = solver.simplifiedClauses(assigns);
 
     // 4. retrieve clauses and build up out
-    set<ID> vars;
+    //set<ID> vars;
     for (int i = 0; i < mscnf->size(); ++i) {
       vec<Lit> * mscl = (*mscnf)[i];
       vector<ID> cl;
@@ -112,7 +118,7 @@ namespace CNF {
         VAR2ID::const_iterator it = var2id.find(msv);
         assert (it != var2id.end());
         ID v = it->second;
-        vars.insert(v);
+        //vars.insert(v);
         cl.push_back(sign(msl) ? ev->apply(Expr::Not, v) : v);
       }
       out.push_back(cl);
@@ -121,7 +127,8 @@ namespace CNF {
     delete mscnf;
 
     // 5. replace clauses for missing functions
-    if (replace)
+    /*
+    if (replace) {
       for (unsigned int i = 0; i < latches.size(); ++i) {
         ID pv = ev->prime(latches[i]);
         if (vars.find(pv) == vars.end()) {
@@ -134,8 +141,36 @@ namespace CNF {
             Expr::tseitin(*ev, ev->apply(Expr::Equiv, pv, fns[i]), out);
         }
       }
+    }
+    */
 
-    delete ev;
+    // 5.a add assignments that refer to system variables as unit clauses
+    set<ID> sysVars;
+    for (vector<ID>::const_iterator it = inputs.begin(); it != inputs.end();
+         ++it) {
+      sysVars.insert(*it);
+      sysVars.insert(ev->prime(*it));
+    }
+    for (vector<ID>::const_iterator it = latches.begin(); it != latches.end();
+         ++it) {
+      sysVars.insert(*it);
+      sysVars.insert(ev->prime(*it));
+    }
+    for (int i = 0; i < assigns.size(); ++i) {
+      Lit msl = assigns[i];
+      Var msv = var(msl);
+      VAR2ID::const_iterator it = var2id.find(msv);
+      assert (it != var2id.end());
+      ID v = it->second;
+      if (sysVars.find(v) != sysVars.end()) {
+        ID lit = sign(msl) ? ev->apply(Expr::Not, v) : v;
+        if (m.verbosity() > Options::Informative)
+          cout << "SimplifyCNF: adding unit clause: " << Expr::stringOf(*ev, lit) << endl;
+        out.push_back(vector<ID>(1, lit));
+      }
+    }
+
+    if (!_ev) delete ev;
   }
 
 }

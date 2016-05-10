@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -118,6 +118,8 @@ private:
     BDD _fw_qc;
     BDD _bw_qc;
   };
+  void composeAuxiliaryFunctions(BddAttachment const * bat,
+                                 BDD & f, std::unordered_map<int,ID> const & index2id);
   std::vector<BDD> clusterConjunctsOld(std::vector<BDD>& conjuncts,
                                        unsigned int limit,
                                        Options::Verbosity verbosity, 

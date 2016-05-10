@@ -620,6 +620,7 @@ extern DdNode * Cudd_addNewVar (DdManager *dd);
 extern DdNode * Cudd_addNewVarAtLevel (DdManager *dd, int level);
 extern DdNode * Cudd_bddNewVar (DdManager *dd);
 extern DdNode * Cudd_bddNewVarAtLevel (DdManager *dd, int level);
+extern int Cudd_bddIsVar(DdManager * dd, DdNode * f);
 extern DdNode * Cudd_addIthVar (DdManager *dd, int i);
 extern DdNode * Cudd_bddIthVar (DdManager *dd, int i);
 extern DdNode * Cudd_zddIthVar (DdManager *dd, int i);

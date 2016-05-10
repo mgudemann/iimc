@@ -573,6 +573,14 @@ BDD::IsZero() const
 } // BDD::IsZero
 
 
+bool
+BDD::IsVar() const
+{
+    return Cudd_bddIsVar(p->manager, node);
+
+} // BDD::IsVar
+
+
 // ---------------------------------------------------------------------------
 // Members of class ADD
 // ---------------------------------------------------------------------------
@@ -2744,7 +2752,7 @@ Cudd::Walsh(
   vector<ADD> x,
   vector<ADD> y)
 {
-    int n = x.size();
+  int n = (int) x.size();
     DdNode **X = new DdNode *[n];
     DdNode **Y = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -2957,7 +2965,7 @@ ABDD::EpdPrintMinterm(
     EpdGetString(&count, str);
     fprintf(fp, "%s\n", str);
 
-} // ABDD::ApaPrintMinterm
+} // ABDD::EpdPrintMinterm
 
 
 BDD
@@ -3480,7 +3488,7 @@ ADD::SwapVariables(
   vector<ADD> x,
   vector<ADD> y) const
 {
-    int n = x.size();
+  int n = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[n];
     DdNode **Y = new DdNode *[n];
@@ -3514,7 +3522,7 @@ BDD::SwapVariables(
   std::vector<BDD> x,
   std::vector<BDD> y) const
 {
-    int n = x.size();
+  int n = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[n];
     DdNode **Y = new DdNode *[n];
@@ -3535,7 +3543,7 @@ BDD
 BDD::AdjPermuteX(
   vector<BDD> x) const
 {
-    int n = x.size();
+  int n = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -3800,7 +3808,7 @@ Cudd::DumpBlif(
   int mv) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3820,7 +3828,7 @@ Cudd::DumpDot(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3840,7 +3848,7 @@ Cudd::DumpDot(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3860,7 +3868,7 @@ Cudd::DumpDaVinci(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3880,7 +3888,7 @@ Cudd::DumpDaVinci(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3900,7 +3908,7 @@ Cudd::DumpDDcal(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -3920,7 +3928,7 @@ Cudd::DumpFactoredForm(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i ++) {
 	F[i] = nodes[i].getNode();
@@ -4166,7 +4174,7 @@ ADD::MatrixMultiply(
   const ADD& B,
   vector<ADD> z) const
 {
-    int nz = z.size();
+  int nz = (int) z.size();
     DdManager *mgr = checkSameManager(B);
     DdNode **Z = new DdNode *[nz];
     for (int i = 0; i < nz; i++) {
@@ -4185,7 +4193,7 @@ ADD::TimesPlus(
   const ADD& B,
   vector<ADD> z) const
 {
-    int nz = z.size();
+  int nz = (int) z.size();
     DdManager *mgr = checkSameManager(B);
     DdNode **Z = new DdNode *[nz];
     for (int i = 0; i < nz; i++) {
@@ -4204,7 +4212,7 @@ ADD::Triangle(
   const ADD& g,
   vector<ADD> z) const
 {
-    int nz = z.size();
+  int nz = (int) z.size();
     DdManager *mgr = checkSameManager(g);
     DdNode **Z = new DdNode *[nz];
     for (int i = 0; i < nz; i++) {
@@ -4226,7 +4234,7 @@ BDD::PrioritySelect(
   const BDD& Pi,
   DD_PRFP Pifunc) const
 {
-    int n = x.size();
+  int n = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[n];
     DdNode **Y = new DdNode *[n];
@@ -4252,7 +4260,7 @@ Cudd::Xgty(
   vector<BDD> x,
   vector<BDD> y)
 {
-    int N = z.size();
+  int N = (int) z.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4277,7 +4285,7 @@ Cudd::Xeqy(
   vector<BDD> x,
   vector<BDD> y)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4299,7 +4307,7 @@ Cudd::Xeqy(
   vector<ADD> x,
   vector<ADD> y)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4322,7 +4330,7 @@ Cudd::Dxygtdxz(
   vector<BDD> y,
   vector<BDD> z)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4348,7 +4356,7 @@ Cudd::Dxygtdyz(
   vector<BDD> y,
   vector<BDD> z)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4374,7 +4382,7 @@ Cudd::Inequality(
   vector<BDD> x,
   vector<BDD> y)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4397,7 +4405,7 @@ Cudd::Disequality(
   vector<BDD> x,
   vector<BDD> y)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     DdNode **Y = new DdNode *[N];
@@ -4420,7 +4428,7 @@ Cudd::Interval(
   unsigned int lowerB,
   unsigned int upperB)
 {
-    int N = x.size();
+  int N = (int) x.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[N];
     for (int i = 0; i < N; i++) {
@@ -4463,7 +4471,7 @@ Cudd::Hamming(
   vector<ADD> xVars,
   vector<ADD> yVars)
 {
-    int nVars = xVars.size();
+  int nVars = (int) xVars.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[nVars];
     DdNode **Y = new DdNode *[nVars];
@@ -4726,7 +4734,7 @@ ABDD::CofMinterm() const
 BDD
 BDD::SolveEqn(
   const BDD& Y,
-  BDD* G,
+  vector<BDD> & G,
   int ** yIndex,
   int n) const
 {
@@ -4735,7 +4743,7 @@ BDD::SolveEqn(
     DdNode *result = Cudd_SolveEqn(mgr, node, Y.node, g, yIndex, n);
     checkReturnValue(result);
     for (int i = 0; i < n; i++) {
-	G[i] = BDD(p, g[i]);
+        G.push_back(BDD(p, g[i]));
 	Cudd_RecursiveDeref(mgr,g[i]);
     }
     delete [] g;
@@ -4746,10 +4754,10 @@ BDD::SolveEqn(
 
 BDD
 BDD::VerifySol(
-  BDD* G,
-  int * yIndex,
-  int n) const
+  vector<BDD> const & G,
+  int * yIndex) const
 {
+    int n = G.size();
     DdManager *mgr = p->manager;
     DdNode **g = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -4768,7 +4776,7 @@ BDD::SplitSet(
   vector<BDD> xVars,
   double m) const
 {
-    int n = xVars.size();
+  int n = (int) xVars.size();
     DdManager *mgr = p->manager;
     DdNode **X = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -4949,7 +4957,7 @@ Cudd::SharingSize(
     for (vector<BDD>::size_type i = 0; i != n; ++i) {
 	nodeArray[i] = v[i].getNode();
     }
-    int result = Cudd_SharingSize(nodeArray, n);
+    int result = Cudd_SharingSize(nodeArray, (int) n);
     delete [] nodeArray;
     checkReturnValue(n == 0 || result > 0);
     return result;
@@ -5004,7 +5012,7 @@ ABDD::SupportSize() const
 BDD
 Cudd::VectorSupport(const vector<BDD>& roots) const
 {
-    int n = roots.size();
+  int n = (int) roots.size();
     DdManager *mgr = p->manager;
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5034,10 +5042,31 @@ ABDD::SupportIndices() const
 
 
 vector<unsigned int>
-Cudd::SupportIndices(const vector<ABDD>& roots) const
+Cudd::SupportIndices(const vector<BDD>& roots) const
 {
     unsigned int *support;
-    int n = roots.size();
+    int n = (int) roots.size();
+    DdManager *mgr = p->manager;
+    DdNode **F = new DdNode *[n];
+    for (int i = 0; i < n; i++) {
+	F[i] = roots[i].getNode();
+    }
+    int size = Cudd_VectorSupportIndices(mgr, F, n, (int **)&support);
+    delete [] F;
+    checkReturnValue(size >= 0);
+    // size could be 0, in which case support is 0 too!
+    vector<unsigned int> indices(support, support+size);
+    if (support) free(support);
+    return indices;
+
+} // Cudd::SupportIndices
+
+
+vector<unsigned int>
+Cudd::SupportIndices(const vector<ADD>& roots) const
+{
+    unsigned int *support;
+    int n = (int) roots.size();
     DdManager *mgr = p->manager;
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5057,7 +5086,7 @@ Cudd::SupportIndices(const vector<ABDD>& roots) const
 int
 Cudd::nodeCount(const vector<BDD>& roots) const
 {
-    int n = roots.size();
+  int n = (int) roots.size();
     DdNode **nodeArray = new DdNode *[n];
     for (int i = 0; i < n; i++) {
 	nodeArray[i] = roots[i].getNode();
@@ -5073,7 +5102,7 @@ Cudd::nodeCount(const vector<BDD>& roots) const
 BDD
 Cudd::VectorSupport(const vector<ADD>& roots) const
 {
-    int n = roots.size();
+  int n = (int) roots.size();
     DdManager *mgr = p->manager;
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5090,7 +5119,7 @@ Cudd::VectorSupport(const vector<ADD>& roots) const
 int
 Cudd::VectorSupportSize(const vector<BDD>& roots) const
 {
-    int n = roots.size();
+  int n = (int) roots.size();
     DdManager *mgr = p->manager;
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5107,7 +5136,7 @@ Cudd::VectorSupportSize(const vector<BDD>& roots) const
 int
 Cudd::VectorSupportSize(const vector<ADD>& roots) const
 {
-    int n = roots.size();
+  int n = (int) roots.size();
     DdManager *mgr = p->manager;
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5162,7 +5191,7 @@ BDD
 BDD::PickOneMinterm(
   vector<BDD> vars) const
 {
-    int n = vars.size();
+  int n = (int) vars.size();
     DdManager *mgr = p->manager;
     DdNode **V = new DdNode *[n];
     for (int i = 0; i < n; i++) {
@@ -5687,7 +5716,7 @@ Cudd::DumpDot(
   FILE * fp) const
 {
     DdManager *mgr = p->manager;
-    int n = nodes.size();
+    int n = (int) nodes.size();
     DdNode **F = new DdNode *[n];
     for (int i = 0; i < n; i++) {
 	F[i] = nodes[i].getNode();

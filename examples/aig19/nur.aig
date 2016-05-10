@@ -1,0 +1,29 @@
+aig 45 0 10 0 35 0 0 1
+43
+49
+55
+61
+67
+73
+79
+85
+91
+21
+1
+1
+
+#!	!$),14	9<ADl0 state<9>
+l1 state<8>
+l2 state<7>
+l3 state<6>
+l4 state<5>
+l5 state<4>
+l6 state<3>
+l7 state<2>
+l8 state<1>
+l9 state<0>
+j0 fair0
+c
+bliftoaig
+1.9
+nur.blif

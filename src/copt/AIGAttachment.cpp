@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -145,6 +145,7 @@ void AIGAttachment::AIG2Expr()
   assert(badFns.size() == bad.size());
 
   const std::vector<NodeRef>& constraintFns = aig.constraintFnRefs();
+  const std::vector<ID>& constraints = eat->constraints();
 
   const std::vector< std::vector<NodeRef> >& justiceFnSets = aig.justiceFnSetRefs();
   const std::vector<ID>& justice = eat->justice();
@@ -195,7 +196,7 @@ void AIGAttachment::AIG2Expr()
       //Recursively build an ID for this next state function
       ID fid = IDOf(constraintFns[i], *v, newId2ref, newRef2id);
       //Add constraint
-      eat->addConstraint(fid);
+      eat->addConstraint(constraints[i],fid);
     }
     for (unsigned i = 0; i < justiceFnSets.size(); ++i) {
       std::vector<ID> just;
@@ -244,6 +245,8 @@ void AIGAttachment::buildAIG(Model &model)
       switch (v.op(id)) {
       case Expr::Var: {
         //All variables must already be there
+        if (_id2ref.find(id) == _id2ref.end())
+          std::cout << Expr::stringOf(v, id) << std::endl;
         assert(_id2ref.find(id) != _id2ref.end());
         break; }
       case Expr::Not: {
@@ -253,6 +256,7 @@ void AIGAttachment::buildAIG(Model &model)
         _ref2id.insert(RefIDMap::value_type(invert(ref), id));
         break; }
       case Expr::And: {
+        assert(n == 2);
         NodeRef args[2];
         assert(_id2ref.find(idArgs[0]) != _id2ref.end());
         args[0] = _id2ref.find(idArgs[0])->second;
@@ -265,7 +269,20 @@ void AIGAttachment::buildAIG(Model &model)
         break; }
       case Expr::True:
         break;
+      case Expr::Or: {
+        assert(n == 2);
+        NodeRef args[2];
+        assert(_id2ref.find(idArgs[0]) != _id2ref.end());
+        args[0] = _id2ref.find(idArgs[0])->second;
+        assert(_id2ref.find(idArgs[1]) != _id2ref.end());
+        args[1] = _id2ref.find(idArgs[1])->second;
+        NodeIndex index = _aig.addNode(invert(args[0]), invert(args[1]));
+        NodeRef ref = refOf(index, false);
+        _id2ref.insert(IDRefMap::value_type(id, invert(ref)));
+        _ref2id.insert(RefIDMap::value_type(invert(ref), id));
+        break; }
       default:
+        assert(false);
         break;
       }
       return id;
@@ -278,7 +295,7 @@ void AIGAttachment::buildAIG(Model &model)
 
   id2ref.clear();
   ref2id.clear();
-  AIG newAig;
+  aig.clear();
   
   Expr::Manager::View *v = model.newView();
 
@@ -293,29 +310,29 @@ void AIGAttachment::buildAIG(Model &model)
   const std::vector<ID>& inputs = eat->inputs();
   //Add all inputs to the AIG
   for(unsigned i = 0; i < inputs.size(); ++i) {
-    NodeIndex index = newAig.addNode();
+    NodeIndex index = aig.addNode();
     NodeRef ref = refOf(index, false);
     id2ref.insert(IDRefMap::value_type(inputs[i], ref));
     ref2id.insert(RefIDMap::value_type(ref, inputs[i]));
   }
   //Set the number of inputs in the AIG
-  newAig.numInputs() = inputs.size();
+  aig.numInputs() = inputs.size();
 
   const std::vector<ID>& stateVars = eat->stateVars();
   //Add all state variables to the AIG
   for(unsigned i = 0; i < stateVars.size(); ++i) {
-    NodeIndex index = newAig.addNode();
+    NodeIndex index = aig.addNode();
     NodeRef ref = refOf(index, false);
     id2ref.insert(IDRefMap::value_type(stateVars[i], ref));
     ref2id.insert(RefIDMap::value_type(ref, stateVars[i]));
   }
   //Set the number of state variables in the AIG
-  newAig.numStateVars() = stateVars.size();
+  aig.numStateVars() = stateVars.size();
 
   const std::vector<ID>& nextStateFns = eat->nextStateFns();
   const std::vector<ID>& outputFns = eat->outputFns();
   const std::vector<ID>& badFns = eat->badFns();
-  const std::vector<ID>& constraintFns = eat->constraints();
+  const std::vector<ID>& constraintFns = eat->constraintFns();
   const std::vector< std::vector<ID> >& justiceFnSets = eat->justiceSets();
   const std::vector<ID>& fairnessFns = eat->fairnessFns();
 
@@ -328,52 +345,50 @@ void AIGAttachment::buildAIG(Model &model)
     ids.insert(ids.end(), justiceFnSets[i].begin(), justiceFnSets[i].end());
   ids.insert(ids.end(), fairnessFns.begin(), fairnessFns.end());
 
-  TopologyFolder folder(*v, newAig, id2ref, ref2id);
+  TopologyFolder folder(*v, aig, id2ref, ref2id);
   v->fold(folder, ids);
 
   for(unsigned i = 0; i < nextStateFns.size(); ++i) {
     assert(id2ref.find(nextStateFns[i]) != id2ref.end());
-    newAig.nextStateFnRefs().push_back(id2ref[nextStateFns[i]]);
-    assert(ref2id[newAig.nextStateFnRefs().back()] == nextStateFns[i]);
+    aig.nextStateFnRefs().push_back(id2ref[nextStateFns[i]]);
+    assert(ref2id[aig.nextStateFnRefs().back()] == nextStateFns[i]);
   }
-  assert(newAig.numStateVars() == newAig.nextStateFnRefs().size());
+  assert(aig.numStateVars() == aig.nextStateFnRefs().size());
 
   for(unsigned i = 0; i < outputFns.size(); ++i) {
     if(id2ref.find(outputFns[i]) != id2ref.end()) {
-      newAig.outputFnRefs().push_back(id2ref[outputFns[i]]);
-      assert(ref2id[newAig.outputFnRefs().back()] == outputFns[i]);
+      aig.outputFnRefs().push_back(id2ref[outputFns[i]]);
+      assert(ref2id[aig.outputFnRefs().back()] == outputFns[i]);
     }
   }
 
   //Add properties/constraints
   for(unsigned i = 0; i < badFns.size(); ++i) {
     if(id2ref.find(badFns[i]) != id2ref.end()) {
-      newAig.badFnRefs().push_back(id2ref[badFns[i]]);
-      assert(ref2id[newAig.badFnRefs().back()] == badFns[i]);
+      aig.badFnRefs().push_back(id2ref[badFns[i]]);
+      assert(ref2id[aig.badFnRefs().back()] == badFns[i]);
     }
   }
   for(unsigned i = 0; i < constraintFns.size(); ++i) {
     assert(id2ref.find(constraintFns[i]) != id2ref.end());
-    newAig.constraintFnRefs().push_back(id2ref[constraintFns[i]]);
-    assert(ref2id[newAig.constraintFnRefs().back()] == constraintFns[i]);
+    aig.constraintFnRefs().push_back(id2ref[constraintFns[i]]);
+    assert(ref2id[aig.constraintFnRefs().back()] == constraintFns[i]);
   }
   for(unsigned i = 0; i < justiceFnSets.size(); ++i) {
-    newAig.justiceFnSetRefs().push_back(std::vector<NodeRef>());
+    aig.justiceFnSetRefs().push_back(std::vector<NodeRef>());
     for(unsigned j = 0; j < justiceFnSets[i].size(); ++j) {
       if(id2ref.find(justiceFnSets[i][j]) != id2ref.end()) {
-        newAig.justiceFnSetRefs()[i].push_back(id2ref[justiceFnSets[i][j]]);
-        assert(ref2id[newAig.justiceFnSetRefs()[i].back()] == justiceFnSets[i][j]);
+        aig.justiceFnSetRefs()[i].push_back(id2ref[justiceFnSets[i][j]]);
+        assert(ref2id[aig.justiceFnSetRefs()[i].back()] == justiceFnSets[i][j]);
       }
     }
   }
   for(unsigned i = 0; i < fairnessFns.size(); ++i) {
     if(id2ref.find(fairnessFns[i]) != id2ref.end()) {
-      newAig.fairnessFnRefs().push_back(id2ref[fairnessFns[i]]);
-      assert(ref2id[newAig.fairnessFnRefs().back()] == fairnessFns[i]);
+      aig.fairnessFnRefs().push_back(id2ref[fairnessFns[i]]);
+      assert(ref2id[aig.fairnessFnRefs().back()] == fairnessFns[i]);
     }
   }
-
-  aig = newAig;
 
   delete v;
   model.constRelease(eat);

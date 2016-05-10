@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -49,7 +49,8 @@ class RchAttachment : public Model::Attachment {
 public:
   RchAttachment(Model& model) : 
     Model::Attachment(model), _view(_model.newView()), _cex_lb(0),
-    _fw_steps_bdd(0), _bw_steps_bdd(0) {
+    _has_tv_info(false), _fw_steps_bdd(0), _bw_steps_bdd(0),
+    _fw_bdd_complete(false), _bw_bdd_complete(false) {
     ExprAttachment::Factory f;
     requires(Key::EXPR, &f);
   }
@@ -62,10 +63,17 @@ public:
     _bw_lb(from._bw_lb),
     _bw_ub(from._bw_ub),
     _cex_lb(from._cex_lb),
+    _has_tv_info(from._has_tv_info),
+    _stem_length(from._stem_length),
+    _loop_length(from._loop_length),
+    _stabilized(from._stabilized),
+    _widened(from._widened),
     _fw_lb_bdd(from._fw_lb_bdd),
     _bw_lb_bdd(from._bw_lb_bdd),
     _fw_steps_bdd(from._fw_steps_bdd),
-    _bw_steps_bdd(from._bw_steps_bdd) {
+    _bw_steps_bdd(from._bw_steps_bdd),
+    _fw_bdd_complete(from._fw_bdd_complete),
+    _bw_bdd_complete(from._bw_bdd_complete) {
   }
   RchAttachment& operator=(RchAttachment& rhs) {
     if (&rhs != this) {
@@ -79,10 +87,17 @@ public:
       _bw_lb = rhs._bw_lb;
       _bw_ub = rhs._bw_ub;
       _cex_lb = rhs._cex_lb;
+      _has_tv_info = rhs._has_tv_info;
+      _stem_length = rhs._stem_length;
+      _loop_length = rhs._loop_length;
+      _stabilized = rhs._stabilized;
+      _widened = rhs._widened;
       _fw_lb_bdd = rhs._fw_lb_bdd;
       _bw_lb_bdd = rhs._bw_lb_bdd;
       _fw_steps_bdd = rhs._fw_steps_bdd;
       _bw_steps_bdd = rhs._bw_steps_bdd;
+      _fw_bdd_complete = rhs._fw_bdd_complete;
+      _bw_bdd_complete = rhs._bw_bdd_complete;
     }
     return *this;
   }
@@ -119,6 +134,15 @@ public:
   unsigned int cexLowerBound() const { return _cex_lb; }
   unsigned int updateCexLowerBound(unsigned int newLb);
 
+  /** From ternary simulation. */
+  bool hasTvInfo() const { return _has_tv_info; }
+  unsigned int stemLength() const { return _stem_length; }
+  unsigned int loopLength() const { return _loop_length; }
+  unsigned int stabilized() const { return _stabilized; }
+  bool widened() const { return _widened; }
+  void setTvInfo(unsigned int stem, unsigned int loop,
+                 unsigned int stable, bool widened);
+
   /** Accessors for BDD-based bounds. */
   BDD forwardBddLowerBound() const { return _fw_lb_bdd; }
   void setForwardBddLowerBound(BDD newFwLb);
@@ -154,6 +178,14 @@ public:
   int backwardStepsBdd() const { return _bw_steps_bdd; }
   void setForwardStepsBdd(int steps) { _fw_steps_bdd = steps; }
   void setBackwardStepsBdd(int steps) { _bw_steps_bdd = steps; }
+  bool isBddForwardComplete(void) const { return _fw_bdd_complete; }
+  bool isBddBackwardComplete(void) const { return _bw_bdd_complete; }
+  void setBddForwardComplete(bool complete) { _fw_bdd_complete = complete; }
+  void setBddBackwardComplete(bool complete) { _bw_bdd_complete = complete; }
+  std::vector<BDD> const & forwardRings(void) const { return _forward_rings; }
+  std::vector<BDD> const & backwardRings(void) const { return _backward_rings; }
+  void setForwardRings(std::vector<BDD> const & rings) { _forward_rings = rings; }
+  void setBackwardRings(std::vector<BDD> const & rings) { _backward_rings = rings; }
 
   class Factory : public Model::AttachmentFactory {
   public:
@@ -196,11 +228,21 @@ private:
   ID _bw_ub;
   // Lower bound on length of counterexample (if one exists).
   unsigned int _cex_lb;
+  // From ternary simulation.
+  bool _has_tv_info;
+  unsigned int _stem_length;
+  unsigned int _loop_length;
+  unsigned int _stabilized;
+  bool _widened;
   // Lower bounds.
   BDD _fw_lb_bdd;
   BDD _bw_lb_bdd;
   int _fw_steps_bdd;
   int _bw_steps_bdd;
+  bool _fw_bdd_complete;
+  bool _bw_bdd_complete;
+  std::vector<BDD> _forward_rings;
+  std::vector<BDD> _backward_rings;
 
   bool kUpperBound(unsigned int, std::vector< std::vector<ID> > &, const std::vector< std::vector< std::vector<ID> > > &) const;
   void setKUpperBound(unsigned int, const std::vector< std::vector<ID> > &, std::vector< std::vector< std::vector<ID> > > &);

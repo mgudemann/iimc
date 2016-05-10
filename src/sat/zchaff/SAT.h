@@ -252,7 +252,7 @@ void SAT_AddHookFun(SAT_Manager         mng,
 void SAT_Prefer(SAT_Manager         mng,
 		int                 v_idx,
 		int                 val);
-int SAT_UA(SAT_Manager mng, int * lids);
+int SAT_UA(SAT_Manager mng, std::vector<int> & lids);
 //AARON
 
 // /* =======================================================

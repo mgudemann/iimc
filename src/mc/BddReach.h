@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -71,6 +71,12 @@ public:
   virtual void exec();
 
   void doFwReachability(Model & model);
+private:
+  void printFwCex(BddTrAttachment const *tat,
+                  std::vector<BDD> const & frontiers,
+                  BDD badStates,
+                  Options::Verbosity verbosity);
+  static ActionRegistrar action;
 };
 
 
@@ -83,6 +89,8 @@ public:
   virtual void exec();
 
   void doBwReachability(Model & model);
+private:
+  static ActionRegistrar action;
 };
 
 #endif // _BddReach_

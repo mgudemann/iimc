@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -86,6 +86,7 @@ namespace Parser {
     if (!aiger_is_reencoded(aig))
       aiger_reencode(aig);
 
+    model.setName(fn);
     Expr::Manager::View * v = model.newView();
     ExprAttachment * eat = (ExprAttachment *) model.attachment(Key::EXPR);
     vector<ID> ids(1+aig->num_inputs+aig->num_latches+aig->num_outputs+aig->num_ands, 
@@ -123,8 +124,9 @@ namespace Parser {
     eat->addInitialConditions(init);
 
     for (size_t i = 0; i < aig->num_constraints; ++i) {
+      ID vnm = var(v, aig->constraints, i, 'c');
       ID cid = idOf(v, ids, aig->constraints[i].lit);
-      eat->addConstraint(cid);
+      eat->addConstraint(vnm, cid);
     }
     for (size_t i = 0; i < aig->num_outputs; ++i) {
       ID vnm = var(v, aig->outputs, i, 'o');

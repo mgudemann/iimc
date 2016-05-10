@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ExprAttachment.h"
 #include "Key.h"
 #include "Model.h"
+#include "options.h"
 #include "SeqAttachment.h"
 
 #include <set>
@@ -52,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
  */
 class COI {
 public:
+  typedef std::pair<std::vector<ID>::const_iterator,std::vector<ID>::const_iterator> range;
   typedef std::pair<ID, ID> IDp;
   typedef std::vector<IDp> IDpv;
 
@@ -65,28 +67,66 @@ public:
    * of pairs, each pair a latch and its function.  prop is the
    * property with respect to which the COI is being computed.
    */
-  COI(Expr::Manager::View & v, const IDpv & rltn, ID prop, Options::Verbosity vrb) { build(v, rltn, prop, vrb); }
+  COI(Expr::Manager::View & v, ExprAttachment * const eat, std::vector<ID> props, 
+      bool internal, Options::Verbosity vrb){ build(v, eat, props, internal, vrb); }
 
   /**
    * Returns the (converged or full) COI.
    */
-  std::set<ID> cCOI() const { return _kCOI.back(); }
+  range cCOI(bool internal=false) const { 
+    return kCOI(markers_.size(), internal);
+  }
 
   /**
    * Returns the stepwise COI that is k steps away from the property.
    */
-  std::set<ID> kCOI(unsigned int k) const {
-    if (k >= _kCOI.size())
-      return cCOI();
-    return _kCOI[k]; 
+  range kCOI(unsigned int k, bool internal=false) const {
+    std::vector<ID>::const_iterator begin;
+    std::vector<ID>::const_iterator end;
+    if (internal){
+      assert(!kCOIplusInt_.empty());
+      begin = kCOIplusInt_.cbegin();
+      if (k >= markersInt_.size())
+	end = kCOIplusInt_.cend();
+      else
+	end = kCOIplusInt_.cbegin() + markersInt_[k];
+    }
+    else{
+      begin = kCOI_.cbegin();
+      if (k >= markers_.size())
+	end = kCOI_.cend();
+      else
+	end = kCOI_.cbegin() + markers_[k];
+    }
+    return range(begin, end);
   }
 
-  unsigned int size() const { return _kCOI.size(); }
+  /*
+   *  Returns reference to modifiable kCOI vector.
+   */
+  std::vector<ID>* kCOIplusInt() {
+    return &kCOIplusInt_;
+  }
+
+
+  /**
+   * Returns the number of steps in the COI.
+   */
+  unsigned int size() const { return markers_.size(); }
+
+  /**
+   * Returns the number of latches in the COI.
+   */
+  std::vector<ID>::size_type count() const { return kCOI_.size(); }
+
+  void build(Expr::Manager::View & v, ExprAttachment * const eat, std::vector<ID> props, bool internal, Options::Verbosity vrb);
+
 
 private:
-  std::vector< std::set<ID> > _kCOI;
-
-  void build(Expr::Manager::View & v, const IDpv & rltn, ID prop, Options::Verbosity vrb);
+  std::vector<ID> kCOI_;
+  std::vector<ID> kCOIplusInt_; // internal nodes
+  std::vector<std::vector<ID>::size_type> markers_;
+  std::vector<std::vector<ID>::size_type> markersInt_;
 };
 
 class COIAttachment : public Model::Attachment {
@@ -131,6 +171,8 @@ public:
   }
 
   virtual void exec();
+private:
+  static ActionRegistrar action;
 };
 
 #endif

@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -48,13 +48,17 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "IC3.h"
 #include "Model.h"
 #include "MC.h"
+#include "options.h"
 #include "ProofAttachment.h"
 #include "RchAttachment.h"
 
 /** namespace of BMC */
 namespace BMC {
   struct BMCOptions {
-    BMCOptions() : timeout(-1), sim(false), useCOI(true), printCex(false), constraints(NULL), iictl(false), silent(false), proofProc(IC3::STRENGTHEN) {}
+    BMCOptions() : 
+      timeout(-1), sim(false), useCOI(false), printCex(false), 
+      constraints(NULL), iictl(false), silent(false), proofProc(IC3::STRENGTHEN),
+      am(NULL), ev(NULL) {}
     size_t lo;
     size_t * bound;
     int timeout;
@@ -69,11 +73,16 @@ namespace BMC {
     SAT::Clauses * iictl_clauses;
     bool silent;
     IC3::ProofProcType proofProc;
+    MC::AlternateModel * am;
+    Expr::Manager::View * ev;
   };
 
   // Procedure that performs BMC on the given model with the given bound.
-  MC::ReturnValue check(Model &model, const BMCOptions & opts, std::vector<Transition> * cexTrace = NULL,
-                        std::vector< std::vector<ID> > * proofCNF = NULL);
+  MC::ReturnValue check(Model &model, const BMCOptions & opts, 
+                        std::vector<Transition> * cexTrace = NULL,
+                        std::vector< std::vector<ID> > * proofCNF = NULL,
+                        SAT::Clauses * unrolling1 = NULL,
+                        SAT::Clauses * unrolling2 = NULL);
 
   // Defines the basic BMC tactic.
   class BMCAction : public Model::Action {
@@ -93,6 +102,8 @@ namespace BMC {
       requires(Key::AIG, &aaf);
     }
     virtual void exec();
+  private:
+    static ActionRegistrar action;
   };
 }
 

@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -41,6 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <boost/program_options.hpp>
 #include <unordered_map>
+#include <deque>
 
 #include "Key.h"
 #include "Expr.h"
@@ -68,22 +69,16 @@ public:
   /**
    * A constructor that creates its own new manager.
    */
-  Model(const boost::program_options::variables_map & opts, std::string name = "anonymous"):
+  Model(boost::program_options::variables_map & opts, std::string name = "anonymous"):
     _name(name), _options(opts), _manager(new Expr::Manager),
     _owns_manager(true) {
   }
   /**
    * A constructor that is passed someone else's manager.
    */
-  Model(Expr::Manager * mgr, const boost::program_options::variables_map & opts, std::string name = "anonymous"):
+  Model(Expr::Manager * mgr, boost::program_options::variables_map & opts, std::string name = "anonymous"):
     _name(name), _options(opts), _manager(mgr),_owns_manager(false) {
     assert(_manager != 0);
-  }
-  Model(std::string name = "anonymous"):
-    _name(name), 
-    _options(boost::program_options::variables_map()), 
-    _manager(new Expr::Manager),
-    _owns_manager(true) {
   }
 
   /**
@@ -93,7 +88,7 @@ public:
   Model(const Model& from): 
     _name(from._name), _options(from._options), _manager(from._manager),
     _owns_manager(false), _bdd_manager(from._bdd_manager),
-    verbosityLevel(from.verbosityLevel) {
+    _tactics(from._tactics), verbosityLevel(from.verbosityLevel) {
     cloneAttachments(from);
   }
   /**
@@ -106,6 +101,7 @@ public:
       _manager = rhs._manager;
       _owns_manager = false;
       _bdd_manager = rhs._bdd_manager;
+      _tactics = rhs._tactics;
       verbosityLevel = rhs.verbosityLevel;
       cloneAttachments(rhs);
     }
@@ -145,21 +141,33 @@ public:
 
   Expr::Manager* manager() const { return _manager; }
   const boost::program_options::variables_map & options() const { return _options; }
+  boost::program_options::variables_map & options() { return _options; }
+  void setOptionValue(const std::string & option, const boost::any & value);
+  void setOption(const std::string & option);
   void setVerbosity(Options::Verbosity l) { verbosityLevel = l; }
   Options::Verbosity verbosity() const { return verbosityLevel; }
   void setDefaultMode(Mode mode) { _defaultMode = mode; }
   Mode defaultMode() const { return _defaultMode; }
+  // Printout methods.
   std::string string(bool includeDetails = false) const;
   std::string dot(bool terse = true) const;
   std::string verilog() const;
   std::string blifMv() const;
-  void attach(Attachment* attachment);
+  void AIGER(std::string filename) const;
+  // Attachment map interface.
+  void attach(Attachment * attachment);
   void detach(Key::Type key);
-  void detach(Attachment* attachment);
-  Attachment* attachment(Key::Type key) const;
+  void detach(Attachment * attachment);
+  Attachment * attachment(Key::Type key) const;
   Attachment const * constAttachment(Key::Type key) const;
-  void release(Attachment* at) const;
+  void release(Attachment * at) const;
   void constRelease(Attachment const * at) const;
+  // Tactic queue interface.
+  void pushBackTactic(Action * tactic);
+  void pushFrontTactic(Action * tactic);
+  Action * popTactic();
+  void clearTactics();
+  // Timestamp management interface.
   static TS newTimestamp() { return ++_stamp; }
   static TS nextTimestamp() { _usedNextTS = true; return _stamp+1; }
   static void endEpoch() { 
@@ -175,13 +183,15 @@ private:
 
   /* Types */
   typedef std::unordered_map<Key::Type, Attachment*, KeyHash> at_map;
+  typedef std::deque<Action *> act_q;
 
   std::string _name;
-  const boost::program_options::variables_map &_options;
+  boost::program_options::variables_map & _options;
   Expr::Manager *_manager;
   bool _owns_manager;
   Cudd _bdd_manager;
   at_map _attachments;
+  act_q _tactics;
   static TS _stamp;
   static bool _usedNextTS;
   Options::Verbosity verbosityLevel;
@@ -264,11 +274,14 @@ public:
   virtual std::string dot(bool terse = true) const { return ""; }
   virtual std::string verilog() const { return ""; }
   virtual std::string blifMv() const { return ""; }
+  virtual void AIGER(std::string filename) const {}
 
-  void exec() { build(); }
+  void exec();
 
 protected:
   void make() { assert (false); }
 };
+
+std::ostream & operator<<(std::ostream & os, Model::Mode m);
 
 #endif // _Model_

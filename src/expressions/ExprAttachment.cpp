@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -44,12 +44,14 @@ using namespace std;
 ExprAttachment::ExprAttachment(const ExprAttachment& from) : 
   Model::Attachment(from),
   _inputs(from._inputs),
+  _aut_state_vars(from._aut_state_vars),
   _state_vars(from._state_vars),
   _next_state_fns(from._next_state_fns),
   _outputs(from._outputs),
   _output_fns(from._output_fns),
   _initial_cond(from._initial_cond),
   _constraints(from._constraints),
+  _constraint_fns(from._constraint_fns),
   _bad(from._bad),
   _bad_fns(from._bad_fns),
   _fairness(from._fairness),
@@ -72,12 +74,14 @@ ExprAttachment& ExprAttachment::operator=(ExprAttachment& rhs) {
     else
       _ts = Model::newTimestamp();
     _inputs = rhs._inputs;
+    _aut_state_vars = rhs._aut_state_vars;
     _state_vars = rhs._state_vars;
     _next_state_fns = rhs._next_state_fns;
     _outputs = rhs._outputs;
     _output_fns = rhs._output_fns;
     _initial_cond = rhs._initial_cond;
     _constraints = rhs._constraints;
+    _constraint_fns = rhs._constraint_fns;
     _bad = rhs._bad;
     _bad_fns = rhs._bad_fns;
     _fairness = rhs._fairness;
@@ -162,6 +166,30 @@ void ExprAttachment::clearInputs()
   _inputs.clear();
 }
 
+void ExprAttachment::addAutStateVar(const ID stateVarId)
+{
+  //Make sure state variable exists
+  const_m_iter iter = _state_var_to_fn.find(stateVarId);
+  assert(iter != _state_var_to_fn.end());
+  _aut_state_var_to_fn[stateVarId] = _aut_state_vars.size();
+  _aut_state_vars.push_back(stateVarId);
+}
+
+void ExprAttachment::addAutStateVars(const mod_vec& stateVarVec)
+{
+  _aut_state_vars.reserve(_aut_state_vars.size()+stateVarVec.size());
+  for (const_v_iter i = stateVarVec.begin(); i != stateVarVec.end(); ++i)
+    addAutStateVar(*i);
+}
+
+void ExprAttachment::clearAutStateVars()
+{
+  for (const_v_iter i = _aut_state_vars.begin(); i != _aut_state_vars.end(); ++i)
+    _aut_state_var_to_fn.erase(*i);
+  _aut_state_vars.clear();
+}
+
+
 void ExprAttachment::setNextStateFn(const ID varId, const ID fnId)
 {
   addOrUpdate(varId, fnId, _state_vars, _next_state_fns, _state_var_to_fn);
@@ -214,20 +242,22 @@ void ExprAttachment::clearInitialConditions()
   _initial_cond.clear();
 }
 
-void ExprAttachment::addConstraint(const ID constrId)
+void ExprAttachment::addConstraint(const ID constrId, const ID fnId)
 {
-  _constraints.push_back(constrId);
+  addOrUpdate(constrId, fnId, _constraints, _constraint_fns, _constraint_var_to_fn);
 }
 
-void ExprAttachment::addConstraints(const mod_vec& constrVec)
+void ExprAttachment::addConstraints(const mod_vec& constrVec, const mod_vec& fnVec)
 {
-  _constraints.reserve(_constraints.size()+constrVec.size());
-  _constraints.insert(_constraints.end(),constrVec.begin(),constrVec.end());
+  addOrUpdate(constrVec, fnVec, _constraints, _constraint_fns, _constraint_var_to_fn);
 }
 
 void ExprAttachment::clearConstraints()
 {
+  for (v_size i = 0; i != _constraints.size(); ++i)
+    _constraint_var_to_fn.erase(_constraints[i]);
   _constraints.clear();
+  _constraint_fns.clear();
 }
 
 void ExprAttachment::setBadFn(const ID varId, const ID fnId)
@@ -308,6 +338,19 @@ void ExprAttachment::clearCtlProperties()
   _ctl_properties.clear();
 }
 
+void ExprAttachment::addAutomaton(const Automaton& automaton) {
+  _automata.push_back(automaton);
+}
+
+void ExprAttachment::addAutomata(const vector<Automaton>& automata) {
+  _automata.reserve(_automata.size()+automata.size());
+  _automata.insert(_automata.end(),automata.begin(),automata.end());
+}
+
+void ExprAttachment::clearAutomata() {
+  _automata.clear();
+}
+
 ID ExprAttachment::nextStateFnOf(const ID varId) const
 {
   const_m_iter iter = _state_var_to_fn.find(varId);
@@ -350,6 +393,21 @@ vector<ID> ExprAttachment::badFnOf(const mod_vec& ids) const
   mod_vec fns;
   for (const_v_iter i = ids.begin(); i != ids.end(); ++i)
     fns.push_back(badFnOf(*i));
+  return fns;
+}
+
+ID ExprAttachment::constraintFnOf(const ID varId) const
+{
+  const_m_iter iter = _constraint_var_to_fn.find(varId);
+  assert(iter != _constraint_var_to_fn.end());
+  return _constraint_fns[iter->second];
+}
+
+vector<ID> ExprAttachment::constraintFnOf(const mod_vec& ids) const
+{
+  mod_vec fns;
+  for (const_v_iter i = ids.begin(); i != ids.end(); ++i)
+    fns.push_back(constraintFnOf(*i));
   return fns;
 }
 
@@ -436,7 +494,7 @@ void  ExprAttachment::keep(Expr::Manager::View *v) const
   v->keep(_output_fns);
   v->keep(_next_state_fns);
   v->keep(_initial_cond);
-  v->keep(_constraints);
+  v->keep(_constraint_fns);
   v->keep(_bad);
   v->keep(_bad_fns);
   v->keep(_fairness);
@@ -454,7 +512,7 @@ void  ExprAttachment::global(Expr::Manager::View *v)
   v->global(_output_fns);
   v->global(_next_state_fns);
   v->global(_initial_cond);
-  v->global(_constraints);
+  v->global(_constraint_fns);
   v->global(_bad);
   v->global(_bad_fns);
   v->global(_fairness);
@@ -478,8 +536,8 @@ void  ExprAttachment::global(Expr::Manager::View *v)
     _state_var_to_fn[_state_vars[i]] = i;
   for (v_size i = 0; i != _bad.size(); ++i)
     _bad_var_to_fn[_bad[i]] = i;
-  for (v_size i = 0; i != _constraints.size(); ++i)
-    _constraint_var_to_fn[_constraints[i]] = i;
+  for (v_size i = 0; i != _constraint_fns.size(); ++i)
+    _constraint_var_to_fn[_constraint_fns[i]] = i;
   for (v_size i = 0; i != _fairness.size(); ++i)
     _fairness_var_to_fn[_fairness[i]] = i;
   for (v_size i = 0; i != _justice.size(); ++i)
@@ -525,7 +583,7 @@ std::string ExprAttachment::string(bool includeDetails) const
     ret << Expr::stringOf(*v, *i, 1) << endl;
 
   ret << "Constraints:" << endl;
-  for (const_v_iter i = _constraints.begin(); i != _constraints.end(); ++i)
+  for (const_v_iter i = _constraint_fns.begin(); i != _constraint_fns.end(); ++i)
     ret << Expr::stringOf(*v, *i, 1) << endl;
 
   ret << "Bad:" << endl;
@@ -576,7 +634,7 @@ std::string ExprAttachment::dot(bool terse) const
   Expr::Manager::View * v = _model.newView();
   std::ostringstream dot;
   // Build graph header.
-  dot << "digraph " << _model.name() << " {" << endl 
+  dot << "digraph \"" << _model.name() << "\" {" << endl 
       << "edge [dir=none];" << endl;
   // Build the source subgraph with next state and output variables.
   dot << "{ rank=source;" << endl;
@@ -612,8 +670,8 @@ std::string ExprAttachment::circuitGraph(bool terse) const
   Expr::Manager::View * v = _model.newView();
   std::ostringstream dot;
   // Build graph header.
-  dot << "digraph " << _model.name() 
-      << " { orientation=landscape; rankdir=LR;\n" ;
+  dot << "digraph \"" << _model.name() 
+      << "\" { orientation=landscape; rankdir=LR;\n" ;
   // Build the source subgraph with the output variables.
   for (const_v_iter i = _outputs.begin(); i != _outputs.end(); ++i) {
     dot << *i << " [shape=box,label=\"" << Expr::stringOf(*v, *i) << "\"];\n";
@@ -621,7 +679,7 @@ std::string ExprAttachment::circuitGraph(bool terse) const
     Expr::Op nop = v->op(of);
     if (nop == Expr::Not) {
       ID nof = v->apply(Expr::Not, of);
-      dot << nof << " -> " << *i << " [style = dotted];\n";
+      dot << nof << " -> " << *i << " [style = dashed];\n";
     } else {
       dot << of << " -> " << *i << ";\n";
     }
@@ -636,7 +694,7 @@ std::string ExprAttachment::circuitGraph(bool terse) const
     Expr::Op nop = v->op(nsf);
     if (nop == Expr::Not) {
       ID nnsf = v->apply(Expr::Not, nsf);
-      dot << nnsf << " -> " << *i << " [style = dotted];\n";
+      dot << nnsf << " -> " << *i << " [style = dashed];\n";
     } else {
       dot << nsf << " -> " << *i << ";\n";
     }
@@ -682,7 +740,7 @@ std::string ExprAttachment::verilog() const
   if (hasClock) {
     for (const_v_iter i = _state_vars.begin(); i != _state_vars.end(); ++i) {
       ret << "  reg " << Expr::stringOf(*v, *i) << "; ";
-      // Only valid for AIGER!
+      // Only valid for AIGER 1.0!
       ret << "initial " << Expr::stringOf(*v, *i) << " = 0;\n";
     }
     for (v_size i = 0; i != _state_vars.size(); ++i) {
@@ -757,11 +815,11 @@ std::string ExprAttachment::blifMv() const
   for (const_v_iter i = _bad.begin(); i != _bad.end(); ++i) {
     ret << ".outputs " << Expr::stringOf(*v, *i) << "\n";
   }
-  if(!_constraints.empty())
+  if(!_constraint_fns.empty())
     ret << "#Invariant Constraints\n";
   //Constraints currently don't have names
-  for (unsigned index = 0; index < _constraints.size(); ++index) {
-    if(v->nprimes(_constraints[index]) == 0) {
+  for (unsigned index = 0; index < _constraint_fns.size(); ++index) {
+    if(v->nprimes(_constraint_fns[index]) == 0) {
       ret << ".outputs constraint_" << index << "\n";
     }
   }
@@ -796,7 +854,7 @@ std::string ExprAttachment::blifMv() const
 
   vector<ID> roots = _output_fns;
   roots.insert(roots.end(),_bad_fns.begin(),_bad_fns.end());
-  for(const_v_iter i = _constraints.begin(); i != _constraints.end(); ++i) {
+  for(const_v_iter i = _constraint_fns.begin(); i != _constraint_fns.end(); ++i) {
     vector<ID> conj;
     conjuncts(*v, *i, conj);
     roots.push_back(conj[0]);
@@ -826,9 +884,9 @@ std::string ExprAttachment::blifMv() const
     else
       ret << "0 1\n";
   }
-  for (v_size i = 0; i != _constraints.size(); ++i) {
+  for (v_size i = 0; i != _constraint_fns.size(); ++i) {
     vector<ID> conj;
-    conjuncts(*v, _constraints[i], conj);
+    conjuncts(*v, _constraint_fns[i], conj);
     ret << ".names ";
     bool phase = nameWithPhase(conj[0], v, ret);
     ret << " constraint_" << i << "\n.def 0\n";
@@ -864,6 +922,96 @@ std::string ExprAttachment::blifMv() const
   return ret.str();
 
 } // ExprAttachment::blifMv
+
+void ExprAttachment::AIGER(std::string filename) const
+{
+  Expr::Manager::View *v = _model.newView();
+  aiger * aig = aiger_init();
+
+  // Add I L O B C J F
+  for (const_v_iter i = _inputs.begin(); i != _inputs.end(); ++i)
+    aiger_add_input(aig, AIGERlit(*i), Expr::stringOf(*v, *i).c_str());
+
+  // Build map for latch resets.  This is based on AIGER 1.9
+  // and should be revised if the standard ever changes.
+  unordered_map<ID,bool> initLatch;
+  for (const_v_iter i = _initial_cond.begin(); i != _initial_cond.end(); ++i) {
+    Expr::Op iop = v->op(*i);
+    if (iop == Expr::Not)
+      initLatch[v->apply(Expr::Not, *i)] = false;
+    else
+      initLatch[*i] = true;
+  }
+  mod_vec next_state_fns = _next_state_fns;
+  Expr::AIGOfExprs(*v,next_state_fns);
+  mod_vec roots = next_state_fns;
+  for (v_size i = 0; i != _state_vars.size(); ++i) {
+    unsigned alit = AIGERlit(_state_vars[i]);
+    aiger_add_latch(aig, alit, AIGERlit(next_state_fns[i]),
+                    Expr::stringOf(*v, _state_vars[i]).c_str());
+    unordered_map<ID,bool>::const_iterator p = initLatch.find(_state_vars[i]);
+    if (p == initLatch.end()) {
+      // uninitialized latch
+      aiger_add_reset(aig, alit, alit);
+    } else if (p->second) {
+      // latch set to 1
+      aiger_add_reset(aig, alit, 1U);
+    }
+  }
+
+  mod_vec output_fns = _output_fns;
+  Expr::AIGOfExprs(*v,output_fns);
+  roots.insert(roots.end(), output_fns.begin(), output_fns.end());
+  for (v_size i = 0; i != _outputs.size(); ++i)
+    aiger_add_output(aig, AIGERlit(output_fns[i]), Expr::stringOf(*v, _outputs[i]).c_str());
+
+  mod_vec bad_fns = _bad_fns;
+  Expr::AIGOfExprs(*v,bad_fns);
+  roots.insert(roots.end(), bad_fns.begin(), bad_fns.end());
+  for (v_size i = 0; i != _bad.size(); ++i)
+    aiger_add_bad(aig, AIGERlit(bad_fns[i]), Expr::stringOf(*v, _bad[i]).c_str());
+
+  mod_vec constraintFns = _constraint_fns;
+  Expr::AIGOfExprs(*v,constraintFns);
+  roots.insert(roots.end(), constraintFns.begin(), constraintFns.end());
+  for (v_size i = 0; i != _constraints.size(); ++i)
+    aiger_add_constraint(aig, AIGERlit(constraintFns[i]), Expr::stringOf(*v, _constraints[i]).c_str());
+
+  for (vector<mod_vec>::size_type i = 0; i != _justice_fn_sets.size(); ++i) {
+    mod_vec justice_set = _justice_fn_sets[i];
+    Expr::AIGOfExprs(*v,justice_set);
+    roots.insert(roots.end(), justice_set.begin(), justice_set.end());
+    unsigned *a = new unsigned[justice_set.size()];
+    transform(justice_set.begin(), justice_set.end(), a, AIGERlit);
+    aiger_add_justice(aig, justice_set.size(), a, Expr::stringOf(*v, _justice[i]).c_str());
+    delete [] a;
+  }
+
+  mod_vec fairness_fns = _fairness_fns;
+  Expr::AIGOfExprs(*v,fairness_fns);
+  roots.insert(roots.end(), fairness_fns.begin(), fairness_fns.end());
+  for (v_size i = 0; i != fairness_fns.size(); ++i)
+    aiger_add_fairness(aig, AIGERlit(fairness_fns[i]), Expr::stringOf(*v, _fairness[i]).c_str());
+
+  // Add AND gates and closing comments.
+  AIGEROf(*v, roots, aig);
+  aiger_add_comment(aig, PACKAGE_STRING);
+  aiger_add_comment(aig, _model.name().c_str());
+  aiger_add_comment(aig, "AIGER " AIGER_VERSION);
+
+  // Check consistency and write file.
+  char const * msg = aiger_check(aig);
+  if (msg)
+    throw(runtime_error(msg));
+
+  if (!aiger_open_and_write_to_file(aig, filename.c_str())) {
+    std::string s("unable to write ");
+    s += filename;
+    throw(runtime_error(s.c_str()));
+  }
+  aiger_reset(aig);
+
+} // ExprAttachment::AIGER
 
 #include <cassert>
 #include <unordered_map>
@@ -918,6 +1066,9 @@ private:
 void ExprAttachment::info() const {
   Expr::Manager::View *v = _model.newView();
 
+  cout << "Inputs: " << _inputs.size() << " latches: " << _next_state_fns.size()
+       << " outputs: " << _output_fns.size() << endl;
+
   // compute the length of longest combinational path
   vector<ID> ids;
   ids.insert(ids.end(), _output_fns.begin(), _output_fns.end());
@@ -928,7 +1079,7 @@ void ExprAttachment::info() const {
   ExprInfoFolder f(*v, length, fanout);
   v->fold(f, ids);
 
-  int min_length = 10000000, max_length = 0;
+  int min_length = 2000000000, max_length = 0;
   for (unsigned i = 0; i < ids.size(); ++i) {
     if (min_length > length[ids[i]].first) min_length = length[ids[i]].first;
     if (max_length < length[ids[i]].second) max_length = length[ids[i]].second;
@@ -942,5 +1093,55 @@ void ExprAttachment::info() const {
       << ": " << length[_output_fns[i]].second << endl;
   }
 
+  int max_fanout = 0;
+  int min_fanout = 2000000000;
+  double total_fanout = 0.0;
+  for (unordered_map<ID, int>::const_iterator fit = fanout.begin();
+       fit != fanout.end(); ++fit) {
+    int this_fanout = fit->second;
+    total_fanout += (double) this_fanout;
+    if (this_fanout > max_fanout)
+      max_fanout = this_fanout;
+    if (this_fanout < min_fanout)
+      min_fanout = this_fanout;
+  }
+  cout << "Maximum/average/minimum fanout: " << max_fanout << "/" 
+       << (total_fanout / (double) fanout.size())
+       << "/" << min_fanout << endl;
+    
+  Options::Verbosity verbosity = _model.verbosity();
+  if (verbosity > Options::Verbose) {
+    // Print input fanout.
+    for (unsigned i = 0; i < _inputs.size(); ++i) {
+      cout << Expr::stringOf(*v, _inputs[i]) << " " << fanout[_inputs[i]] << endl;
+    }
+  }
+
   delete v;
 } // ExprAttachment::info
+
+void ExprAttachment::supportStateVars(Expr::Manager::View & v, ID id,
+                                     set<ID> & stateVars) const {
+  var_folder vf(v, _state_var_to_fn, stateVars);
+  v.fold(vf, id);
+}
+
+void ExprAttachment::supportStateVars(Expr::Manager::View & v, vector<ID> ids,
+                                      set<ID> & stateVars) const {
+  var_folder vf(v, _state_var_to_fn, stateVars);
+  v.fold(vf, ids);
+}
+
+
+void ExprAttachment::supportNodes(Expr::Manager::View & v, ID id,
+				  set<ID> & intNodes) const {
+  node_folder vf(v, intNodes);
+  v.fold(vf, id);
+}
+
+void ExprAttachment::supportNodes(Expr::Manager::View & v, vector<ID> ids,
+				     set<ID> & intNodes) const {
+  node_folder vf(v, intNodes);
+  v.fold(vf, ids);
+}
+

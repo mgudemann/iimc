@@ -1,8 +1,6 @@
-SUBDIRS = src/cudd src/sat/minisat
+SUBDIRS = src/cudd src/sat/minisat20 src/sat/minisat
 if ZCHAFF
 SUBDIRS += src/sat/zchaff
-else
-SUBDIRS += src/sat/minisat22 
 endif
 ACLOCAL_AMFLAGS = -I m4
 
@@ -22,7 +20,7 @@ dist-hook:
 	$(foreach i,$(DIST_SOURCES),sed -i -e '/^LICENSE/r $(top_srcdir)/LICENSE' -e '/^LICENSE/d' $(distdir)/$(i);)
 	rm -rf `find $(distdir)/examples -name .svn`
 
-LDADD = $(BOOST_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LIB) \
+LDADD = $(BOOST_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_REGEX_LIB)\
   src/cudd/libobj.a src/cudd/libcudd.a src/cudd/libepd.a \
   src/cudd/libmtr.a src/cudd/libst.a src/cudd/libutil.a
 
@@ -42,6 +40,7 @@ include $(top_srcdir)/src/sopt/sopt.make
 include $(top_srcdir)/src/truthtable/truthtable.make
 include $(top_srcdir)/src/cnf/cnf.make
 include $(top_srcdir)/src/properties/properties.make
+include $(top_srcdir)/src/automata/automata.make
 include $(top_srcdir)/src/mc/mc.make
 include $(top_srcdir)/src/main/main.make
 

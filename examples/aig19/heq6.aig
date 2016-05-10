@@ -1,0 +1,16 @@
+aig 6 1 4 1 1
+2
+3 1
+4
+6 1
+12
+i0 i0
+l0 l0
+l1 l1
+l2 l2
+l3 l3
+o0 o0
+c
+bliftoaig
+1.9
+heq6.blif

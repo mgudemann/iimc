@@ -49,13 +49,10 @@
 #  include <sys/types.h>
 #endif
 
-#if HAVE_VARARGS_H
-#  include <varargs.h>
-#endif
-
 #if STDC_HEADERS
 #  include <stdlib.h>
 #  include <string.h>
+#  include <stddef.h>
 #else
 #  ifdef HAVE_STRCHR
 char * strchr(const char *, int);

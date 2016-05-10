@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SAT.h"
 #include "Sim.h"
 #include "SimUtil.h"
+#include "ThreeValuedSimulation.h"
 #include "Util.h"
 
 #include <algorithm>
@@ -65,11 +66,14 @@ namespace {
 
   class Stats {
   public:
-    Stats() : level(0), cubeSizeBef(0), cubeSizeTACAS(0), cubeSizeIBM(0),
+    Stats() : level(0), cubeSizeBef(0), cubeSizeIBM(0),
               cubeSizeBrute(0), numLiftCubes(0), ibmLiftTime(0), 
               bruteLiftTime(0), numBruteIter(0),
               numMicCalls(0), numUpCalls(0), numDownCalls(0),
-              clauseSizeBef(0), clauseSizeAft(0), micTime(0) {
+              clauseSizeBef(0), clauseSizeAft(0), micTime(0),
+              numConsPW(0), numSuccPW(0), repeats(0), numSuccDown(0), numSuccDownWithJoin(0), numDownWithJoin(0),
+              numDownWithCtg(0), numSuccDownWithCtg(0)
+    {
       numPropQueries.push_back(0);
       numClauses.push_back(0);
       percentProp.push_back(0);
@@ -77,20 +81,34 @@ namespace {
       clauseDistAft.push_back(vector<uint64_t>());
       levInd.push_back(0);
       numGenCalls.push_back(0);
+      maxDlvl.push_back(1);
+      startTime = Util::get_user_cpu_time();
+      startSatCalls = SAT::Manager::satCount();
+      startSatTime = SAT::Manager::satTime();
     }
 
     void print() {
       const string ic3 = "IC3: ";
       cout << endl;
       cout << "============================ IC3 Statistics ============================" << endl;
+      int64_t elapsedTime = Util::get_user_cpu_time() - startTime;
+      int64_t satTime = SAT::Manager::satTime() - startSatTime;
+      cout << ic3 << "Total time = " << elapsedTime / 1000000.0 << "s"
+           << " (SAT time = " << satTime / 1000000.0 << "s = "
+           << 100.0 * satTime / double(elapsedTime) << "%)" << endl;
+      unsigned satCount = SAT::Manager::satCount() - startSatCalls;
+      cout << ic3 << "Number of SAT calls = " << satCount << endl;
+      cout << ic3 << "SAT calls per second = " << satCount * 1000000.0 / satTime << endl;
       cout << ic3 << "Final level reached = " << level << endl;
       for(unsigned i = 1; i < numPropQueries.size(); ++i) {
         cout << ic3 << "Number of property inductiveness queries at level "
              << i << " = " << numPropQueries[i] << endl;
       }
+      uint64_t totalClauses = 0;
       for(unsigned i = 1; i < numClauses.size(); ++i) {
         cout << ic3 << "Number of clauses derived at level " << i << " = "
              << numClauses[i] << endl;
+        totalClauses += numClauses[i];
       }
       assert(numPropQueries.size() == numClauses.size());
       for(unsigned i = 1; i < numPropQueries.size(); ++i) {
@@ -137,8 +155,6 @@ namespace {
 
       cout << ic3 << "Average size of CTI cubes before lifting = "
            << cubeSizeBef / (double) numLiftCubes << endl;
-      cout << ic3 << "Average size of CTI cubes after TACAS lifting = "
-           << cubeSizeTACAS / (double) numLiftCubes << endl;
       cout << ic3 << "Average size of CTI cubes after IBM lifting = "
            << cubeSizeIBM / (double) numLiftCubes << endl;
       cout << ic3 << "Average size of CTI cubes after brute-force lifting = "
@@ -149,13 +165,31 @@ namespace {
            << bruteLiftTime / 1000000.0 << "s" << endl;
       cout << ic3 << "Total number of brute-force lifting iterations = "
            << numBruteIter << endl;
+
+      cout << ic3 << "Total PW Cons = " << numConsPW << endl;
+      cout << ic3 << "Succ PW Cons = " << numSuccPW << endl;
+      cout << ic3 << "Repeated clauses = " << repeats << endl;
+
+      cout << "Total number of clauses = " << totalClauses << endl;
+      cout << ic3 << "Successful down calls = " << numSuccDown << " / " << numDownCalls
+           << " = " << 100.0 * numSuccDown / double(numDownCalls)
+           << "%, involved joining = " << numSuccDownWithJoin << " / " << numDownWithJoin
+           << " = " << 100.0 * numSuccDownWithJoin / double(numDownWithJoin)
+           << "%, involved CTG handling = " << numSuccDownWithCtg << " / " << numDownWithCtg
+           << " = " << 100.0 * numSuccDownWithCtg / double(numDownWithCtg) << "%"
+           << endl;
+      int maxMaxDlvl = 0;
+      for (unsigned i = 1; i < maxDlvl.size(); ++i) {
+        cout << ic3 << "Maximum dlvl at level " << i << " = " << maxDlvl[i] << endl;
+        maxMaxDlvl = max(maxMaxDlvl, maxDlvl[i]);
+      }
+      cout << ic3 << "Absolute maximum dlvl = " << maxMaxDlvl << endl;
     }
 
     int level;                          //Final level reached
     vector<uint64_t> numPropQueries;    //Number of property inductiveness queries for each level
     vector<uint64_t> numClauses;        //Number of clauses derived at each level
     uint64_t cubeSizeBef;               //Sum of CTI cube sizes before lifting
-    uint64_t cubeSizeTACAS;             //Sum of CTI cube sizes after TACAS lifting
     uint64_t cubeSizeIBM;               //Sum of CTI cube sizes after IBM lifting
     uint64_t cubeSizeBrute;             //Sum of CTI cube sizes after brute-force lifting
     uint64_t numLiftCubes;              //Number of cubes on which lifting was applied
@@ -164,6 +198,7 @@ namespace {
     uint64_t numBruteIter;              //Total number of brute-force iterations
     vector<uint64_t> numGenCalls;       //Number of calls to generalize() on a property CTI
     vector<uint64_t> levInd;            //Sum of levels at which a clause (the negation of a property CTI) is found to be inductive
+    vector<int> maxDlvl;
     uint64_t numMicCalls;               //Total number of calls to MIC
     uint64_t numUpCalls;                //Total number of calls to UP
     uint64_t numDownCalls;              //Total number of calls to DOWN
@@ -173,6 +208,18 @@ namespace {
     vector<double> percentProp;         //Average percentage of clauses propagated for each level
     vector< vector<uint64_t> > clauseDistBef; //The distribution of clauses among the different levels before clause propagation
     vector< vector<uint64_t> > clauseDistAft; //The distribution of clauses among the different levels after clause propagation
+
+    uint64_t numConsPW;
+    uint64_t numSuccPW;
+    uint64_t repeats;
+    uint64_t numSuccDown;
+    uint64_t numSuccDownWithJoin;
+    uint64_t numDownWithJoin;
+    uint64_t numDownWithCtg;
+    uint64_t numSuccDownWithCtg;
+    int64_t startTime;
+    unsigned startSatCalls;
+    uint64_t startSatTime;
   };
 
   typedef vector< set<ID> > Partition;
@@ -204,7 +251,8 @@ namespace {
       m(_m), opts(_opts), nThreads(1), reverse(false),
       simpleInit(true), bddInit(true), bddTarget(true), 
       TESteps(0), rat(NULL), up_threshold(25), 
-      init(NULL), cons(NULL), icons(NULL), lift(NULL), fae(NULL)
+      init(NULL), cons(NULL), icons(NULL), lift(NULL), fae(NULL),
+      stem(NULL), stem_plus(NULL), ev(NULL)
     {
       cons = m.newSATManager();
       if(_cubes)
@@ -266,23 +314,37 @@ namespace {
 
     vector< vector<ID> > base_constraints;
 
+    vector< vector<ID> > abs_tr;
+    vector< vector<ID> > abs_ptr;
+    ID abs_er;
+
+    SAT::Clauses * stem;
+    SAT::Clauses * stem_plus;
+
     Stats stats;
 
+    Expr::Manager::View * ev;
+
+    //For lifting
+    ID actPp;
+    ID actNegCp;
+    ID actNegG;
+    ID actNegTp;
   };
 
   class State {
   public:
     State(SharedState & sst) : 
-      ss(sst), m(sst.m), opts(sst.opts), _ev(sst.m.newView()), ev(*_ev), cubes(sst.cubes), infCubes(sst.infCubes), propClauses(sst.propClauses), id(0), 
+      ss(sst), m(sst.m), opts(sst.opts), _ev(sst.ev ? sst.ev : sst.m.newView()), ev(*_ev), cubes(sst.cubes), infCubes(sst.infCubes), propClauses(sst.propClauses), id(0), 
       init(NULL), cons(NULL), icons(NULL), lift(NULL), fae(NULL),  faeLits(sst.faeLits)
     {
-      init = sst.init ? sst.init->newView(ev) : NULL;
-      cons = sst.cons->newView(ev);
+      init = sst.init ? sst.init->newView(ev, opts.backend) : NULL;
+      cons = sst.cons->newView(ev, opts.backend);
       if (opts.timeout > 0)
         cons->timeout(opts.timeout);
     }
     ~State() {
-      delete _ev;
+      if (!ss.ev) delete _ev;
       if (init) delete init;
       delete cons;
       if (lift) delete lift;
@@ -318,6 +380,8 @@ namespace {
     SAT::Manager::View * lift;
     SAT::Manager::View * fae;
     vector<ID> & faeLits;
+
+    set<ID> avars;
   };
 
   class ProofPostProcState {
@@ -351,12 +415,14 @@ namespace {
     IC3Options opts;
   };
 
+  void _printVector(Expr::Manager::View & ev, const vector<ID> & c) {
+    for (vector<ID>::const_iterator it = c.begin(); it != c.end(); it++)
+      cout << " " << Expr::stringOf(ev, *it);
+    cout << endl;
+  }
   void printVector(State & st, const vector<ID> & c) {
-    if (st.m.verbosity() > Options::Informative) {
-      for (vector<ID>::const_iterator it = c.begin(); it != c.end(); it++)
-        cout << " " << Expr::stringOf(st.ev, *it);
-      cout << endl;
-    }
+    if (st.m.verbosity() > Options::Informative)
+      _printVector(st.ev, c);
   }
 
   class SubsumptionUniverse {
@@ -575,6 +641,8 @@ namespace {
   void randomVars(SharedState & ss, Expr::Manager::View & ev, 
                   const vector<ID> & latches, const vector<ID> & fns)
   {
+    if (ss.opts.abstract > 0 && ss.opts.abstract < 3) return;
+
     class cnt_folder : public Expr::Manager::View::Folder {
     public:
       cnt_folder(Expr::Manager::View & v, VMap & vmap) : 
@@ -624,7 +692,38 @@ namespace {
       //if (v != ev.btrue()) cout << endl;
     }
     ss.nrvars = nrvars;
-    if (ss.m.verbosity() > Options::Informative)
+
+#if 0
+    set<ID> tcvars, cvars;
+    if (ss.opts.constraints)
+      for (unsigned i = 0; i < ss.opts.constraints->size(); ++i)      
+        for (SAT::Clauses::const_iterator j = (*ss.opts.constraints)[i].begin();
+             j != (*ss.opts.constraints)[i].end(); ++j)
+          for (vector<ID>::const_iterator jj = j->begin(); jj != j->end(); ++jj) {
+            ID v = ev.op(*jj) == Expr::Not ? ev.apply(Expr::Not, *jj) : *jj;
+            v = ev.primeTo(v, 0);
+            tcvars.insert(v);
+          }
+    ExprAttachment const * eat = (ExprAttachment *) ss.m.constAttachment(Key::EXPR);
+    vector<ID> cfns(eat->constraintFns());
+    ss.m.constRelease(eat);
+    Expr::variables(ev, cfns, tcvars);
+    set<ID> slatches(latches.begin(), latches.end());
+    set_intersection(tcvars.begin(), tcvars.end(), slatches.begin(), slatches.end(),
+                     inserter(cvars, cvars.end()));
+    if (!cvars.empty()) {
+      ss.nrvars.clear();
+      set<ID> tmp1, tmp2;
+      set_union(nrvars.begin(), nrvars.end(), cvars.begin(), cvars.end(),
+                inserter(tmp1, tmp1.end()));
+      ss.nrvars = tmp1;
+      set_difference(ss.rvars.begin(), ss.rvars.end(), cvars.begin(), cvars.end(),
+                     inserter(tmp2, tmp2.end()));
+      ss.rvars = tmp2;
+    }
+#endif
+
+    if (ss.m.verbosity() > Options::Verbose)
       cout << "IC3: randomVars: " << ss.rvars.size() << endl;
   }
 
@@ -687,7 +786,7 @@ namespace {
     ID initf;
     if (use_flb) {
       const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      initf = bat->exprOf(rat->forwardBddLowerBound(), st.ev);
+      initf = exprOf(rat->forwardBddLowerBound(), st.ev, bat->order());
       st.m.constRelease(bat);
 #if 1
       vector<ID> disj;
@@ -700,7 +799,7 @@ namespace {
         }
 #endif
     }
-    if (use_flb || (!eat->constraints().empty() && !st.ss.opts.bmcsz)) {
+    if (use_flb || (!eat->constraintFns().empty() && !st.ss.opts.bmcsz)) {
       st.ss.simpleInit = false;
       if (use_flb) {
         st.ss.rat = rat;
@@ -723,15 +822,15 @@ namespace {
       }
       SAT::Clauses icons_clauses(cons_clauses);
       icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
-      for (vector<ID>::const_iterator it = eat->constraints().begin(); it != eat->constraints().end(); ++it)
+      for (vector<ID>::const_iterator it = eat->constraintFns().begin(); it != eat->constraintFns().end(); ++it)
         Expr::tseitin(st.ev, *it, init_clauses);
 
       st.ss.icons = st.m.newSATManager();
-      st.icons = st.ss.icons->newView(st.ev);
+      st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
       st.ss.icons->add(icons_clauses);
 
       st.ss.init = st.m.newSATManager();
-      st.init = st.ss.init->newView(st.ev);
+      st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
       st.ss.init->add(init_clauses);
     }
     else if (!st.ss.opts.bmcsz) {
@@ -764,12 +863,12 @@ namespace {
         Expr::primeFormulas(st.ev, *it, -1);
       // initial condition is post-image of init
       st.ss.init = st.m.newSATManager();
-      st.init = st.ss.init->newView(st.ev);
+      st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
       st.ss.init->add(tr0);
       // special case for k=0
       tr0.insert(tr0.end(), cons_clauses.begin(), cons_clauses.end());
       st.ss.icons = st.m.newSATManager();
-      st.icons = st.ss.icons->newView(st.ev);
+      st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
       st.ss.icons->add(tr0);
     }
 
@@ -778,7 +877,7 @@ namespace {
     if (st.ss.bddTarget && rat->backwardStepsBdd() > 1) {
       st.ss.TESteps = rat->backwardStepsBdd() - 1;
       const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      npi = bat->exprOf(rat->backwardBddLowerBound(), st.ev);
+      npi = exprOf(rat->backwardBddLowerBound(), st.ev, bat->order());
       st.m.constRelease(bat);
       Expr::tseitin(st.ev, st.ev.apply(Expr::Not, npi), cons_clauses);
     }
@@ -810,16 +909,47 @@ namespace {
     st.m.constRelease(cnfat);
   }
 
-
   void initSAT(State & st) {
     COIAttachment const * cat = (COIAttachment *) st.m.constAttachment(Key::COI);
     st.ss.coi = cat->coi();
     st.m.constRelease(cat);
 
+    if (st.m.verbosity() > Options::Terse) {
+      ostringstream oss;
+      oss << "IC3: Using " << st.opts.ctgs << " CTGs" << endl;
+      cout << oss.str();
+    }
+
     // get CNF encoding for transition relation
     CNFAttachment * cnfat = (CNFAttachment *) st.m.constAttachment(Key::CNF);
-    vector< vector<ID> > cons_clauses = cnfat->getCNF();
+    vector< vector<ID> > cons_clauses;
+    if (st.opts.abstract >= 2)
+      cons_clauses = st.ss.abs_tr;
+    else
+      cons_clauses = cnfat->getCNF();
+
+    if (st.ss.opts.intNodes) {
+      SAT::Clauses temp = cnfat->getPlainCNF();
+      for(SAT::Clauses::iterator it = temp.begin(); it != temp.end();
+          ++it) {
+        primeFormulas(st.ev, *it);
+      }
+      cons_clauses.insert(cons_clauses.end(), temp.begin(), temp.end());
+    }
  
+    // for internal nodes replace DAG IDs with SAT IDs 
+    Expr::IDMap satIdOfId = cnfat->satIdOfId; 
+    if (st.ss.opts.intNodes){
+      vector<ID> * kCOI = st.ss.coi.kCOIplusInt();
+      for (vector<ID>::iterator it = kCOI->begin(); it != kCOI->end(); ++it) {
+	if (satIdOfId.find(*it) == satIdOfId.end())
+	  assert(st.ev.op(*it) == Expr::Var);
+	else{
+	  *it = satIdOfId[*it];
+	}
+      }
+    }
+    
     // include user-provided constraints
     vector< vector<ID> > constraints;
     if (st.ss.opts.constraints)
@@ -827,7 +957,8 @@ namespace {
         cons_clauses.insert(cons_clauses.end(), 
                             (*st.ss.opts.constraints)[i].begin(), 
                             (*st.ss.opts.constraints)[i].end());
-        constraints.insert(constraints.end(), (*st.ss.opts.constraints)[i].begin(),
+        constraints.insert(constraints.end(), 
+                           (*st.ss.opts.constraints)[i].begin(),
                            (*st.ss.opts.constraints)[i].end());
       }
 
@@ -870,10 +1001,10 @@ namespace {
 
     // look for lower bound from bdd_reach
     bool use_flb = !st.ss.opts.bmcsz && st.ss.bddInit && rat->backwardStepsBdd() > 1;
-    ID initf;
+    ID initf = st.ev.btrue();
     if (use_flb) {
       const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      initf = bat->exprOf(rat->forwardBddLowerBound(), st.ev);
+      initf = exprOf(rat->forwardBddLowerBound(), st.ev, bat->order());
       st.m.constRelease(bat);
 #if 1
       vector<ID> disj;
@@ -886,7 +1017,61 @@ namespace {
         }
 #endif
     }
-    if (use_flb || (!eat->constraints().empty() && !st.ss.opts.bmcsz)) {
+    vector<ID> nonImpliedConstraints;
+    if (!eat->constraintFns().empty() && !st.ss.opts.bmcsz) {
+      //Build a map from latch to initial value
+      Expr::IDMap initial;
+      for (vector<ID>::const_iterator it = init.begin(); it != init.end();
+           ++it) {
+        ID latch = var(st, *it);
+        initial.insert(Expr::IDMap::value_type(latch, latch == *it ? 
+                                               st.ev.btrue() : st.ev.bfalse()));
+      }
+      SAT::Manager * sman = st.m.newSATManager();
+      for (vector<ID>::const_iterator it = eat->constraintFns().begin();
+           it != eat->constraintFns().end(); ++it) {
+        ID sub = varSub(st.ev, initial, *it);
+        if (sub == st.ev.btrue())
+          continue;
+        //Do a semantic check
+        SAT::Manager::View * sview = sman->newView(st.ev, st.ss.opts.backend);
+        SAT::Clauses clauses;
+        Expr::tseitin(st.ev, st.ev.apply(Expr::Not, sub), clauses);
+        try {
+          sview->add(clauses);
+        }
+        catch (SAT::Trivial tr) {
+          assert(!tr.value());
+          delete sview;
+          continue;
+        }
+        bool sat = sview->sat(&init);
+        if (sat) {
+          nonImpliedConstraints.push_back(*it);
+        }
+        delete sview;
+      }
+      delete sman;
+    }
+    if (st.ss.stem) {
+      if (st.m.verbosity() > Options::Informative)
+        cout << "IC3: stem length: " << st.ss.opts.stem << endl;
+      st.ss.bddInit = false;
+      st.ss.simpleInit = false;
+      st.m.constRelease(rat);
+
+      st.ss.init = st.m.newSATManager();
+      st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
+      st.ss.init->add(*(st.ss.stem));
+
+      st.ss.icons = st.m.newSATManager();
+      st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
+      st.ss.icons->add(*(st.ss.stem));
+      st.ss.icons->add(*(st.ss.stem_plus));
+    }
+    else if (st.ss.opts.intNodes || use_flb || !nonImpliedConstraints.empty()) {
+      if (st.m.verbosity() > Options::Informative)
+        cout << "IC3: using SAT queries for initiation checks" << endl;
       st.ss.simpleInit = false;
       if (use_flb) {
         st.ss.rat = rat;
@@ -909,22 +1094,27 @@ namespace {
       }
       SAT::Clauses icons_clauses(cons_clauses);
       icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
-      for (vector<ID>::const_iterator it = eat->constraints().begin(); it != eat->constraints().end(); ++it)
+      for (vector<ID>::const_iterator it = nonImpliedConstraints.begin(); 
+           it != nonImpliedConstraints.end(); ++it)
         Expr::tseitin(st.ev, *it, init_clauses);
 
       st.ss.icons = st.m.newSATManager();
-      st.icons = st.ss.icons->newView(st.ev);
+      st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
       st.ss.icons->add(icons_clauses);
 
-
       st.ss.init = st.m.newSATManager();
-      st.init = st.ss.init->newView(st.ev);
+      st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
       st.ss.init->add(init_clauses);
+      if (st.ss.opts.intNodes) {
+        SAT::Clauses temp2 = cnfat->getPlainCNF();
+        st.ss.init->add(temp2);
+      }
 
       if(st.ss.opts.constraints)
         for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i) {
           st.ss.init->add((*st.ss.opts.constraints)[i]);
         }
+      if (!st.init->sat()) throw Trivial();
     }
     else if (!st.ss.opts.bmcsz) {
       st.ss.bddInit = false;
@@ -943,7 +1133,11 @@ namespace {
       st.ss.simpleInit = false;
 
       // copy constrained transition relation
-      SAT::Clauses tr0 = cnfat->getPlainCNF();
+      SAT::Clauses tr0;
+      if (st.opts.abstract == 3)
+        tr0 = st.ss.abs_ptr;
+      else
+        tr0 = cnfat->getPlainCNF();
       tr0.insert(tr0.end(), constraints.begin(), constraints.end());
       // add initial condition (cube)
       for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
@@ -956,12 +1150,12 @@ namespace {
         Expr::primeFormulas(st.ev, *it, -1);
       // initial condition is post-image of init
       st.ss.init = st.m.newSATManager();
-      st.init = st.ss.init->newView(st.ev);
+      st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
       st.ss.init->add(tr0);
       // special case for k=0
       tr0.insert(tr0.end(), cons_clauses.begin(), cons_clauses.end());
       st.ss.icons = st.m.newSATManager();
-      st.icons = st.ss.icons->newView(st.ev);
+      st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
       st.ss.icons->add(tr0);
     }
 
@@ -970,13 +1164,16 @@ namespace {
     if (st.ss.bddTarget && rat->backwardStepsBdd() > 1) {
       st.ss.TESteps = rat->backwardStepsBdd() - 1;
       const BddAttachment * bat = (const BddAttachment *) st.m.constAttachment(Key::BDD);
-      npi = bat->exprOf(rat->backwardBddLowerBound(), st.ev);
+      npi = exprOf(rat->backwardBddLowerBound(), st.ev, bat->order());
       st.m.constRelease(bat);
       Expr::tseitin(st.ev, st.ev.apply(Expr::Not, npi), cons_clauses);
     }
     else {
       st.ss.bddTarget = false;
-      npi = eat->outputFnOf(eat->outputs()[0]);
+      if (st.opts.abstract >= 2)
+        npi = st.ss.abs_er;
+      else
+        npi = eat->outputFnOf(eat->outputs()[0]);
       vector<ID> cube;
       Expr::conjuncts(st.ev, npi, cube);
       npi = st.ev.apply(Expr::And, cube);
@@ -984,7 +1181,14 @@ namespace {
     if (npi == st.ev.bfalse()) throw Safe();
     if (npi == st.ev.btrue()) throw CEX();
     if(!st.ss.opts.iictl) {
-      Expr::tseitin(st.ev, Expr::primeFormula(st.ev, npi), error_clauses);
+      if (st.ss.opts.intNodes) {
+        Expr::tseitin(st.ev, npi, error_clauses);
+        for (vector< vector<ID> >::iterator it = error_clauses.begin(); it != error_clauses.end(); ++it) {
+          Expr::primeFormulas(st.ev, *it);
+        }
+      }
+      else
+        Expr::tseitin(st.ev, Expr::primeFormula(st.ev, npi), error_clauses);
     }
     else {
       for(SAT::Clauses::const_iterator it = st.ss.opts.iictl_clauses->begin();
@@ -1014,21 +1218,89 @@ namespace {
     st.ss.base_constraints.insert(st.ss.base_constraints.end(), error_clauses.begin(), error_clauses.end());
 
     if(st.opts.lift) {
-      vector< vector<ID> > property_clauses;
-      Expr::tseitin(st.ev, Expr::primeFormula(st.ev, st.ev.apply(Expr::Not, npi)), property_clauses);
+      if (st.m.verbosity() > Options::Terse)
+        cout << "IC3: lifting enabled" << endl;
+      //Only lift if constraints are not functions of primary inputs
+      set<ID> vars;
+      bool ok = true;
+      vector<ID> tmp(eat->constraintFns());
+      Expr::variables(st.ev, tmp, vars);
+      for (set<ID>::iterator it = vars.begin(); it != vars.end(); ++it) {
+        if (eat->isInput(*it)) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) {
+        if (st.m.verbosity() > Options::Terse)
+          cout << "IC3: Disabling lifting" << endl;
+        st.opts.lift = false;
+      }
+      else {
+        st.ss.lift = st.m.newSATManager();
+        st.lift = st.ss.lift->newView(st.ev, st.ss.opts.backend);
+        //Lifting query:
+        //P & C & T & (!C' | !G(x,x') | P') for property CTIs and
+        //P & C & T & (!C' | !G(x,x') | !t') for clause CTIs
+        //C: invariant constraints
+        //G(x,x'): relational constraints
+        //!t: clause (negation of target cube)
+        SAT::Clauses trNpi = cnfat->getPlainCNFNoConstraints(); //T
+        Expr::tseitin(st.ev, st.ev.apply(Expr::Not, eat->outputFns()[0]), trNpi); //P
+        vector<ID> constraints(eat->constraintFns());
+        Expr::tseitin(st.ev, constraints, trNpi); //C
+        st.lift->add(trNpi);
 
-      st.ss.lift = st.m.newSATManager();
-      st.lift = st.ss.lift->newView(st.ev);
-      SAT::Clauses trNpi = cnfat->getCNF();
-      st.lift->add(trNpi);
-      st.lift->add(property_clauses);
+        st.ss.actPp = st.ev.newVar("_@actPp@_");
+        st.ss.actNegCp = st.ev.newVar("_@actNegCp@_");
+        st.ss.actNegG = st.ev.newVar("_@actNegG@_");
+        st.ss.actNegTp = st.ev.newVar("_@actNegTp@_");
+        //Or
+        vector<ID> disj;
+        disj.push_back(st.ss.actPp);
+        disj.push_back(st.ss.actNegCp);
+        if (st.ss.opts.negConstraints)
+          disj.push_back(st.ss.actNegG);
+        disj.push_back(st.ss.actNegTp);
+        st.lift->add(disj);
+        vector< vector<ID> > property_clauses;
+        Expr::tseitin(st.ev, Expr::primeFormula(st.ev, st.ev.apply(Expr::Not, npi)), property_clauses);
+        for (vector< vector<ID> >::iterator it = property_clauses.begin();
+             it != property_clauses.end(); ++it) {
+          it->push_back(st.ev.apply(Expr::Not, st.ss.actPp));
+        }
+        st.lift->add(property_clauses);
 
-      st.ss.fae = st.m.newSATManager();
-      st.fae = st.ss.fae->newView(st.ev);
-      SAT::Clauses tr = cnfat->getPlainCNF();
-      st.fae->add(tr);
-      st.fae->add(error_clauses_cpy);
-      st.faeLits.push_back(levelVar(st, -1));
+        vector<ID> negCp(eat->constraintFns());
+        primeFormulas(st.ev, negCp);
+        for (vector<ID>::iterator it = negCp.begin(); it != negCp.end(); ++it) {
+          *it = st.ev.apply(Expr::Not, *it);
+        }
+        SAT::Clauses negCpClauses;
+        Expr::tseitin(st.ev, st.ev.apply(Expr::Or, negCp), negCpClauses);
+        //Add activation literal
+        for (SAT::Clauses::iterator it = negCpClauses.begin(); it != negCpClauses.end(); ++it) {
+          it->push_back(st.ev.apply(Expr::Not, st.ss.actNegCp));
+        }
+        st.lift->add(negCpClauses);
+
+        if (st.ss.opts.negConstraints) {
+          SAT::Clauses negConstraints(*st.ss.opts.negConstraints);
+          assert(!negConstraints.empty());
+          SAT::Clause orClause = negConstraints.back();
+          negConstraints.pop_back();
+          orClause.push_back(st.ev.apply(Expr::Not, st.ss.actNegG));
+          negConstraints.push_back(orClause);
+          st.lift->add(negConstraints);
+        }
+
+        st.ss.fae = st.m.newSATManager();
+        st.fae = st.ss.fae->newView(st.ev, st.ss.opts.backend);
+        SAT::Clauses tr = cnfat->getPlainCNF();
+        st.fae->add(tr);
+        st.fae->add(error_clauses_cpy);
+        st.faeLits.push_back(levelVar(st, -1));
+      }
     }
 
     st.m.constRelease(eat);
@@ -1040,6 +1312,7 @@ namespace {
     st.ss.eqprop = false;
     st.ss.reverse = true;
     st.ss.simpleInit = false;
+    st.ss.opts.lift = false;
 
     COIAttachment const * cat = (COIAttachment *) st.m.constAttachment(Key::COI);
     st.ss.coi = cat->coi();
@@ -1063,9 +1336,16 @@ namespace {
 
     randomVars(st.ss, st.ev, latches, fns);
 
+    // initial condition
+    ID initf = eat->outputFnOf(eat->outputs()[0]);
+    if (initf == st.ev.btrue()) throw CEX();
+    if (initf == st.ev.bfalse()) throw Safe();
+    SAT::Clauses initf_cnf;
+    Expr::tseitin(st.ev, initf, initf_cnf);
+
     // get CNF encoding for transition relation
     CNFAttachment * cnfat = (CNFAttachment *) st.m.constAttachment(Key::CNF);
-    vector< vector<ID> > cons_clauses = cnfat->getCNF();
+    vector< vector<ID> > cons_clauses = cnfat->getPlainCNF();
     st.m.constRelease(cnfat);
 
     // switch primed and unprimed vars
@@ -1080,17 +1360,13 @@ namespace {
           *lit = *lit == v ? st.ev.unprime(v) : st.ev.apply(Expr::Not, st.ev.unprime(v));
       }
 
-    // initial condition
-    ID initf = eat->outputFnOf(eat->outputs()[0]);
-    if (initf == st.ev.btrue()) throw CEX();
-    if (initf == st.ev.bfalse()) throw Safe();
-    SAT::Clauses initf_cnf;
-    Expr::tseitin(st.ev, initf, initf_cnf);
+    //ID x = Expr::primeFormula(st.ev, st.ev.apply(Expr::Not, initf));
+    //Expr::tseitin(st.ev, x, cons_clauses);
 
     st.ss.init = st.m.newSATManager();
-    st.init = st.ss.init->newView(st.ev);
+    st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
     st.ss.init->add(initf_cnf);
-    vector<ID> constraints = eat->constraints();
+    vector<ID> constraints = eat->constraintFns();
     vector< vector<ID> > constraint_clauses;
     Expr::tseitin(st.ev, constraints, constraint_clauses);
     st.ss.init->add(constraint_clauses);
@@ -1112,9 +1388,9 @@ namespace {
       cls.push_back(Expr::primeFormula(st.ev, *it));
       error_clauses.push_back(cls);
     }
-    vector<ID> npi;
-    complement(st.ev, init, npi);
-    cons_clauses.push_back(npi);
+    vector<ID> pi;
+    complement(st.ev, init, pi);
+    cons_clauses.push_back(pi);
 
     // include user-provided constraints
     if (st.ss.opts.constraints)
@@ -1140,26 +1416,17 @@ namespace {
     st.cons->manager().add(cls);
 
     if(k + 1 == static_cast<int>(st.cubes.size()))
-      st.cubes.push_back(st.infCubes);
+      st.cubes.push_back(CubeSet());
   }
 
   void prepareCons(State & st, int k, vector<ID> & assumps) {
-    bool inf = false;
-    if(k == INT_MAX) {
+    if(k == INT_MAX)
       k = st.cubes.size();
-      inf = true;
-    }
     else
       assumps.push_back(levelVar(st, k));                            // enable >= k
-    assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, k-1)));  // disable < k
+    // Not needed, and in the way of lconsecution.
+    //ARB 2/23/13 assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, k-1)));  // disable < k
     assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, -1)));   // disable error
-    if(st.opts.inf_weak) {
-      if(inf)
-        assumps.push_back(levelVar(st, INT_MAX)); //enable inf
-      else //inf cubes are subsumed by cubes at other levels, so disable them
-           //so as not to overwhelm the SAT solver
-        assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, INT_MAX)));
-    }
   }
 
   void prepareError(State & st, int k, vector<ID> & assumps) {
@@ -1167,8 +1434,6 @@ namespace {
     assumps.push_back(levelVar(st, k));                            // enable >= k
     assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, k-1)));  // disable < k
     assumps.push_back(levelVar(st, -1));                           // enable error
-    if(st.opts.inf_weak)
-      assumps.push_back(st.ev.apply(Expr::Not, levelVar(st, INT_MAX))); //disable inf
   }
 
   void prepareAssignSpecial(State & st, SAT::Assignment & asgn) {
@@ -1180,8 +1445,8 @@ namespace {
       asgn.insert(SAT::Assignment::value_type(st.ev.unprime(*it), SAT::Unknown));
     }
     st.m.constRelease(eat);
-    const set<ID> & latches = st.ss.coi.cCOI();
-    for (set<ID>::const_iterator it = latches.begin(); it != latches.end(); ++it) {
+    COI::range latchRange = st.ss.coi.cCOI();
+    for (vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it) {
       asgn.insert(SAT::Assignment::value_type(*it, SAT::Unknown));
       asgn.insert(SAT::Assignment::value_type(st.ev.unprime(*it), SAT::Unknown));
     }
@@ -1189,7 +1454,7 @@ namespace {
 
   void prepareAssign(State & st, SAT::Assignment & asgn, int dlvl = -1,
                      bool inputs = false, bool primedLatches = false,
-                     bool primedInputs = false) {
+                     bool primedInputs = false, bool internal = false) {
     if(inputs || primedInputs) {
       //Add inputs to asgn
       ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
@@ -1201,13 +1466,13 @@ namespace {
       }
       st.m.constRelease(eat);
     }
-    const set<ID> & latches = 
-      st.ss.reverse 
-      ? st.ss.nrvars
-      : dlvl >= 0 && !st.ss.opts.cycle
-      ? st.ss.coi.kCOI(dlvl + st.ss.TESteps) 
-      : st.ss.coi.cCOI();
-    for (set<ID>::const_iterator it = latches.begin(); it != latches.end(); ++it) {
+    // Ugly.
+    //vector<ID> latchv(st.ss.nrvars.begin(), st.ss.nrvars.end());
+    COI::range latchRange =
+      st.ss.reverse || dlvl < 0 || st.ss.opts.cycle
+      ? st.ss.coi.cCOI(internal)
+      : st.ss.coi.kCOI(dlvl + st.ss.TESteps, internal);
+    for (vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it) {
       asgn.insert(SAT::Assignment::value_type(*it, SAT::Unknown));
       if(primedLatches) {
         asgn.insert(SAT::Assignment::value_type(st.ev.prime(*it), SAT::Unknown));
@@ -1215,12 +1480,12 @@ namespace {
     }
   }
 
-  void preparePrimedAssign(State & st, SAT::Assignment & asgn, int dlvl = -1) {
-    const set<ID> & latches = 
+  void preparePrimedAssign(State & st, SAT::Assignment & asgn, int dlvl = -1, bool internal=false) {
+    COI::range latchRange = 
       dlvl >= 0 && !st.ss.opts.cycle 
-      ? st.ss.coi.kCOI(dlvl + st.ss.TESteps) 
-      : st.ss.coi.cCOI();
-    for (set<ID>::const_iterator it = latches.begin(); it != latches.end(); ++it)
+      ? st.ss.coi.kCOI(dlvl + st.ss.TESteps, internal) 
+      : st.ss.coi.cCOI(internal);
+    for (vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it)
       asgn.insert(SAT::Assignment::value_type(st.ev.prime(*it), SAT::Unknown));
   }
 
@@ -1244,6 +1509,7 @@ namespace {
                               it->first);
         }
         else {
+          assert(eat->isStateVar(it->first));
           cube.push_back(it->second == SAT::False ? 
                          st.ev.apply(Expr::Not, it->first) : 
                          it->first);
@@ -1345,30 +1611,19 @@ namespace {
     st.m.constRelease(eat);
   }
 
-
-  void assignOf(State & st, SAT::Assignment & asgn, vector<ID> & cube) {
-    for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it)
-      if (it->second != SAT::Unknown)
-        cube.push_back(it->second == SAT::False ? 
-                       st.ev.apply(Expr::Not, it->first) : 
-                       it->first);
-#if 0
-      else
-        cout << "Unknown: " << Expr::stringOf(st.ev, it->first) << endl;
-#endif
-  }
-
   void assignOf(Expr::Manager::View & ev, SAT::Assignment & asgn, vector<ID> & cube) {
     for (SAT::Assignment::const_iterator it = asgn.begin(); it != asgn.end(); ++it) {
-      //cout << it->second;
       if (it->second != SAT::Unknown)
         cube.push_back(it->second == SAT::False ? 
                        ev.apply(Expr::Not, it->first) : 
                        it->first);
      }
-     //cout << endl;
   }
 
+
+  void assignOf(State & st, SAT::Assignment & asgn, vector<ID> & cube) {
+    assignOf(st.ev, asgn, cube);
+  }
 
   void addTransitionToCexTrace(State & st, const vector<ID> & state, const vector<ID> & inputs) {
     st.cex.push_back(Transition(state, inputs));
@@ -1401,7 +1656,7 @@ namespace {
         st.lift->manager().add(cls);
     }
 
-    if(k != INT_MAX || !st.opts.inf) {
+    if(k != INT_MAX) {
       // 2. make it a level k clause
       cls.push_back(st.ev.apply(Expr::Not, levelVar(st, k)));
     }
@@ -1421,6 +1676,8 @@ namespace {
   void addCube(State & st, int k, vector<ID> & cube) {
     if (addCubeToCubes(st, k, cube))
       addCubeToManager(st, k, cube);
+    else 
+      st.ss.stats.repeats++;
   }
 
   void renewSAT(State & st) {
@@ -1437,7 +1694,7 @@ namespace {
     sst.cons = st.m.newSATManager();
 
     sst.cons->add(sst.base_constraints);
-    st.cons = sst.cons->newView(st.ev);
+    st.cons = sst.cons->newView(st.ev, st.ss.opts.backend);
     if (sst.opts.timeout > 0)
       st.cons->timeout(sst.opts.timeout);
 
@@ -1559,7 +1816,8 @@ namespace {
 
   bool consecution(State & st, int k, vector<ID> & cube, 
                    SAT::Assignment * asgn = NULL, bool rcore = true,
-                   bool full_init = false, SAT::Assignment * lifted = NULL) 
+                   bool full_init = false, SAT::Assignment * lifted = NULL,
+                   SAT::GID * incremental = NULL) 
   {
     if (st.ss.opts.timeout > 0) {
       int64_t sofar = Util::get_user_cpu_time() - st.ss.stime;
@@ -1570,29 +1828,53 @@ namespace {
       }
     }
 
-    vector<ID> cls, assumps;
-    complement(st.ev, cube, cls);
+    vector<ID> cls, assumps, cassumps;
 
     SAT::GID tgid = SAT::NULL_GID;
     SAT::Manager::View * cons;
-    if (k == 0 && st.icons) 
+    if (k == 0 && st.icons) {
       cons = st.icons;
-    else {
-      prepareCons(st, k, assumps);
-      cons = st.cons;
-      tgid = cons->newGID();
-      try {
-        cons->add(cls, tgid);
+      for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++) {
+        assumps.push_back(st.ev.prime(*it));
+        cassumps.push_back(st.ev.prime(*it));
       }
-      catch (SAT::Trivial tr) {
-        assert (!tr.value());
+      // clean up previous calls
+      if (incremental && *incremental != SAT::NULL_GID)
+        st.cons->remove(*incremental);
+    }
+    else {
+      cons = st.cons;
+      if (!incremental || *incremental == SAT::NULL_GID) {
+        prepareCons(st, k, assumps);
+        tgid = cons->newGID();
+        try {
+          complement(st.ev, cube, cls);
+          cons->add(cls, tgid);
+        }
+        catch (SAT::Trivial tr) {
+          assert (!tr.value());
+          cons->remove(tgid);
           return true;
+        }
+        for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++) {
+          assumps.push_back(st.ev.prime(*it));
+          cassumps.push_back(st.ev.prime(*it));
+        }
+        if (incremental)
+          *incremental = tgid;
+      }
+      else {
+        tgid = *incremental;
+        assumps.push_back(levelVar(st, k));
+        for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++)
+          cassumps.push_back(st.ev.prime(*it));
       }
     }
-    for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++)
-      assumps.push_back(st.ev.prime(*it));
-    bool rv = cons->sat(&assumps, asgn, rcore ? &assumps : NULL, tgid, full_init, lifted);
-    if (tgid != SAT::NULL_GID) cons->remove(tgid);
+
+    bool rv = cons->sat(&assumps, asgn, rcore ? &cassumps : NULL, tgid, 
+                        full_init, lifted);
+    if (tgid != SAT::NULL_GID && (!rv || !incremental))
+      cons->remove(tgid);
 
     if (rv)
       return false;
@@ -1601,9 +1883,9 @@ namespace {
         vector<ID> copy(cube);
         // reduce the cube by the unsat core  
         cube.clear();
-        sort(assumps.begin(), assumps.end());
+        sort(cassumps.begin(), cassumps.end());
         for (vector<ID>::iterator it = copy.begin(); it != copy.end(); it++)
-          if (binary_search(assumps.begin(), assumps.end(), 
+          if (binary_search(cassumps.begin(), cassumps.end(), 
                             Expr::primeFormula(st.ev, *it)))
             cube.push_back(*it);
         if (!initiation(st, cube)) {
@@ -1656,33 +1938,90 @@ namespace {
     }
   }
 
-  bool down(State & st, int k, const set<ID> & keep, vector<ID> & cube) {
-    SAT::Assignment asgn;
-    for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++)
-      asgn.insert(SAT::Assignment::value_type(var(st, *it), SAT::Unknown));
+  bool join(State & st, const set<ID> & keep, vector<ID> & cube,
+            const SAT::Assignment & asgn) 
+  {
     vector<ID> rcube;
+    for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++) {
+      SAT::Assignment::const_iterator ait = asgn.find(var(st, *it));
+      Expr::Op op = st.ev.op(*it);
+      if ((op == Expr::Not && ait->second == SAT::True) ||
+          (op == Expr::Var && ait->second == SAT::False)) {
+        if (keep.find(*it) != keep.end())
+          // about to drop a literal that should be kept
+          return false;
+      }
+      else
+        rcube.push_back(*it);
+    }
+    cube = rcube;
+    return true;
+  }
+
+  void mic(State & st, int k, vector<ID> & cube, bool complete = false, bool ctg = false);
+
+  bool down(State & st, int k, const set<ID> & keep, vector<ID> & cube,
+            vector<ID> * full = NULL, bool handleCtgs = false, int numJoins = -1) {
+    if (numJoins < 0) //a complete down query
+      ++st.ss.stats.numDownCalls;
+    SAT::Assignment asgn;
+    //TODO: could use the distance from the frontier instead of -1
+    if (handleCtgs)
+      prepareAssign(st, asgn, -1); 
+    else {
+      for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++)
+        asgn.insert(SAT::Assignment::value_type(var(st, *it), SAT::Unknown));
+    }
+    int joined = 0;
+    int ctgAttempts = 0;
+    bool ctged = false; //only used for statistical purposes
     while (true) {
       if (!initiation(st, cube))
         return false;
+      if (full) *full = cube;
       if (!consecution(st, k, cube, &asgn)) {
-        // reduce cube by asgn
-        rcube.clear();
-        for (vector<ID>::iterator it = cube.begin(); it != cube.end(); it++) {
-          SAT::Assignment::const_iterator ait = asgn.find(var(st, *it));
-          Expr::Op op = st.ev.op(*it);
-          if ((op == Expr::Not && ait->second == SAT::True) ||
-              (op == Expr::Var && ait->second == SAT::False)) {
-            if (keep.find(*it) != keep.end())
-              // about to drop a literal that should be kept
-              return false;
+        if (k > 0 && handleCtgs && ctgAttempts < st.opts.ctgs) {
+          if (!ctged) {
+            ++st.ss.stats.numDownWithCtg;
+            ctged = true;
           }
-          else
-            rcube.push_back(*it);
+          ++ctgAttempts;
+          vector<ID> ctg;
+          assignOf(st, asgn, ctg);
+          if (initiation(st, ctg) && consecution(st, k-1, ctg)) {
+            set<ID> dummy;
+            int l = k;
+            for (; l <= st.ss.stats.level; ++l) {
+              vector<ID> ccube(ctg);
+              if (down(st, l, dummy, ccube))
+                ctg = ccube;
+              else
+                break;
+            }
+            mic(st, l-1, ctg, false, true);
+            ++st.ss.stats.numClauses.back();
+            addCube(st, l, ctg);
+            continue;
+          }
         }
-        cube = rcube;
+        if (numJoins >= 0 && joined >= numJoins)
+          return false;
+        ctgAttempts = 0;
+        ++joined;
+        if (joined == 1)
+          ++st.ss.stats.numDownWithJoin;
+        if (!join(st, keep, cube, asgn))
+          return false;
       }
-      else
+      else {
+        if (numJoins < 0)
+          ++st.ss.stats.numSuccDown;
+        if (joined)
+          ++st.ss.stats.numSuccDownWithJoin;
+        if (ctged)
+          ++st.ss.stats.numSuccDownWithCtg;
         return true;
+      }
     }
   }
 
@@ -1919,9 +2258,11 @@ namespace {
     }
   }
 
-  void mic(State & st, int k, vector<ID> & cube, bool complete = false) {
+  void mic(State & st, int k, vector<ID> & cube, bool complete, bool ctg) {
+    if (!ctg)
+      ++st.ss.stats.numMicCalls;
     set<ID> keep;
-    if (!st.ss.reverse) reduceCube(st, cube);
+    //if (st.ss.opts.abstract == 3) reduceCube(st, cube); // TODO: WHY CAN'T I DO THIS?
     randomizeVector(cube);
     orderCube(st, cube);
     for (;;) {
@@ -1944,14 +2285,15 @@ namespace {
         for (unsigned int j = 0, l = 0; j < cube.size(); ++j)
           if (j != i)
             dcube[l++] = cube[j];
-        ++st.ss.stats.numDownCalls;
-        if (down(st, k, keep, dcube)) {
+        if (down(st, k, keep, dcube, NULL, st.opts.ctgs && !ctg, ctg ? 0 : -1)) {
           cube = dcube;
           break;
         }
-        keep.insert(cube[i]);
+        if (!ctg)
+          keep.insert(cube[i]);
         --cnt;
       }
+
       if (i == cube.size() || cnt < 0) return;
     }
   }
@@ -1974,22 +2316,7 @@ namespace {
     return rv;
   }
 
-  int generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue, vector<ID> * unlifted = NULL) {
-    if (!pursue) {
-      // if it's inductive at lo+1, this cube has probably already been
-      // taken care of
-      vector<ID> assumps(cube);
-      prepareCons(st, lo+1, assumps);
-      if (!st.cons->sat(&assumps))
-        return INT_MAX;
-      // inductive relative only to lo
-      hi = lo;
-    }
-
-    lo = max(0, lo);
-    if (lo == 0 && !initiation(st, cube))
-      return 0;
-
+  int std_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) {
     bool indInf = false;
     if((st.opts.inf || st.opts.inf_weak) && pursue) {
       //Check if inductive relative to truly inductive clauses
@@ -2008,7 +2335,7 @@ namespace {
       int _lo = lo, _hi = hi-1;
       SAT::Assignment asgn;
       if(st.ss.opts.printCex) {
-        if(st.icons)
+        if(st.icons && st.opts.bmcsz)
           prepareAssignSpecial(st, asgn);
         else
           prepareAssign(st, asgn, -1, true);
@@ -2031,7 +2358,7 @@ namespace {
       }
       if (_lo > _hi) {
         if(st.ss.opts.printCex) {
-          if(st.icons) {
+          if(st.icons && st.opts.bmcsz) {
             vector<ID> state1, inputs1, state2, inputs2;
             specAssignOf(st, asgn, state1, inputs1, state2, inputs2);
             addTransitionToCexTrace(st, state2, inputs2);
@@ -2051,77 +2378,11 @@ namespace {
     set<ID> dummy;
     for (; k < hi; ++k) {
       vector<ID> ccube(cube);
+      //if (down(st, k+1, dummy, ccube, NULL, st.opts.ctgs))
       if (down(st, k+1, dummy, ccube))
         cube = ccube;
       else
         break;
-    }
-
-    if(st.opts.try_unlifted && unlifted && k < hi) {
-      vector<ID> unliftedCpy = *unlifted;
-      int k2 = hi;
-      ConsMem mem2(hi-lo+1);
-      if (!mem_consecution(mem2, st, k2, lo, *unlifted)) {
-        int _lo = lo, _hi = hi-1;
-        SAT::Assignment asgn;
-        if(st.ss.opts.printCex) {
-          if(st.icons)
-            prepareAssignSpecial(st, asgn);
-          else
-            prepareAssign(st, asgn, -1, true);
-        }
-        while (_lo <= _hi) {
-          k2 = (_lo+_hi)/2;
-          vector<ID> copy1(*unlifted);
-          if (mem_consecution(mem2, st, k2, lo, copy1, st.ss.opts.printCex ? &asgn : NULL)) {
-            vector<ID> copy2(*unlifted);
-            if (!mem_consecution(mem2, st, k2+1, lo, copy2)) {
-              *unlifted = copy1;
-              break;
-            }
-            else
-              _lo = k2+1;
-          }
-          else
-            _hi = k2-1;
-        }
-        if (_lo > _hi) {
-          if(st.ss.opts.printCex) {
-            if(st.icons) {
-              vector<ID> state1, inputs1, state2, inputs2;
-              specAssignOf(st, asgn, state1, inputs1, state2, inputs2);
-              addTransitionToCexTrace(st, state2, inputs2);
-              addTransitionToCexTrace(st, state1, inputs1);
-            }
-            else {
-              vector<ID> state, inputs;
-              fullAssignOf(st, asgn, state, inputs);
-              addTransitionToCexTrace(st, state, inputs);
-            }
-          }
-          return 0;
-        }
-      }
-
-      // use down to push forward as far as possible
-      set<ID> dummy;
-      for (; k2 < hi; ++k2) {
-        vector<ID> ccube(*unlifted);
-        if (down(st, k2+1, dummy, ccube))
-          *unlifted = ccube;
-        else
-          break;
-      }
-
-      if(k2 > k) {
-        k = k2;
-        cube = *unlifted;
-        *unlifted = unliftedCpy;
-      }
-      else {
-        //signal the caller that the unlifted cube wasn't used
-        unlifted->clear();
-      }
     }
 
     if (k == hi && st.opts.inf && pursue) {
@@ -2146,7 +2407,6 @@ namespace {
     }
 
     ++st.ss.stats.numClauses.back();
-    ++st.ss.stats.numMicCalls;
 
     // definitely inductive
     ++st.ss.stats.clauseSizeBef += cube.size();
@@ -2156,6 +2416,185 @@ namespace {
     ++st.ss.stats.clauseSizeAft += cube.size();
     addCube(st, k+1, cube);
     return k+1;
+  }
+
+  int lconsecution(State & st, int lo, int hi, vector<ID> & cube, 
+                   vector<SAT::Assignment> & asgns, int offset = 0)
+  {
+    SAT::GID gid = SAT::NULL_GID;
+    vector<ID> copy(cube);
+    int k = hi;
+    for (; k >= lo; --k) {
+      if (offset+hi-k >= static_cast<int>(asgns.size())) {
+        asgns.push_back(SAT::Assignment());
+        assert (offset+hi-k < static_cast<int>(asgns.size()));
+        prepareAssign(st, asgns[offset+hi-k]);
+      }
+      else
+        resetAssignment(asgns[offset+hi-k]);
+      if (consecution(st, k, copy, &asgns[offset+hi-k], true, false, NULL, &gid)) {
+        cube = copy;
+        break;
+      }
+    }
+    if (k < lo && gid != SAT::NULL_GID && (k > 0 || !st.icons))
+      st.cons->remove(gid);
+    return k;
+  }
+
+  int new_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  {
+    vector<SAT::Assignment> asgns;
+    int k = lconsecution(st, lo, hi, cube, asgns);
+    if (k < lo) return 0;
+
+    // use down to push forward as far as possible
+    set<ID> dummy;
+    for (; k < hi; ++k) {
+      vector<ID> ccube(cube);
+      join(st, dummy, ccube, asgns[hi-(k+1)]);
+      if (!down(st, k+1, dummy, ccube))
+        break;
+      cube = ccube;
+    }
+
+    ++st.ss.stats.numClauses.back();
+
+    // definitely inductive
+    ++st.ss.stats.clauseSizeBef += cube.size();
+    int64_t start = Util::get_user_cpu_time();
+    mic(st, k, cube);
+    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    ++st.ss.stats.clauseSizeAft += cube.size();
+    addCube(st, k+1, cube);
+    return k+1;    
+  }
+
+  int pri_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  {
+    vector<SAT::Assignment> asgns;
+    vector<ID> core(cube);
+    set<ID> dummy;
+    bool first = true;
+    int k = lo;
+    while (k < hi) {
+      k = lconsecution(st, lo, hi, core, asgns);
+      if (k < lo) {
+        if (first) {
+          assert (lo == 0);
+          return 0;
+        }
+        cube = core;
+        break;
+      }
+      else if (k == hi) {
+        cube = core;
+        break;
+      }
+      first = false;
+      vector<ID> copy(cube), full;
+      for (int j = k+1; j <= hi; ++j) {
+        join(st, dummy, copy, asgns[hi-j]);
+        if (copy.size() == cube.size())
+          break;
+        // guaranteed to get here when j == k+1
+        if (!down(st, j, dummy, copy, &full)) {
+          cube = core;
+          goto DONE;
+        }
+        ++k;
+        lo = k+1;
+        cube = full;
+        core = copy;
+      }
+    }
+  DONE:
+
+    ++st.ss.stats.numClauses.back();
+
+    // definitely inductive
+    ++st.ss.stats.clauseSizeBef += cube.size();
+    int64_t start = Util::get_user_cpu_time();
+    mic(st, k, cube);
+    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+    ++st.ss.stats.clauseSizeAft += cube.size();
+    addCube(st, k+1, cube);
+    return k+1;    
+  }
+
+  int rch_generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) {
+
+    int k = lo;
+
+    if (!st.opts.pushLast) {
+      // use down to push forward as far as possible
+      set<ID> dummy;
+      for (; k < hi; ++k) {
+        vector<ID> ccube(cube);
+        //if (down(st, k+1, dummy, ccube, NULL, st.opts.ctgs))
+        if (down(st, k+1, dummy, ccube))
+          cube = ccube;
+        else
+          break;
+      }
+    }
+
+    ++st.ss.stats.numClauses.back();
+    ++st.ss.stats.clauseSizeBef += cube.size();
+    int64_t start = Util::get_user_cpu_time();
+    mic(st, k, cube);
+    st.ss.stats.micTime += (Util::get_user_cpu_time() - start);
+
+    if (st.opts.pushLast) {
+      // use down to push forward as far as possible
+      set<ID> dummy;
+      for (; k < hi; ++k) {
+        vector<ID> ccube(cube);
+        //if (down(st, k+1, dummy, ccube, NULL, st.opts.ctgs))
+        if (down(st, k+1, dummy, ccube))
+          cube = ccube;
+        else
+          break;
+      }
+    }
+    ++st.ss.stats.clauseSizeAft += cube.size();
+
+    // definitely inductive
+    addCube(st, k+1, cube);
+    return k+1;
+  }
+
+
+  int generalize(State & st, int lo, int hi, vector<ID> & cube, bool pursue) 
+  {
+    if (!pursue && st.opts.gen != 3) {
+      // if it's inductive at lo+1, this cube has probably already been
+      // taken care of
+      vector<ID> assumps(cube);
+      prepareCons(st, lo+1, assumps);
+      if (!st.cons->sat(&assumps))
+        return INT_MAX;
+      // inductive relative only to lo
+      hi = lo;
+    }
+
+    assert(st.opts.gen != 3 || lo >= 0);
+    lo = max(0, lo);
+    if (lo == 0 && !initiation(st, cube))
+      return 0;
+
+    switch (st.opts.gen) {
+    case 0:
+      return std_generalize(st, lo, hi, cube, pursue);
+    case 1:
+      return new_generalize(st, lo, hi, cube, pursue);
+    case 2:
+      return pri_generalize(st, lo, hi, cube, pursue);
+    case 3:
+      return rch_generalize(st, lo, hi, cube, pursue);
+    default:
+      assert(false);
+    }
   }
 
   class SzOrd {
@@ -2239,7 +2678,8 @@ namespace {
     while (!q.empty()) {
       set<ID> part = q.front();
 
-      st.ev.begin_local();
+      if (!st.ss.ev)
+        st.ev.begin_local();
 
       SAT::Assignment asgn;
       SAT::Manager::View * cons;
@@ -2301,11 +2741,12 @@ namespace {
       }
       cons->remove(tgid);
 
-      st.ev.end_local();
+      if (!st.ss.ev)
+        st.ev.end_local();
     }
 
     if (st.m.verbosity() > Options::Informative && parts.size() > 0) {
-      cout << "Parts at " << k << " (" << parts.size() << "):";
+      cout << "Parts at " << k+1 << " (" << parts.size() << "):";
       for (Partition::iterator it = parts.begin(); it != parts.end(); ++it)
         cout << " " << it->size();
       cout << endl;
@@ -2320,7 +2761,8 @@ namespace {
     st.ss.partition.clear();
 
     // initialize partition
-    set<ID> allpart = st.ss.coi.cCOI();
+    COI::range latchRange = st.ss.coi.cCOI();
+    set<ID> allpart(latchRange.first, latchRange.second);
     allpart.insert(st.ev.bfalse());
     st.ss.partition.push_back(allpart);
     simRefine(st);
@@ -2353,6 +2795,7 @@ namespace {
   void unsatCoreLift(State & st, int k, vector<ID> & cube, vector<ID> & inputs,
                      vector<ID> & nsInputs, bool silent = false) {
     vector<ID> assumps;
+    assumps.push_back(st.ev.apply(Expr::Not, st.ss.actNegTp));
     assumps.insert(assumps.end(), inputs.begin(), inputs.end());
     assumps.insert(assumps.end(), cube.begin(), cube.end());
     for(vector<ID>::const_iterator it = nsInputs.begin();
@@ -2500,14 +2943,14 @@ namespace {
       cout << "Forall-exists Lifting: " << cube.size() << endl;
   }
 
-  void lift(State & st, int k, vector<ID> & cube, vector<ID> & inputs, vector<ID> & nsInputs) {
-    liftAdd(st, cube, false);
+  void liftPropCti(State & st, int k, vector<ID> & cube, vector<ID> & inputs, vector<ID> & nsInputs) {
+    //liftAdd(st, cube, false);
 
     int64_t start = Util::get_user_cpu_time();
     unsatCoreLift(st, k, cube, inputs, nsInputs);
     st.ss.stats.ibmLiftTime += (Util::get_user_cpu_time() - start);
     st.ss.stats.cubeSizeIBM += cube.size();
-    liftAdd(st, cube, false);
+    //liftAdd(st, cube, false);
 
     if(st.opts.lift_aggr > 0) {
       //Do brute-force
@@ -2527,7 +2970,9 @@ namespace {
     }
   }
 
-  void propagateClauses(State & st, int k, bool trivial, bool shortCircuit, bool possible = true) {
+  void propagateClauses(State & st, int k, bool trivial, bool shortCircuit, 
+                        bool possible = true) {
+
     if (st.m.verbosity() > Options::Informative) cout << "propagateClauses " << endl;
 
     st.ss.stats.percentProp.push_back(0.0);
@@ -2537,12 +2982,32 @@ namespace {
     for(int i = 1; i <= k+1; ++i) {
       st.ss.stats.clauseDistBef.back().push_back(st.cubes[i].size());
     }
+    
+    //Reduce infCubes
+    bool reduced = true;
+    while (reduced) {
+      reduced = false;
+      CubeSet newInfCubes;
+      for (CubeSet::iterator it = st.infCubes.begin(); it != st.infCubes.end();
+           ++it) {
+        vector<ID> cube(*it);
+        bool ind = consecution(st, INT_MAX, cube);
+        assert(ind);
+        if (cube.size() < it->size()) {
+          addCubeToManager(st, INT_MAX, cube, true);
+          reduced = true;
+        }
+        sort(cube.begin(), cube.end());
+        newInfCubes.insert(cube);
+      }
+      st.infCubes = newInfCubes;
+    }
 
     SubsumptionUniverse su;
     if (!trivial) {
       for (int i = 1; i <= k+1; ++i)
         su.add(st.cubes[i], i);
-      if(st.opts.inf)
+      if(st.opts.inf || st.opts.inf_weak)
         su.add(st.infCubes, k+1); //Add to level k+1?
       su.reduce(st.cubes[1], 1);
     }
@@ -2578,9 +3043,15 @@ namespace {
         else
           it++;
       }
+      if (st.m.verbosity() > Options::Informative)
+        cout << i << " " << icubes.size() << " " << next.size() << endl;
       st.ss.stats.percentProp.back() += (numProp / (double) total);
       if (icubes.empty() && possible) {
-        if (shortCircuit && !st.ss.opts.incremental) throw Safe();
+        if (shortCircuit && !st.ss.opts.incremental) {
+          throw Safe();
+        }
+        if (st.opts.abstract == 3 && st.cubes.size() > static_cast<unsigned int>(k+2))
+          k++;
         if (i == k) {
           CubeSet & ncubes = st.cubes[i+1];
           if (!trivial) {
@@ -2637,6 +3108,7 @@ namespace {
       }
       for (CubeSet::const_iterator it = next.begin(); it != next.end(); ++it) {
         st.cubes[i+1].insert(*it);
+        vector<ID> cp(*it);
         addCubeToManager(st, i+1, *it, true);
       }
 
@@ -2662,8 +3134,26 @@ namespace {
     }
 
 
+    if(st.opts.inf || st.opts.inf_weak || st.opts.inf_vweak) {
+      int promoted = 0;
+      CubeSet & kcubes = st.cubes.back();
+      for (CubeSet::iterator it = kcubes.begin(); it != kcubes.end();) {
+        vector<ID> cube = *it;
+        if (consecution(st, INT_MAX, cube)) {
+          ++promoted;
+          CubeSet::iterator tmp = it;
+          it++;
+          kcubes.erase(tmp);
+          sort(cube.begin(), cube.end());
+          st.infCubes.insert(cube);
+        }
+        else
+          it++;
+      }
+      //cout << "Promoted " << promoted << " clauses to F_inf" << endl;
+    }
 
-    if(st.opts.inf || st.opts.inf_weak) {
+    if(st.opts.inf || st.opts.inf_weak || st.opts.inf_vweak) {
       //Apply subsumption on infCubes
       SubsumptionUniverse su2;
       su2.add(st.infCubes, 1);
@@ -2703,10 +3193,30 @@ namespace {
                             (*st.ss.opts.constraints)[i].end());
     }
 
+    if(st.ss.reverse) {
+      ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+      vector<ID> latches(eat->stateVars());
+ 
+      // switch primed and unprimed vars
+      set<ID> tpv(latches.begin(), latches.end());
+      set_union(tpv.begin(), tpv.end(), eat->inputs().begin(), eat->inputs().end(), inserter(tpv, tpv.end()));
+      for (vector< vector<ID> >::iterator cl = cons_clauses.begin(); cl != cons_clauses.end(); cl++)
+        for (vector<ID>::iterator lit = cl->begin(); lit != cl->end(); lit++) {
+          ID v = var(st, *lit);
+          if (tpv.find(v) != tpv.end())
+            *lit = *lit == v ? st.ev.prime(v) : st.ev.apply(Expr::Not, st.ev.prime(v));
+          else if (st.ev.nprimes(v))
+            *lit = *lit == v ? st.ev.unprime(v) : st.ev.apply(Expr::Not, st.ev.unprime(v));
+        }
+      st.m.constRelease(eat);
+    }
+
+
     sst.cons->add(cons_clauses);
-    st.cons = sst.cons->newView(st.ev);
+    st.cons = sst.cons->newView(st.ev, st.ss.opts.backend);
 
     CubeSet cubes = st.cubes[k+1];
+    cubes.insert(st.infCubes.begin(), st.infCubes.end());
 
     if(st.opts.initCube) {
       if(st.ss.simpleInit) {
@@ -2730,16 +3240,16 @@ namespace {
         SAT::Clauses icons_clauses(cons_clauses);
         icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
         ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
-        for (vector<ID>::const_iterator it = eat->constraints().begin(); it != eat->constraints().end(); ++it)
+        for (vector<ID>::const_iterator it = eat->constraintFns().begin(); it != eat->constraintFns().end(); ++it)
           Expr::tseitin(st.ev, *it, init_clauses);
         st.m.constRelease(eat);
 
         st.ss.icons = st.m.newSATManager();
-        st.icons = st.ss.icons->newView(st.ev);
+        st.icons = st.ss.icons->newView(st.ev, st.ss.opts.backend);
         st.ss.icons->add(icons_clauses);
 
         st.ss.init = st.m.newSATManager();
-        st.init = st.ss.init->newView(st.ev);
+        st.init = st.ss.init->newView(st.ev, st.ss.opts.backend);
         st.ss.init->add(init_clauses);
 
         if(st.ss.opts.constraints)
@@ -2790,7 +3300,7 @@ namespace {
       sst.cons = st.m.newSATManager();
 
       sst.cons->add(cons_clauses);
-      st.cons = sst.cons->newView(st.ev);
+      st.cons = sst.cons->newView(st.ev, st.ss.opts.backend);
 
       cubes = next;
 
@@ -2799,14 +3309,52 @@ namespace {
     }
   }
 
+  int blconsecution(State & st, int lo, int hi, vector<ID> & cube) {
+    SAT::GID gid = SAT::NULL_GID;
+    vector<ID> copy(cube);
+    int k = hi;
+    for (; k >= lo; --k) {
+      if (consecution(st, k, copy, NULL, false, false, NULL, &gid)) {
+        cube = copy;
+        break;
+      }
+    }
+    if (k < lo) st.cons->remove(gid);
+    return k;
+  }
+
+  void liftClsCti(State & st, vector<ID> & curState, vector<ID> & inputs, const vector<ID> & target) {
+    vector<ID> assumps;
+    //disable P'
+    assumps.push_back(st.ev.apply(Expr::Not, st.ss.actPp));
+    assumps.insert(assumps.end(), curState.begin(), curState.end());
+    assumps.insert(assumps.end(), inputs.begin(), inputs.end());
+    vector<ID> notTargetPr;
+    complement(st.ev, target, notTargetPr);
+    primeFormulas(st.ev, notTargetPr);
+    notTargetPr.push_back(st.ev.apply(Expr::Not, st.ss.actNegTp));
+    SAT::GID gid = st.lift->newGID();
+    st.lift->add(notTargetPr, gid);
+    bool sat = st.lift->sat(&assumps, NULL, &assumps);
+    st.lift->remove(gid);
+    assert(!sat);
+    curState.clear();
+    ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+    for (vector<ID>::const_iterator it = assumps.begin(); it != assumps.end(); ++it) {
+      if (eat->isStateVar(*it) || eat->isStateVar(st.ev.apply(Expr::Not, *it))) {
+        curState.push_back(*it);
+      }
+    }
+    st.m.constRelease(eat);
+  }
 
   struct ToPush {
-    ToPush(int k, int dlvl, vector<ID> cube) : k(k), dlvl(dlvl), cube(cube) {}
-    ToPush(int k, int dlvl, vector<ID> cube, int idx) : k(k), dlvl(dlvl),
-        cube(cube), nodeIdx(idx) {}
+    ToPush(int k, int dlvl, vector<ID> cube, vector<ID> gen, int idx = 0) : 
+      k(k), dlvl(dlvl), cube(cube), lastGen(gen), nodeIdx(idx)  {}
     int k;
     int dlvl;
     vector<ID> cube;
+    vector<ID> lastGen;
     int nodeIdx; //Index of node in graph maintaining state-skeleton
   };
   struct Node {
@@ -2829,20 +3377,38 @@ namespace {
 
   typedef set<ToPush, ToPushComp> PushSet;
 
-  void pushGeneralization(State & st, int toK, PushSet & toPush, vector<Node> & skeleton) {
+  void pushGeneralization(State & st, int toK, PushSet & toPush, 
+                          vector<Node> & skeleton) 
+  {
     while (!toPush.empty()) {
       PushSet::iterator tp = toPush.begin();
       vector<ID> cube(tp->cube);
+
       SAT::Assignment asgn;
-      prepareAssign(st, asgn, st.ss.opts.printCex ? -1 : tp->dlvl+1, st.ss.opts.printCex);
-      if (consecution(st, tp->k, cube, &asgn, true, true)) {
-        int n = generalize(st, tp->k, toK, cube, false);
+        prepareAssign(st, asgn, tp->dlvl+1,
+              st.ss.opts.printCex || st.ss.opts.lift, false, false, st.ss.opts.intNodes);
+
+      bool cons = false;
+      int n;
+      if (st.ss.opts.leapfrog) {
+        st.ss.stats.numConsPW++;
+        vector<ID> lastGen(tp->lastGen);
+        n = blconsecution(st, tp->k, toK, lastGen);
+        cons = n >= tp->k;
+        ++n;
+        if (cons) {
+          st.ss.stats.numSuccPW++;
+          cube = lastGen;
+          addCube(st, n, cube);
+        }
+      }
+      if (!cons) {
+        cons = consecution(st, tp->k, cube, &asgn, true, true);
+        if (cons) n = generalize(st, tp->k, toK, cube, false);
+      }
+      if (cons) {
         if (n <= toK) {
-          if(st.ss.opts.printCex) {
-            toPush.insert(ToPush(n, tp->dlvl, tp->cube, tp->nodeIdx));
-          }
-          else
-            toPush.insert(ToPush(n, tp->dlvl, tp->cube));
+          toPush.insert(ToPush(n, tp->dlvl, tp->cube, cube, tp->nodeIdx));
         }
         else {
           unrecordLits(st, tp->cube);
@@ -2851,15 +3417,24 @@ namespace {
       }
       else {
         vector<ID> pred, inputs;
-        if(st.ss.opts.printCex) {
+        if(st.ss.opts.printCex || st.ss.opts.lift) {
           fullAssignOf(st, asgn, pred, inputs);
+          if (st.ss.opts.lift)
+            liftClsCti(st, pred, inputs, cube);
         }
         else {
           assignOf(st, asgn, pred);
         }
         vector<ID> cube(pred);
-        int n = generalize(st, tp->k-2, toK, cube, true);
-        if (n == 0) {
+        int n = 0;
+        if (tp->k > 0)
+          n = st.opts.gen == 3 ? tp->k - 1 : generalize(st, tp->k-2, toK, cube, true);
+        if ((n == 0 && st.opts.gen != 3) || (st.opts.gen == 3 && n == -1)) {
+          if (st.opts.minCex && (tp->dlvl+3 > toK + 2)) {
+            if (st.m.verbosity() > Options::Informative)
+              cout << "Ignoring counterexample of length " << tp->dlvl+3 << endl;
+            return;
+          }
           if (st.m.verbosity() > Options::Silent && !st.ss.opts.silent)
             cout << "Counterexample of length " << tp->dlvl+3 << endl;
           //Retrieve trace
@@ -2880,7 +3455,7 @@ namespace {
             Transition init = st.cex.back();
             popBackTransition(st);
             Transition init2;
-            if(st.icons) {
+            if(st.icons && st.opts.bmcsz) {
               init2 = st.cex.back();
               popBackTransition(st);
             }
@@ -2889,7 +3464,7 @@ namespace {
               addTransitionToCexTrace(st, rit->state, rit->inputs);
             }
             //Add back initial transition(s)
-            if(st.icons)
+            if(st.icons && st.opts.bmcsz)
               st.cex.push_back(init2);
             st.cex.push_back(init);
           }
@@ -2906,13 +3481,10 @@ namespace {
         }
         if (n <= toK) {
           sort(pred.begin(), pred.end());
-          if(st.ss.opts.printCex) {
-            //Add state to skeleton
+          if(st.ss.opts.printCex)
             skeleton.push_back(Node(pred, inputs, tp->nodeIdx));
-            toPush.insert(ToPush(n, tp->dlvl + 1, pred, skeleton.size() - 1));
-          }
-          else
-            toPush.insert(ToPush(n, tp->dlvl + 1, pred));
+          toPush.insert(ToPush(n, tp->dlvl + 1, pred, cube, skeleton.size() - 1));
+          st.ss.stats.maxDlvl.back() = max(st.ss.stats.maxDlvl.back(), tp->dlvl + 1);
           recordLits(st, pred);
         }
       }
@@ -2931,48 +3503,38 @@ namespace {
     st.ss.stats.numClauses.push_back(0);
     st.ss.stats.levInd.push_back(0);
     st.ss.stats.numGenCalls.push_back(0);
+    st.ss.stats.maxDlvl.push_back(0);
 
     while (true) {
       if (st.m.verbosity() > Options::Verbose) cout << "strengthen" << endl;
       vector<ID> assumps;
       prepareError(st, k, assumps);
       SAT::Assignment asgn;
-      prepareAssign(st, asgn, st.ss.opts.printCex ? -1 : 1,
-                    st.ss.opts.printCex || st.ss.opts.lift, st.ss.opts.printCex,
-                    st.ss.opts.lift);
-      SAT::Assignment lifted;
-      if(st.ss.opts.printCex || st.ss.opts.lift)
-        prepareAssign(st, lifted, 1);
-      else
-        lifted = asgn;
-      bool rv = st.cons->sat(&assumps, &asgn, NULL, SAT::NULL_GID, true, &lifted);
+      prepareAssign(st, asgn, 1, st.ss.opts.printCex || st.ss.opts.lift,
+                    false, st.ss.opts.lift, st.ss.opts.intNodes);
+
+      bool rv = st.cons->sat(&assumps, &asgn, NULL, SAT::NULL_GID, true);
       ++st.ss.stats.numPropQueries.back();
       if (rv) {
-        vector<ID> asgnc, liftedc, inputs, unliftedc;
-        if(st.ss.opts.printCex) {
+        vector<ID> asgnc, inputs;
+        if(st.ss.opts.printCex && !st.ss.opts.lift) {
           //Separate asgn into current state, input, and next state
-          vector<ID> curState, nextState;
-          fullAssignWithPrimedOf(st, asgn, curState, inputs, nextState);
-          vector<ID> empty;
-          addTransitionToCexTrace(st, nextState, empty);
-          addTransitionToCexTrace(st, curState, inputs);
-          asgnc = curState;
+          vector<ID> curState;
+          fullAssignOf(st, asgn, asgnc, inputs);
+          addTransitionToCexTrace(st, asgnc, inputs);
         }
         else if(st.ss.opts.lift) {
           ++st.ss.stats.numLiftCubes;
+          //Separate asgn into current state, input, and primed-input
           vector<ID> nsInputs;
           fullAssignWithPrimedInputsOf(st, asgn, asgnc, inputs, nsInputs);
           st.ss.stats.cubeSizeBef += asgnc.size();
           if(st.m.verbosity() > Options::Verbose)
             cout << "Before lifting: " << asgnc.size() << endl;
-          assignOf(st, lifted, liftedc);
-          st.ss.stats.cubeSizeTACAS += liftedc.size();
-          if(st.m.verbosity() > Options::Verbose) {
-            cout << "TACAS Lifting: " << liftedc.size() << endl;
-          }
           //Lift asgnc
-          unliftedc = asgnc;
-          lift(st, k, asgnc, inputs, nsInputs);
+          liftPropCti(st, k, asgnc, inputs, nsInputs);
+          if (st.opts.printCex)
+            addTransitionToCexTrace(st, asgnc, inputs);
         }
         else {
           assignOf(st, asgn, asgnc);
@@ -2980,14 +3542,9 @@ namespace {
         first = false;
         vector<ID> cube(asgnc);
         ++st.ss.stats.numGenCalls.back();
-        int n = generalize(st, k-2, k, cube, true, st.ss.opts.lift ? &unliftedc : NULL);
+        int n = st.opts.gen == 3 ? k - 1 : generalize(st, k-2, k, cube, true);
         st.ss.stats.levInd.back() += (n - 1);
-        if(st.ss.opts.lift) {
-          //Find out which cube was used (lifted or unlifted)
-          if(!unliftedc.empty())
-            asgnc = unliftedc;
-        }
-        if (n == 0) {
+        if (n == 0 && st.opts.gen != 3) {
           if (st.m.verbosity() > Options::Silent && !st.ss.opts.silent)
             cout << "Counterexample of length 3 (!)" << endl;
           if(st.ss.opts.propagate) {
@@ -3002,19 +3559,15 @@ namespace {
           PushSet toPush;
           vector<Node> skeleton;
           sort(asgnc.begin(), asgnc.end());
-          if(st.ss.opts.printCex) {
+          if(st.ss.opts.printCex)
             skeleton.push_back(Node(asgnc, inputs, -1));
-            toPush.insert(ToPush(n, 1, asgnc, 0));
-          }
-          else
-            toPush.insert(ToPush(n, 1, asgnc));
+          toPush.insert(ToPush(n, 1, asgnc, cube, 0));
+          st.ss.stats.maxDlvl.back() = max(st.ss.stats.maxDlvl.back(), 1);
           recordLits(st, asgnc);
           pushGeneralization(st, k, toPush, skeleton);
         }
-        if(st.ss.opts.printCex) {
+        if(st.ss.opts.printCex)
           popBackTransition(st);
-          popBackTransition(st);
-        }
       }
       else {
         if (st.m.verbosity() > Options::Informative)
@@ -3027,16 +3580,15 @@ namespace {
     }
   }
 
-  void check(SharedState & sst, bool shortCircuit = true) {
+  void _check(SharedState & sst, bool shortCircuit = true, bool renew = false) {
     State st(sst);
     if (sst.opts.reverse)
       initReverseSAT(st);
     else
       initSAT(st);
-    if(sst.opts.incremental) {
+    if(sst.opts.incremental || renew) {
       renewSAT(st);
     }
-    sst.stime = Util::get_user_cpu_time();
     extend(st, 0);
     for (int k = 1;; ++k) {
       if (st.m.verbosity() > Options::Informative) cout << "Level " << k << endl;
@@ -3044,6 +3596,1264 @@ namespace {
       bool trivial = strengthen(st, k);
       propagateClauses(st, k, trivial, shortCircuit);
       renewSAT(st);
+    }
+  }
+
+  bool verifyProof(Model & m, vector< vector<ID> > & proof, vector<SAT::Clauses> * constraints, IC3Options & opts, vector<ID> * gprop = NULL) {
+    if (!opts.verify) return true;
+
+    if (m.verbosity() == Options::Silent) return true;
+
+    if(m.verbosity() > Options::Informative) {
+      cout << "IC3: Verifying proof" << endl;
+    }
+   
+    SAT::Manager * propertyMgr = m.newSATManager();
+    SAT::Manager * proofMgr = m.newSATManager();
+    Expr::Manager::View * ev = m.newView();
+
+    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+    ID npi;
+    if (gprop && !gprop->empty()) {
+      vector<ID> cube;
+      complement(*ev, *gprop, cube);
+      npi = ev->apply(Expr::And, cube);
+    }
+    else
+      npi = eat->outputFnOf(eat->outputs()[0]);
+    vector<ID> init(eat->initialConditions());
+    m.constRelease(eat);
+
+    vector< vector< ID> > property;
+    Expr::tseitin(*ev, ev->apply(Expr::Not, npi), property);
+
+    CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
+    vector< vector<ID> > transRel;
+    if (gprop && !gprop->empty()) {
+      transRel = cnfat->getPlainCNF();
+      transRel.push_back(*gprop);
+    }
+    else
+      transRel = cnfat->getCNF();
+    m.constRelease(cnfat);
+
+    vector< vector<ID> > negPropertyPrimed;
+    Expr::tseitin(*ev, Expr::primeFormula(*ev, npi), negPropertyPrimed);
+
+    ID proofID = ev->btrue();
+    for(unsigned i = 0; i < proof.size(); ++i)
+      proofID = ev->apply(Expr::And, ev->apply(Expr::Or, proof[i]), proofID);
+    vector< vector<ID> > negProof;
+    Expr::tseitin(*ev, ev->apply(Expr::Not, proofID), negProof);
+    vector< vector<ID> > negProofPrimed(negProof);
+    for (vector< vector<ID> >::iterator it = negProofPrimed.begin(); it != negProofPrimed.end(); ++it)
+      Expr::primeFormulas(*ev, *it);
+
+    // include user-provided constraints
+    vector< vector<ID> > ccls;
+    if (constraints)
+      for (unsigned i = 0; i < constraints->size(); ++i)
+        ccls.insert(ccls.end(), (*constraints)[i].begin(), (*constraints)[i].end());
+
+    if (opts.constraints)
+      for (unsigned i = 0; i < opts.constraints->size(); ++i)
+        ccls.insert(ccls.end(), (*opts.constraints)[i].begin(), (*opts.constraints)[i].end());
+
+    bool init_sat = true, prop_sat = true, proof_sat = true;
+
+    {
+      SharedState sst(m, opts);
+      State _st(sst);
+      initSAT(_st);
+      if (sst.simpleInit) {
+        SAT::Manager * initMgr = m.newSATManager();
+        SAT::Manager::View* initView = initMgr->newView(*ev, opts.backend);
+        try {
+          for (size_t i = 0; i < init.size(); ++i) {
+            vector<ID> cls(1, init[i]);
+            initMgr->add(cls);
+          }
+          initMgr->add(negProof);
+          init_sat = initView->sat();
+        }
+        catch (SAT::Trivial tr) {
+          assert (!tr.value());
+          init_sat = false;
+        }
+        delete initView;
+        delete initMgr;
+      }
+      else {
+        try {
+          _st.ss.init->add(negProof);
+          init_sat = _st.init->sat();
+        }
+        catch (SAT::Trivial tr) {
+          assert (!tr.value());
+          init_sat = false;
+        }
+      }
+    }
+
+    SAT::Manager::View* propertyView = propertyMgr->newView(*ev, opts.backend);
+    try {
+      propertyMgr->add(transRel);
+      propertyMgr->add(ccls);
+      propertyMgr->add(proof);
+      propertyMgr->add(negPropertyPrimed);
+      prop_sat = propertyView->sat();
+    }
+    catch (SAT::Trivial tr) {
+      assert (!tr.value());
+      prop_sat = false;
+    }
+    delete propertyView;
+
+    SAT::Manager::View* proofView = proofMgr->newView(*ev, opts.backend);
+    try {
+      proofMgr->add(transRel);
+      proofMgr->add(ccls);
+      proofMgr->add(proof);
+      proofMgr->add(negProofPrimed);
+      proof_sat = proofView->sat();
+    } 
+    catch (SAT::Trivial tr) {
+      assert (!tr.value());
+      proof_sat = false;
+    }
+    delete proofView;
+
+    if(m.verbosity() > Options::Informative) {
+      cout << "Initial condition satisfied? " << (init_sat? "No" : "Yes") << endl;
+      cout << "Property inductive? " << (prop_sat? "No" : "Yes") << endl;
+      cout << "Proof inductive? " << (proof_sat? "No" : "Yes") << endl;
+    }
+
+    delete ev;
+    delete propertyMgr;
+    delete proofMgr;
+
+    return !(init_sat || prop_sat || proof_sat);
+  }
+
+  void minimalCore(SAT::Manager::View * sv, const vector<ID> & assumps, 
+                   vector<ID> core) 
+  {
+    for (unsigned int j = 0; j < core.size();) {
+      vector<ID> ccore;
+      if (j > 0) 
+        ccore.insert(ccore.end(), core.begin(), core.begin()+j-1);
+      if (j < core.size()-1) 
+        ccore.insert(ccore.end(), core.begin()+j+1, core.end());
+      vector<ID> _assumps(assumps);
+      _assumps.insert(_assumps.end(), ccore.begin(), ccore.end());
+      if (!sv->sat(&_assumps, NULL, &ccore))
+        core = ccore;
+      else
+        ++j;
+    }
+  }
+
+  AbsPattern * pattern(SharedState & sst) {
+    if (sst.opts.abs_patterns.empty())
+      sst.opts.abs_patternMap.clear();
+    if (sst.opts.abs_pattern == 0)
+      return NULL;
+    int patid = sst.opts.abs_pattern;
+    if (sst.opts.abs_patternMap.find(patid) == sst.opts.abs_patternMap.end()) {
+      sst.opts.abs_patterns.push_back(AbsPattern());
+      sst.opts.abs_patternMap.insert(
+        PatternMap::value_type(patid, sst.opts.abs_patterns.size()-1));
+    }
+    int patidx = sst.opts.abs_patternMap[patid];
+    return &sst.opts.abs_patterns[patidx];
+  }
+
+  void updatePattern(SharedState & sst, const set<ID> & concrete) {
+    AbsPattern * pat = pattern(sst);
+    if (!pat) return;
+    set<ID> curr, next;
+    for (vector< set<ID> >::const_iterator i = pat->concrete.begin();
+         i != pat->concrete.end(); ++i)
+      curr.insert(i->begin(), i->end());
+    set_difference(concrete.begin(), concrete.end(),
+                   curr.begin(), curr.end(),
+                   inserter(next, next.end()));
+    if (!next.empty()) {
+      pat->cnt++;
+      pat->concrete.push_back(next);
+    }
+  }
+
+  void oaCheck(SharedState & sst, bool shortCircuit) {
+    sst.stime = Util::get_user_cpu_time();
+
+    sst.opts.printCex = true;
+    bool optsprop = sst.opts.propagate;
+    sst.opts.propagate = false;
+
+    Expr::Manager::View * ev = sst.m.newView();
+    ev->begin_local();
+    sst.ev = ev;
+
+    ExprAttachment const * eat = (ExprAttachment *) sst.m.constAttachment(Key::EXPR);
+    vector<ID> inputs(eat->inputs());
+    ID npi = eat->outputFnOf(eat->outputs())[0];
+    vector<ID> init(eat->initialConditions());
+    vector<ID> constraints = eat->constraintFns();
+    vector<ID> latches = eat->stateVars();
+    vector<ID> fns = eat->nextStateFnOf(latches);
+    sst.m.constRelease(eat);
+
+    // obtain initial set of concrete states
+    set<ID> concrete, si(inputs.begin(), inputs.end()), vs;
+    AbsPattern * pat = pattern(sst);
+    if (pat) {
+      unsigned int sz = 0;
+      for (vector< set<ID> >::const_iterator i = pat->concrete.begin();
+           i != pat->concrete.end(); ++i)
+        sz += i->size();
+      if(sst.m.verbosity() > Options::Informative)
+        cout << "Abstract: pattern " << sst.opts.abs_pattern
+             << " " << pat->concrete.size() << " " << sz << endl;
+    }
+    if (pat && !pat->resume.empty()) {
+      // from an interrupted run
+      concrete.insert(pat->resume.begin(), pat->resume.end());
+    }
+    else if (pat && !pat->concrete.empty()) {
+      // from the pattern dictionary
+      if (sst.opts.abs_prunehi >= 0
+          && pat->cnt < sst.opts.abs_prunehi 
+          && (int) pat->concrete.size() > sst.opts.abs_prunelo)
+        pat->concrete.erase(pat->concrete.begin());
+      for (vector< set<ID> >::const_iterator i = pat->concrete.begin();
+           i != pat->concrete.end(); ++i)
+        if (!i->empty())
+          concrete.insert(i->begin(), i->end());
+    }
+    else {
+      // new pattern, so form a fresh initial set
+      if (!sst.opts.iictl)
+        Expr::variables(*ev, npi, vs);
+      set_difference(vs.begin(), vs.end(), si.begin(), si.end(), 
+                     inserter(concrete, concrete.end()));
+      for (unsigned int i = 0; i < latches.size(); ++i)
+        if (fns[i] == ev->btrue() || fns[i] == ev->bfalse())
+          concrete.insert(latches[i]);
+      if (concrete.size() == latches.size()) {
+        concrete.clear();
+        for (unsigned int i = 0; i < latches.size(); ++i)
+          if (fns[i] == ev->btrue() || fns[i] == ev->bfalse())
+            concrete.insert(latches[i]);
+      }
+    }
+
+    // construct the full TR; activation literals control latch concretization
+    Expr::IDMap act2latch;
+    vector<ID> tr, acts;
+    for (unsigned int i = 0; i < latches.size(); ++i) {
+      if (concrete.find(latches[i]) == concrete.end()) {
+        ostringstream buf;
+        buf << "ic3_act:" << i;
+        ID act = ev->newVar(buf.str());
+        acts.push_back(act);
+        act2latch.insert(Expr::IDMap::value_type(act, latches[i]));
+        tr.push_back(ev->apply(Expr::Or, 
+                               ev->apply(Expr::Not, act), 
+                               ev->apply(Expr::Equiv, ev->prime(latches[i]), fns[i])));
+      }
+      else
+        tr.push_back(ev->apply(Expr::Equiv, ev->prime(latches[i]), fns[i]));
+    }
+    set<ID> sacts;
+    for (vector<ID>::const_iterator i = acts.begin(); i != acts.end(); ++i)
+      sacts.insert(ev->apply(Expr::Not, *i));
+    SAT::Clauses cnf, _fulltr;
+    for(vector<ID>::const_iterator it = constraints.begin();
+        it != constraints.end(); ++it)
+      if(*it != ev->btrue()) { //Ignore trivial constraints
+        vector<ID> lits;
+        if (Expr::isClause(*ev, *it, &lits)) {
+          cnf.push_back(lits);
+          for (vector<ID>::iterator it = lits.begin(); it != lits.end(); ++it)
+            *it = ev->prime(*it);
+          cnf.push_back(lits);
+        }
+        else {
+          tr.push_back(*it);
+          tr.push_back(Expr::primeFormula(*ev, *it));
+        }
+      }
+    Expr::tseitin(*ev, tr, cnf);
+    vector<ID> extinputs(inputs);
+    extinputs.insert(extinputs.end(), acts.begin(), acts.end());
+    CNF::simplify(sst.m, cnf, _fulltr, extinputs, latches, fns, true, ev);
+    if (sst.opts.constraints)
+      for (unsigned i = 0; i < sst.opts.constraints->size(); ++i)
+        _fulltr.insert(_fulltr.end(), 
+                       (*sst.opts.constraints)[i].begin(),
+                       (*sst.opts.constraints)[i].end());
+    // _fulltr is the plain TR, fulltr has the property as well
+    SAT::Clauses fulltr = _fulltr;
+    if (!sst.opts.iictl)
+      Expr::tseitin(*ev, ev->apply(Expr::Not, npi), fulltr);
+
+    SAT::Clauses initClss;
+    // add initial condition (cube)
+    for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
+      vector<ID> cls;
+      cls.push_back(*it);
+      initClss.push_back(cls);
+    }
+    if (sst.opts.bmcsz) {
+      // step back one timestep
+      initClss.insert(initClss.end(), _fulltr.begin(), _fulltr.end());
+      for (vector< vector<ID> >::iterator it = initClss.begin(); 
+           it != initClss.end(); ++it)
+        for (vector<ID>::iterator l = it->begin(); l != it->end(); ++l)
+          if (sacts.find(*l) == sacts.end())
+            *l = Expr::primeFormula(*ev, *l, -1);
+    }
+
+    // target
+    SAT::Clauses err;
+    if (!sst.opts.iictl)
+      Expr::tseitin(*ev, npi, err);
+    else
+      err = *(sst.opts.iictl_clauses);
+    sst.abs_er = npi; // may be ignored (IICTL)
+
+    vector<ID> remActs(acts);
+    int longestCex = 0;
+    while (true) {
+      if(sst.m.verbosity() > Options::Informative)
+        cout << "Abstract: concrete: " << concrete.size() << endl;
+
+      // construct abstract TR
+      vector<ID> tr, sfns(fns), sinputs(inputs);
+      for (unsigned int i = 0; i < latches.size(); ++i) {
+        ID f = fns[i];
+        if (concrete.find(latches[i]) == concrete.end()) {
+          ostringstream buf;
+          buf << "ic3_abs:" << i;
+          f = ev->newVar(buf.str());
+          sfns[i] = f;
+          sinputs.push_back(f);
+        }
+        tr.push_back(ev->apply(Expr::Equiv, ev->prime(latches[i]), f));
+      }
+      SAT::Clauses cnf;
+      for(vector<ID>::const_iterator it = constraints.begin();
+          it != constraints.end(); ++it)
+        if(*it != ev->btrue()) { //Ignore trivial constraints
+          vector<ID> lits;
+          if (Expr::isClause(*ev, *it, &lits)) {
+            cnf.push_back(lits);
+            for (vector<ID>::iterator it = lits.begin(); it != lits.end(); ++it)
+              *it = ev->prime(*it);
+            cnf.push_back(lits);
+          }
+          else {
+            tr.push_back(*it);
+            tr.push_back(Expr::primeFormula(*ev, *it));
+          }
+        }
+      sst.abs_tr.clear();
+      sst.abs_ptr.clear();
+      if (sst.opts.bmcsz) {
+        // make both a plain TR and one with the property
+        Expr::tseitin(*ev, tr, cnf);
+        CNF::simplify(sst.m, cnf, sst.abs_ptr, sinputs, latches, sfns, true, ev);
+        sst.abs_tr = sst.abs_ptr;
+        if (!sst.opts.iictl)
+          Expr::tseitin(*ev, ev->apply(Expr::Not, npi), sst.abs_tr);
+      }
+      else {
+        // just one with the property
+        if (!sst.opts.iictl)
+          tr.push_back(ev->apply(Expr::Not, npi));
+        Expr::tseitin(*ev, tr, cnf);
+        CNF::simplify(sst.m, cnf, sst.abs_tr, sinputs, latches, sfns, true, ev);
+      }
+
+      if(sst.m.verbosity() > Options::Informative)
+        cout << "Abstraction: TR size: " << sst.abs_tr.size() << endl;
+
+      bool ic3 = false;
+      try {
+        if (sst.opts.timeout > 0) {
+          int64_t sofar = Util::get_user_cpu_time() - sst.stime;
+          if (sofar / 1000000 >= sst.opts.timeout) {
+            if (sst.m.verbosity() > Options::Terse)
+              cout << "IC3: timeout" << endl;
+            throw Timeout("IC3 timeout");
+          }
+        }
+
+        if (longestCex <= sst.opts.abs_bmc 
+            && sst.opts.abs_bmctimeout <= Util::get_user_cpu_time() - sst.stime) {
+          MC::AlternateModel am;
+          am.init = init;
+          am.inputs = sinputs;
+          am.latches = latches;
+          am.fns = sfns;
+          am.tr = sst.abs_tr;
+          am.err = npi; // may be ignored (IICTL)
+          if (sst.opts.bmcsz) am.ptr = sst.abs_ptr;
+          BMC::BMCOptions bopts;
+          if (sst.opts.iictl) {
+            bopts.iictl = sst.opts.iictl;
+            bopts.iictl_clauses = sst.opts.iictl_clauses;
+          }
+          // if bmcsz (from FAIR), don't look for 0-step cex
+          bopts.lo = max(sst.opts.bmcsz ? 1 : 0, longestCex-1);
+          size_t k = sst.opts.abs_bmc;
+          bopts.bound = &k;
+          bopts.printCex = true;
+          bopts.am = &am;
+          bopts.timeout = sst.opts.abs_bmctimeout;
+          bopts.useCOI = false;  // WHY?
+          bopts.constraints = sst.opts.constraints;
+          bopts.ev = ev;
+          vector<Transition> cexTrace;
+          MC::ReturnValue rv = BMC::check(sst.m, bopts, &cexTrace);
+          if (rv.returnType == MC::CEX) {
+            longestCex = cexTrace.size();
+            vector<Transition> rev;
+            for (vector<Transition>::const_reverse_iterator i = cexTrace.rbegin();
+                 i != cexTrace.rend(); ++i)
+              rev.push_back(*i);
+            throw CEX(rev);
+          }
+          else 
+            longestCex = sst.opts.abs_bmc+1;
+        }
+        ic3 = true;
+        randomVars(sst, *ev, latches, sfns);
+        _check(sst, false, true);
+        assert (false);
+      }
+      catch (CEX cex) {
+        // try to concretize
+        SAT::Clauses _fulltr(fulltr);
+        SAT::Manager * consMgr = sst.m.newSATManager();
+        SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
+        cons->timeout(sst.opts.timeout);
+
+        if(sst.m.verbosity() > Options::Informative)
+          cout << "Abstract: cex length: " << cex.cexTrace.size() << endl;
+        // if bmcsz && ic3: need the 0-step vector; otherwise, already
+        // covered by initClss above
+        int j = sst.opts.bmcsz && ic3 && cex.cexTrace.size() == 2 ? 0 : 1;
+        int k = sst.opts.bmcsz ? 0 : 1;
+        SAT::Assignment asgn;
+        if (sst.opts.bmcsz) {
+          for (vector<ID>::const_iterator j = latches.begin(); j != latches.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(ev->prime(*j, -1), SAT::Unknown));
+          for (vector<ID>::const_iterator j = inputs.begin(); j != inputs.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(ev->prime(*j, -1), SAT::Unknown));
+        }
+        if (k > 0) {
+          for (vector<ID>::const_iterator j = latches.begin(); j != latches.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(*j, SAT::Unknown));
+          for (vector<ID>::const_iterator j = inputs.begin(); j != inputs.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(*j, SAT::Unknown));
+        }
+        cons->add(initClss);
+        vector<ID> assumps;
+        for (vector<Transition>::const_reverse_iterator i = cex.cexTrace.rbegin()+j;
+             i != cex.cexTrace.rend(); ++i, ++k) {
+          if (i+1 == cex.cexTrace.rend()) {
+            SAT::Clauses _err(err);
+            for (SAT::Clauses::iterator j = _err.begin(); j != _err.end(); ++j)
+              for (vector<ID>::iterator jj = j->begin(); jj != j->end(); ++jj)
+                if (*jj != ev->btrue() && *jj != ev->bfalse())
+                  *jj = Expr::primeFormula(*ev, *jj, k);
+            cons->add(_err);
+          }
+          else {
+            for (vector<ID>::const_iterator j = i->state.begin();
+                 j != i->state.end(); ++j) {
+              ID v = *j;
+              if (ev->op(v) == Expr::Not) v = ev->apply(Expr::Not, v);
+              if (concrete.find(v) != concrete.end())
+                assumps.push_back(ev->prime(*j, k));
+            }
+          }
+          for (vector<ID>::const_iterator j = latches.begin(); j != latches.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(ev->prime(*j, k), SAT::Unknown));
+          for (vector<ID>::const_iterator j = inputs.begin(); j != inputs.end(); ++j)
+            asgn.insert(SAT::Assignment::value_type(ev->prime(*j, k), SAT::Unknown));
+          if (k > 0) {
+            cons->add(_fulltr);
+            for (SAT::Clauses::iterator j = _fulltr.begin(); j != _fulltr.end(); ++j) {
+              for (vector<ID>::iterator l = j->begin(); l != j->end(); ++l)
+                if (sacts.find(*l) == sacts.end())
+                  *l = Expr::primeFormula(*ev, *l);  // for next iteration
+            }
+          }
+        }
+
+        vector<ID> _assumps(assumps), core(remActs);
+        _assumps.insert(_assumps.end(), acts.begin(), acts.end());
+        // can it be concretized?
+        if (cons->sat(&_assumps, &asgn, &core)) {
+          --k; // last level
+          vector<Transition> ct(k + (sst.opts.bmcsz ? 2 : 1));
+          set<ID> sinputs(inputs.begin(), inputs.end());
+          for (SAT::Assignment::const_iterator i = asgn.begin(); 
+               i != asgn.end(); ++i) {
+            int numPrimes = ev->nprimes(i->first);
+            ID id = ev->unprime(i->first, numPrimes);
+            ID v = i->second == SAT::True ? id : ev->apply(Expr::Not, id);
+            if(sinputs.find(id) != sinputs.end())
+              ct[k-numPrimes].inputs.push_back(v);
+            else
+              ct[k-numPrimes].state.push_back(v);
+          }
+          cex.cexTrace = ct;
+
+          delete cons;
+          delete consMgr;
+
+          if (acts.size() > remActs.size() && (sst.opts.iictl || sst.opts.fair)) {
+            if (!ic3) { // BMC
+              // extract core acts from cex.cexTrace.size()-1 unrolling
+              int j = 1;
+              int k = sst.opts.bmcsz ? 0 : 1;
+              SAT::Clauses _fulltr(fulltr);
+              SAT::Manager * consMgr = sst.m.newSATManager();
+              SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
+              cons->timeout(sst.opts.timeout);
+              cons->add(initClss);
+              for (vector<Transition>::const_reverse_iterator 
+                     i = cex.cexTrace.rbegin()+j;
+                   i+1 != cex.cexTrace.rend(); ++i, ++k) {
+                if (i+2 == cex.cexTrace.rend()) {
+                  SAT::Clauses _err(err);
+                  for (SAT::Clauses::iterator j = _err.begin(); j != _err.end(); ++j)
+                    for (vector<ID>::iterator jj = j->begin(); jj != j->end(); ++jj)
+                      if (*jj != ev->btrue() && *jj != ev->bfalse())
+                        *jj = Expr::primeFormula(*ev, *jj, k);
+                  cons->add(_err);
+                }
+                if (k > 0) {
+                  cons->add(_fulltr);
+                  for (SAT::Clauses::iterator j = _fulltr.begin(); 
+                       j != _fulltr.end(); ++j) {
+                    for (vector<ID>::iterator l = j->begin(); l != j->end(); ++l)
+                      if (sacts.find(*l) == sacts.end())
+                      *l = Expr::primeFormula(*ev, *l);  // for next iteration
+                  }
+                }
+              }
+              vector<ID> assumps;
+              for (vector<ID>::const_iterator i = acts.begin(); i != acts.end(); ++i)
+                if (concrete.find(act2latch[*i]) != concrete.end())
+                  assumps.push_back(*i);
+              cout << "BEFORE (cex BMC): " << assumps.size() << endl;
+              bool rv = cons->sat(&assumps, NULL, &assumps);
+              assert (!rv);
+              cout << "AFTER (cex BMC): " << assumps.size() << endl;
+              set<ID> nc;
+              for (vector<ID>::const_iterator i = assumps.begin(); 
+                   i != assumps.end(); ++i)
+                nc.insert(act2latch[*i]);
+              updatePattern(sst, nc);
+              delete cons;
+              delete consMgr;
+            }
+            else {
+              // extract core acts based on which are needed for generated clauses
+              SAT::Manager * consMgr = sst.m.newSATManager();
+              SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
+              cons->timeout(sst.opts.timeout);
+              cons->add(fulltr);
+              vector<ID> keep, rem;
+              for (vector<ID>::const_iterator i = acts.begin(); i != acts.end(); ++i)
+                if (concrete.find(act2latch[*i]) != concrete.end())
+                  rem.push_back(*i);
+              for (unsigned int k = sst.cubes.size()-1; k > 0; --k) {
+                for (CubeSet::const_iterator i = sst.cubes[k].begin();
+                     i != sst.cubes[k].end(); ++i) {
+                  vector<ID> cls;
+                  complement(*ev, *i, cls);
+                  cons->add(cls);
+                }
+                if (k+1 == sst.cubes.size() || sst.cubes[k+1].empty()) continue;
+                vector<ID> disj;
+                for (CubeSet::const_iterator i = sst.cubes[k+1].begin();
+                     i != sst.cubes[k+1].end(); ++i) {
+                  vector<ID> cube(*i);
+                  Expr::primeFormulas(*ev, cube);
+                  disj.push_back(ev->apply(Expr::And, cube));
+                }
+                ID target = ev->apply(Expr::Or, disj);
+                SAT::Clauses targetcnf;
+                Expr::tseitin(*ev, target, targetcnf);
+                SAT::GID gid = cons->newGID();
+                cons->add(targetcnf, gid);
+                vector<ID> assumps(keep), core(rem);
+                assumps.insert(assumps.end(), core.begin(), core.end());
+                bool rv = cons->sat(&assumps, NULL, &core);
+                assert (!rv);
+                cons->remove(gid);
+                keep.insert(keep.end(), core.begin(), core.end());
+                set<ID> score(core.begin(), core.end());
+                for (vector<ID>::iterator i = rem.begin(); i != rem.end();)
+                  if (score.find(*i) != score.end())
+                    rem.erase(i);
+                  else
+                    ++i;
+              }
+              cout << "BEFORE (cex IC3): " << acts.size()-remActs.size() << endl;
+              cout << "AFTER (cex IC3): " << keep.size() << endl;
+              set<ID> nc;
+              for (vector<ID>::const_iterator i = keep.begin(); 
+                   i != keep.end(); ++i)
+                nc.insert(act2latch[*i]);
+              updatePattern(sst, nc);
+              delete cons;
+              delete consMgr;
+            }
+          }
+
+          if (optsprop) {
+            // propagate truly inductive clauses (e.g., for FAIR, IICTL)
+            sst.opts.propagate = true;
+
+#if 1
+            if (sst.cubes.size() > 1) {
+              if (sst.opts.initCube) {
+                SAT::Manager * initMgr = sst.m.newSATManager();
+                SAT::Manager::View * init = initMgr->newView(*ev, sst.opts.backend);
+                for (vector<ID>::const_iterator i = sst.opts.initCube->begin();
+                     i != sst.opts.initCube->end(); ++i) {
+                  vector<ID> cls;
+                  cls.push_back(*i);
+                  init->add(cls);
+                }
+                for (unsigned int k = 1; k < sst.cubes.size(); ++k)
+                  for (CubeSet::const_iterator i = sst.cubes[k].begin();
+                       i != sst.cubes[k].end(); ++i) {
+                    vector<ID> cube(*i);
+                    if (init->sat(&cube))
+                      sst.cubes[k].erase(i);
+                  }
+                delete init;
+                delete initMgr;
+              }
+
+              consMgr = sst.m.newSATManager();
+              cons = consMgr->newView(*ev, sst.opts.backend);
+              cons->add(sst.abs_ptr);
+
+              SAT::Clauses constraints;
+              if(sst.opts.constraints) {
+                for (unsigned i = 0; i < sst.opts.constraints->size(); ++i)
+                  constraints.insert(constraints.end(),
+                                     (*sst.opts.constraints)[i].begin(),
+                                     (*sst.opts.constraints)[i].end());
+              }
+              cons->add(constraints);
+
+              unsigned int k = 1;
+              if (sst.cubes[k].empty()) ++k;
+              for (; !sst.cubes[k].empty(); ++k) {
+                bool pconv = k+1 == sst.cubes.size() || sst.cubes[k+1].empty();
+                if(sst.m.verbosity() > Options::Informative)
+                  cout << k << " " << sst.cubes[k].size() 
+                       << (pconv ? "*" : "") << endl;
+                if (k+1 == sst.cubes.size())
+                  sst.cubes.push_back(CubeSet());
+                SAT::GID gid = cons->newGID();
+                for (unsigned int kk = k; kk < sst.cubes.size(); ++kk)
+                  for (CubeSet::const_iterator i = sst.cubes[kk].begin();
+                       i != sst.cubes[kk].end(); ++i) {
+                    vector<ID> cls;
+                    complement(*ev, *i, cls);
+                    cons->add(cls, gid);
+                  }
+                bool dropped = false;
+                for (CubeSet::const_iterator i = sst.cubes[k].begin();
+                     i != sst.cubes[k].end(); ++i) {
+                  vector<ID> cube(*i);
+                  Expr::primeFormulas(*ev, cube);
+                  if (!cons->sat(&cube))
+                    sst.cubes[k+1].insert(*i);
+                  else
+                    dropped = true;
+                }
+                cons->remove(gid);
+                if (!dropped && pconv) {
+                  SubsumptionUniverse su;
+                  su.add(sst.cubes[k], 1);
+                  su.reduce(sst.cubes[k], 1);
+                  cex.indCubes = sst.cubes[k];
+                  break;
+                }
+              }
+              delete cons;
+              delete consMgr;
+              if(sst.m.verbosity() > Options::Informative)
+                cout << "Abstract: inductive: " << cex.indCubes.size() << endl;
+            }
+#endif
+          }
+
+          if (pat) pat->resume.clear();
+          throw cex;
+        }
+        else {
+          // can't be concretized, so use core to direct choice of more latches
+          if(sst.m.verbosity() > Options::Informative)
+            cout << "Abstract: core: " << core.size() << endl;
+
+          //minimalCore(cons, assumps, core);
+          //cout << "Abstract: reduced core: " << core.size() << endl;
+
+          unsigned int sz = concrete.size();
+          for (vector<ID>::const_iterator j = core.begin(); j != core.end(); ++j)
+            //pair<set<ID>::iterator, bool> rv = concrete.insert(act2latch[*j]);
+            concrete.insert(act2latch[*j]);
+          set<ID> score(core.begin(), core.end());
+          for (vector<ID>::iterator j = remActs.begin(); j != remActs.end();)
+            if (score.find(*j) != score.end())
+              remActs.erase(j);
+            else
+              ++j;
+          assert (concrete.size() > sz);
+
+          delete cons;
+          delete consMgr;
+        }
+      }
+      catch (Safe safe) {
+        // it's a proof
+        if (acts.size() > remActs.size() && (sst.opts.iictl || sst.opts.fair)) {
+          SAT::Manager * consMgr = sst.m.newSATManager();
+          SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
+          cons->timeout(sst.opts.timeout);
+          cons->add(fulltr);
+          CubeSet cubes = safe.proof;
+          SAT::Clauses p;
+          vector<ID> disj;
+          for (CubeSet::const_iterator i = cubes.begin(); i != cubes.end(); ++i) {
+            vector<ID> cube(*i), cls;
+            disj.push_back(ev->apply(Expr::And, cube));
+            complement(*ev, cube, cls);
+            p.push_back(cls);
+          }
+          cons->add(p);
+          vector<ID> errcl;
+          for (SAT::Clauses::const_iterator i = err.begin(); i != err.end(); ++i) {
+            vector<ID> cube(*i);
+            errcl.push_back(ev->apply(Expr::Or, cube));
+          }
+          disj.push_back(ev->apply(Expr::And, errcl));
+          SAT::Clauses er;
+          Expr::tseitin(*ev, Expr::primeFormula(*ev, ev->apply(Expr::Or, disj)), er);
+          cons->add(er);
+          vector<ID> assumps;
+          for (vector<ID>::const_iterator i = acts.begin(); i != acts.end(); ++i)
+            if (concrete.find(act2latch[*i]) != concrete.end())
+              assumps.push_back(*i);
+          cout << "BEFORE (safe): " << assumps.size() << endl;
+          bool rv = cons->sat(&assumps, NULL, &assumps);
+          assert (!rv);
+          cout << "AFTER (safe): " << assumps.size() << endl;
+          set<ID> nc;
+          for (vector<ID>::const_iterator i = assumps.begin(); i != assumps.end(); ++i)
+            nc.insert(act2latch[*i]);
+          updatePattern(sst, nc);
+          delete cons;
+          delete consMgr;
+        }
+        if (pat) pat->resume.clear();
+        throw safe;
+      }
+      catch (Timeout to) {
+        // save the current concrete set
+        if (pat) {
+          pat->resume.clear();
+          pat->resume.insert(concrete.begin(), concrete.end());
+        }
+        throw to;
+      }
+
+      sst.rvars.clear();
+      sst.nrvars.clear();
+      sst.base_constraints.clear();
+    }
+  }
+
+  void uaCheck(SharedState & sst, bool shortCircuit = true) {
+    sst.stime = Util::get_user_cpu_time();
+
+    Expr::Manager::View * ev = sst.m.newView();
+
+    ExprAttachment const * eat = (ExprAttachment *) sst.m.constAttachment(Key::EXPR);
+    vector<ID> inputs(eat->inputs()), frozen(eat->inputs());
+    ID npi = eat->outputFnOf(eat->outputs())[0];
+    vector<ID> init(eat->initialConditions());
+    SAT::Clauses err;
+    Expr::tseitin(*ev, Expr::primeFormula(*ev, npi), err);
+    vector<ID> constraints = eat->constraintFns();
+    vector<ID> latches = eat->stateVars();
+    vector<ID> fns = eat->nextStateFnOf(latches);
+    sst.m.constRelease(eat);
+
+    SAT::Manager * consMgr = sst.m.newSATManager();
+    CNFAttachment * cnfat = (CNFAttachment *) sst.m.constAttachment(Key::CNF);
+    SAT::Clauses tr(cnfat->getCNF());
+    consMgr->add(tr);
+    sst.m.constRelease(cnfat);
+    SAT::Manager::View * cons = consMgr->newView(*ev, sst.opts.backend);
+
+    SAT::GID gid = cons->newGID();
+    cons->add(err, gid);
+    vector<ID> assumps;
+    for (vector<ID>::iterator it = frozen.begin(); it != frozen.end(); ++it) {
+      ID act = var(*ev);
+      assumps.push_back(act);
+      vector<ID> cls;
+      cls.push_back(ev->apply(Expr::Not, act));
+      cls.push_back(ev->apply(Expr::Not, *it));
+      cons->add(cls, gid);
+      cls.clear();
+      cls.push_back(ev->apply(Expr::Not, act));
+      cls.push_back(ev->apply(Expr::Not, ev->prime(*it)));
+      cons->add(cls, gid);
+    }
+    vector<ID> cassumps(assumps);
+    while (!cons->sat(&assumps, NULL, &cassumps)) {
+      minimalCore(cons, vector<ID>(), cassumps);
+      set<ID> core(cassumps.begin(), cassumps.end());
+      bool changed = false;
+      for (unsigned int i = 0; i < assumps.size(); ++i)
+        if (core.find(assumps[i]) != core.end()) {
+          changed = true;
+          assumps.erase(assumps.begin()+i);
+          frozen.erase(frozen.begin()+i);
+          break;
+        }
+      if (!changed) break;
+      cassumps = assumps;
+    }
+    cons->remove(gid);
+    
+    cout << "Abstraction: frozen after err: " << frozen.size() << endl;
+
+    vector<SAT::Clauses> dummy;
+    bool wasnull = false;
+    if (!sst.opts.constraints) {
+      wasnull = true;
+      sst.opts.constraints = &dummy;
+    }
+
+    vector<ID> units;
+    bool mkunits = true, mktr = sst.opts.abstract == 2;
+    while (true) {
+      cout << "Abstraction: frozen: " << frozen.size() << endl;
+
+      vector<ID> sfns(fns);
+      ThreeValued::Map sub;
+      if (mkunits) {
+        units.clear();
+
+        for (vector<ID>::iterator it = frozen.begin(); it != frozen.end(); ++it)
+          sub.insert(ThreeValued::Map::value_type(*it, ThreeValued::TVFalse));
+        ThreeValued::Map justpi(sub);
+        for (unsigned int i = 0; i < init.size(); ++i)
+          if (ev->op(init[i]) == Expr::Var)
+            sub.insert(ThreeValued::Map::value_type(init[i], ThreeValued::TVTrue));
+          else
+            sub.insert(ThreeValued::Map::value_type(ev->apply(Expr::Not, init[i]), 
+                                                    ThreeValued::TVFalse));
+        bool changed = true;
+        while (changed) {
+          ThreeValued::Folder tvf(*ev, sub);
+          ev->fold(tvf, sfns);
+          changed = false;
+          ThreeValued::Map newsub(justpi);
+          for (unsigned int i = 0; i < sfns.size(); ++i) {
+            assert (sub.find(sfns[i]) != sub.end());
+            assert (sub.find(latches[i]) != sub.end());
+            ThreeValued::TV v = sub[sfns[i]];
+            if (sub[latches[i]] == ThreeValued::TVX) v = ThreeValued::TVX;
+            if (v != sub[latches[i]]) {
+              v = ThreeValued::TVX;
+              changed = true;
+            }
+            newsub.insert(ThreeValued::Map::value_type(latches[i], v));
+          }
+          sub = newsub;
+        }
+        for (unsigned int i = 0; i < sfns.size(); ++i) {
+          ThreeValued::TV v = sub[latches[i]];
+          if (v != ThreeValued::TVX)
+            units.push_back(ev->apply(Expr::Equiv, latches[i], 
+                                      v == ThreeValued::TVTrue ? ev->btrue() 
+                                      : ev->bfalse()));
+        }
+        mkunits = !units.empty();
+      }
+
+      cout << "Abstraction: units: " << units.size() << endl;
+
+      if (mktr) {
+        /* TODO:
+         *  - eq reduction
+         *  - simplify
+         *  - switch to Fabio's?
+         */
+        Expr::IDMap fsub;
+        for (vector<ID>::iterator it = frozen.begin(); it != frozen.end(); ++it)
+          fsub.insert(Expr::IDMap::value_type(*it, ev->bfalse()));
+        vector<unsigned int> equiv;
+        ID snpi = npi;
+        if (mkunits) {
+          bool havetrue = false, havefalse = false;
+          for (unsigned int i = 0; i < sfns.size(); ++i) {
+            ThreeValued::TV v = sub[latches[i]];
+            if (v != ThreeValued::TVX) {
+              sfns[i] = v == ThreeValued::TVTrue ? ev->btrue() : ev->bfalse();
+              fsub.insert(Expr::IDMap::value_type(latches[i], sfns[i]));
+              if (v == ThreeValued::TVTrue) {
+                if (havetrue) equiv.push_back(i);
+                havetrue = true;
+              }
+              else if (v == ThreeValued::TVFalse) {
+                if (havefalse) equiv.push_back(i);
+                havefalse = true;
+              }
+            }
+          }
+          Expr::varSub(*ev, fsub, sfns);
+          snpi = Expr::varSub(*ev, fsub, snpi);
+        }
+
+        vector<ID> tr;
+        sst.abs_er = snpi;
+        tr.push_back(ev->apply(Expr::Not, snpi));
+        sst.abs_tr.clear();
+        vector<unsigned int>::iterator eq = equiv.begin();
+        // ADAPTED FROM CNFAttachment.cpp
+        vector<ID> clatches, cfns;
+        for (unsigned int i = 0; i < latches.size(); ++i) {
+          while (eq != equiv.end() && i > *eq) ++eq;
+          if (eq != equiv.end() && i == *eq) continue;
+          clatches.push_back(latches[i]);
+          cfns.push_back(sfns[i]);
+          tr.push_back(ev->apply(Expr::Equiv, ev->prime(latches[i]), sfns[i]));
+        }
+        SAT::Clauses cnf;
+        for(vector<ID>::const_iterator it = constraints.begin();
+            it != constraints.end(); ++it)
+          if(*it != ev->btrue()) { //Ignore trivial constraints
+            vector<ID> lits;
+            if (Expr::isClause(*ev, *it, &lits)) {
+              cnf.push_back(lits);
+              for (vector<ID>::iterator it = lits.begin(); it != lits.end(); ++it)
+                *it = ev->prime(*it);
+              cnf.push_back(lits);
+            }
+            else {
+              tr.push_back(*it);
+              tr.push_back(Expr::primeFormula(*ev, *it));
+            }
+          }
+        Expr::tseitin(*ev, tr, cnf);
+        CNF::simplify(sst.m, cnf, sst.abs_tr, inputs, clatches, cfns);
+        CNFAttachment * cnfat = (CNFAttachment *) sst.m.constAttachment(Key::CNF);
+        if (sst.abs_tr.size() > cnfat->getCNF().size()) {
+          mktr = false;
+          sst.opts.abstract = 1;
+          cout << "Abstraction: no longer making TR" << endl;
+        }
+        sst.m.constRelease(cnfat);
+
+        cout << "Abstraction: TR size: " << sst.abs_tr.size() << endl;
+        // END ADAPT
+      }
+
+      if (!frozen.empty()) {
+        SAT::Clauses clss;
+        for (vector<ID>::iterator it = frozen.begin(); it != frozen.end(); ++it) {
+          vector<ID> cls;
+          cls.push_back(ev->apply(Expr::Not, *it));
+          clss.push_back(cls);
+          cls.clear();
+          cls.push_back(ev->apply(Expr::Not, ev->prime(*it)));
+          clss.push_back(cls);
+        }
+        if (!units.empty() && !mktr)
+          for (vector<ID>::iterator it = units.begin(); it != units.end(); ++it) {
+            vector<ID> cls;
+            cls.push_back(*it);
+            clss.push_back(cls);
+          }
+        sst.opts.constraints->push_back(clss);
+      }
+      else
+        sst.opts.abstract = 0;
+
+      try {
+        _check(sst, false, true);
+        assert (false);
+      }
+      catch (CEX cex) {
+        if (wasnull) sst.opts.constraints = NULL;
+        delete ev;
+        delete cons;
+        delete consMgr;
+        throw cex;
+      }
+      catch (Safe safe) {
+        if (frozen.empty()) {
+          if (wasnull) sst.opts.constraints = NULL;
+          delete ev;
+          delete cons;
+          delete consMgr;
+          throw safe;
+        }
+
+        sst.opts.constraints->pop_back();
+
+        vector<ID> nfrozen(frozen);
+        for (vector<ID>::iterator it = nfrozen.begin(); it != nfrozen.end(); ++it)
+          *it = ev->apply(Expr::Not, *it);
+        vector<ID> npfrozen(frozen);
+        for (vector<ID>::iterator it = npfrozen.begin(); it != npfrozen.end(); ++it)
+          *it = ev->apply(Expr::Not, ev->prime(*it));
+
+        SAT::Clauses prf(safe.proof.begin(), safe.proof.end());
+        SAT::Clauses npprf(prf);
+        for(vector< vector<ID> >::iterator it = prf.begin(); it != prf.end(); ++it)
+          for(vector<ID>::iterator lit = it->begin(); lit != it->end(); ++lit)
+            *lit = ev->apply(Expr::Not, *lit);
+        for(vector< vector<ID> >::iterator it = npprf.begin(); it != npprf.end(); ++it)
+          for(vector<ID>::iterator lit = it->begin(); lit != it->end(); ++lit)
+            *lit = ev->prime(*lit);
+
+        if (!units.empty()) {
+          set<ID> funits;
+          while (true) {
+            vector<ID> disj;
+            for (SAT::Clauses::iterator it = npprf.begin(); it != npprf.end(); ++it)
+              disj.push_back(ev->apply(Expr::And, *it));
+            disj.push_back(Expr::primeFormula(*ev, npi));
+            SAT::Clauses npprf_cnf;
+            Expr::tseitin(*ev, ev->apply(Expr::Or, disj), npprf_cnf);
+            gid = cons->newGID();
+            cons->add(prf, gid);
+            cons->add(npprf_cnf, gid);
+            vector<ID> assumps, cunits(units);
+            assumps.insert(assumps.end(), nfrozen.begin(), nfrozen.end());
+            assumps.insert(assumps.end(), npfrozen.begin(), npfrozen.end());
+            vector<ID> _assumps(assumps);
+            _assumps.insert(_assumps.end(), cunits.begin(), cunits.end());
+            if (cons->sat(&_assumps, NULL, &cunits))
+              assert (false);
+            minimalCore(cons, assumps, cunits);
+            cons->remove(gid);
+            for (vector<ID>::iterator it = cunits.begin(); it != cunits.end(); ++it) {
+              if (funits.find(*it) != funits.end()) continue;
+              vector<ID> cls;
+              cls.push_back(*it);
+              prf.push_back(cls);
+              cls.clear();
+              cls.push_back(ev->apply(Expr::Not, ev->prime(*it)));
+              npprf.push_back(cls);
+            }
+            unsigned int sz = funits.size();
+            funits.insert(cunits.begin(), cunits.end());
+            if (funits.size() == sz) break;
+          }
+          units.clear();
+          units.insert(units.end(), funits.begin(), funits.end());
+
+          cout << "Abstract: critical units: " << units.size() << endl;
+        }
+
+        cout << (prf.size() > 0 ? "*" : "") << "Abstraction: prf before: " 
+             << prf.size() << endl;
+
+        set<ID> drop;
+        gid = cons->newGID();
+        cons->add(prf, gid);
+        cons->add(err, gid);
+        vector<ID> cassumps(nfrozen);
+        cassumps.insert(cassumps.end(), npfrozen.begin(), npfrozen.end());
+        if (!cons->sat(&cassumps, NULL, &cassumps)) {
+          minimalCore(cons, vector<ID>(), cassumps);
+          for (vector<ID>::iterator c = cassumps.begin(); c != cassumps.end(); ++c) {
+            ID pi = ev->nprimes(*c) == 1 ? ev->unprime(*c) : *c;
+            drop.insert(ev->apply(Expr::Not, pi));
+            if (sst.opts.abs_onedrop) break;
+          }
+          for (vector<ID>::iterator c = nfrozen.begin(); c != nfrozen.end();)
+            if (drop.find(ev->apply(Expr::Not, *c)) != drop.end())
+              nfrozen.erase(c);
+            else
+              ++c;
+          for (vector<ID>::iterator c = npfrozen.begin(); c != npfrozen.end();)
+            if (drop.find(ev->apply(Expr::Not, ev->unprime(*c))) != drop.end())
+              npfrozen.erase(c);
+            else
+              ++c;
+        }
+        else
+          assert (false);
+        cons->remove(gid);
+
+        gid = cons->newGID();
+        cons->add(prf, gid);
+        for (SAT::Clauses::iterator it = prf.begin(); 
+             it != prf.end() && (drop.empty() || !sst.opts.abs_onedrop);
+             ++it) {
+          while (drop.empty() || !sst.opts.abs_onedrop) {
+            vector<ID> cassumps(nfrozen), assumps(*it);
+            for (vector<ID>::iterator j = assumps.begin(); j != assumps.end(); ++j)
+              *j = ev->apply(Expr::Not, ev->prime(*j));
+            assumps.insert(assumps.end(), npfrozen.begin(), npfrozen.end());
+            vector<ID> _assumps(assumps);
+            _assumps.insert(_assumps.end(), cassumps.begin(), cassumps.end());
+            if (cons->sat(&_assumps, NULL, &cassumps) || cassumps.empty())
+              break;
+            minimalCore(cons, assumps, cassumps);
+
+            for (vector<ID>::iterator c = cassumps.begin(); c != cassumps.end(); ++c) {
+              drop.insert(ev->apply(Expr::Not, *c));
+              if (sst.opts.abs_onedrop) break;
+            }
+            for (vector<ID>::iterator c = nfrozen.begin(); c != nfrozen.end();)
+              if (drop.find(ev->apply(Expr::Not, *c)) != drop.end())
+                nfrozen.erase(c);
+              else
+                ++c;
+            for (vector<ID>::iterator c = npfrozen.begin(); c != npfrozen.end();)
+              if (drop.find(ev->apply(Expr::Not, ev->unprime(*c))) != drop.end())
+                npfrozen.erase(c);
+              else
+                ++c;
+          }
+        }
+
+        if (drop.empty()) {
+          // prf on abstraction is inductive
+          if (wasnull) sst.opts.constraints = NULL;
+          delete ev;
+          delete cons;
+          delete consMgr;
+          throw safe; // TODO: update proof to include previous proofs as well
+        }
+
+        if (sst.opts.abs_strict > 0) {
+          /* TODO: much better prf reduction */
+          bool done = false, changed = false;
+          SAT::Clauses::iterator curr = prf.begin();
+          while (!done) {
+            // not quite efficient yet: redo some checks when inductive
+            if (curr == prf.end()) curr = prf.begin();
+            done = curr == prf.begin();
+            cons->remove(gid);
+            gid = cons->newGID();
+            cons->add(prf, gid);
+            for (; curr != prf.end(); ++curr) {
+              vector<ID> assumps(*curr);
+              for (vector<ID>::iterator j = assumps.begin(); j != assumps.end(); ++j)
+                *j = ev->apply(Expr::Not, ev->prime(*j));
+              if (sst.opts.abs_strict == 1)
+                assumps.insert(assumps.end(), nfrozen.begin(), nfrozen.end());
+              if (cons->sat(&assumps)) {
+                changed = true;
+                done = false;
+                prf.erase(curr);
+                break;
+              }
+            }
+          }
+          if (!changed) {
+            cons->add(err, gid);
+            changed = cons->sat();
+          }
+          cons->remove(gid);
+
+          // prf has become inductive
+          if (sst.opts.abs_strict == 2 && prf.size() > 0) {
+            sst.opts.constraints->push_back(prf);
+            cons->add(prf);
+          }
+        }
+        else {
+          cons->remove(gid);
+          SAT::Clauses ic;
+          for (vector<ID>::iterator i = init.begin(); i != init.end(); ++i) {
+            vector<ID> cls;
+            cls.push_back(*i);
+            ic.push_back(cls);
+          }
+          gid = cons->newGID();
+          cons->add(ic, gid);
+          for (SAT::Clauses::iterator i = prf.begin(); i != prf.end();) {
+            vector<ID> assumps(*i);
+            for (vector<ID>::iterator j = assumps.begin(); j != assumps.end(); ++j)
+              *j = ev->apply(Expr::Not, ev->prime(*j));
+            assumps.insert(assumps.end(), nfrozen.begin(), nfrozen.end());
+            assumps.insert(assumps.end(), npfrozen.begin(), npfrozen.end());
+            if (cons->sat(&assumps))
+              prf.erase(i);
+            else
+              ++i;
+          }
+          cons->remove(gid);
+        }
+
+        cout << (prf.size() > 0 ? "**" : "") << "Abstraction: prf after: " 
+             << prf.size() << endl;
+
+        for (vector<ID>::iterator it = frozen.begin(); it != frozen.end();)
+          if (drop.find(*it) != drop.end())
+            frozen.erase(it);
+          else
+            ++it;
+
+        sst.cubes.clear();
+        sst.cubes.push_back(CubeSet());
+        if (!sst.opts.abs_strict) {
+          CubeSet start;
+          for (SAT::Clauses::iterator i = prf.begin(); i != prf.end(); ++i) {
+            vector<ID> cube(*i);
+            for (vector<ID>::iterator j = cube.begin(); j != cube.end(); ++j)
+              *j = ev->apply(Expr::Not, *j);
+            sort(cube.begin(), cube.end());
+            start.insert(cube);
+          }
+          sst.cubes.push_back(start);
+        }
+        sst.infCubes.clear();
+        sst.propClauses.clear();
+        sst.partition.clear();
+        sst.last_partition.clear();
+        sst.rvars.clear();
+        sst.nrvars.clear();
+        sst.base_constraints.clear();
+      }
+    }
+  }
+
+  void check(SharedState & sst, bool shortCircuit = true) {
+    if (sst.opts.abstract == 0) {
+      sst.stime = Util::get_user_cpu_time();
+      _check(sst, shortCircuit);
+    }
+    else if (sst.opts.abstract == 3) {
+      oaCheck(sst, shortCircuit);
+    }
+    else {
+      uaCheck(sst, shortCircuit);
     }
   }
 
@@ -3080,12 +4890,10 @@ namespace {
       st.transRel = cnfat->getPlainCNF();
       vector<ID> cube;
       complement(*st.ev, st.gprop, cube);
-      ID npi = st.ev->btrue();
-      for(vector<ID>::const_iterator it = cube.begin(); it != cube.end(); ++it) {
-        npi = st.ev->apply(Expr::And, npi, st.ev->prime(*it));
-        st.negGPropertyPrimed.push_back(st.ev->prime(*it));
-      }
-      st.npi = npi;
+      Expr::primeFormulas(*st.ev, cube);
+      st.npi = st.ev->apply(Expr::And, cube);
+      st.negGPropertyPrimed.insert(st.negGPropertyPrimed.end(),
+                                   cube.begin(), cube.end());
       st.propCube.insert(st.negGPropertyPrimed.begin(), st.negGPropertyPrimed.end());
     }
  
@@ -3110,7 +4918,7 @@ namespace {
     if(st.gprop.empty()) {
       SAT::Manager * satMgr = st.m.newSATManager();
       satMgr->add(st.negPropPrimedCNF);
-      SAT::Manager::View* satView = satMgr->newView(*st.ev);
+      SAT::Manager::View* satView = satMgr->newView(*st.ev, st.opts.backend);
       bool sat = satView->sat(&asgn);
       delete satView;
       delete satMgr;
@@ -3196,13 +5004,21 @@ namespace {
     }
 
     bool reduced = true;
+    bool timedout = true;
+    int timeout = st.m.options()["fair_pp_timeout"].as<int>();
     while(reduced) {
       reduced = false;
       SAT::Clauses nproof;
       for (SAT::Clauses::const_iterator it = proof.begin(); it != proof.end(); ++it) {
         vector<ID> cube;
         complement(_st.ev, *it, cube);
-        mic(_st, 1, cube, true);
+        if (!timedout && timeout > 0) {
+          int64_t elapsed = Util::get_user_cpu_time() - startTime;
+          if (elapsed > timeout)
+            timedout = true;
+        }
+        if (!timedout)
+          mic(_st, 1, cube, true);
         if (cube.size() < it->size()) {
           reduced = true;
           vector<ID> cls;
@@ -3267,7 +5083,7 @@ namespace {
       if(!st.gprop.empty()) {
         cout << "Property has " << st.gprop.size() << " literals" << endl;
       }
-      cout << "Time elapsed = " << (endTime - startTime) / 1000000.0 << "s" << endl;
+      cout << "Time elapsed (stronger) = " << (endTime - startTime) / 1000000.0 << "s" << endl;
     }
 
     int numLitsPost = 0; 
@@ -3283,7 +5099,6 @@ namespace {
   }
 
   bool deriveWeakerProof(ProofPostProcState & st, vector< vector<ID> > & proof) {
-  
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Deriving a weaker proof: ";
       printProofSize(proof);
@@ -3299,30 +5114,12 @@ namespace {
       satMgr->add(st.gprop);
 
     //Add transition relation to SAT database
-    //State of SAT manager after next statement: T
+    //State of SAT manager after next statement: T & P
+    //P is either included with the transition relation or is a generalized
+    //property that has been added in the previous statement
     satMgr->add(st.transRel);
 
     Expr::Manager::View* & ev = st.ev;
-
-    //State of SAT manager after next block: T ^ P
-    if(!st.opts.iictl) {
-      if(st.gprop.empty()) {
-        //Need to add property
-        SAT::Clauses prop;
-        Expr::tseitin(*ev, ev->apply(Expr::Not, st.npi), prop);
-        satMgr->add(prop);
-      }
-    }
-    else {
-      //Add property ***No need as it is included in transRel
-      /*
-      SAT::Clauses prop = *st.opts.iictl_clauses;
-      vector<ID> & repClause = prop.back();
-      assert(repClause.size() == 1);
-      repClause[0] = ev->apply(Expr::Not, repClause[0]);
-      satMgr->add(prop);
-      */
-    }
 
     // include user-provided constraints
     if (st.constraints)
@@ -3383,14 +5180,14 @@ namespace {
 
     //unordered_set<ID> propCube(st.negGPropertyPrimed.begin(), st.negGPropertyPrimed.end());
 
-    SAT::Manager::View* satView = satMgr->newView(*ev);
+    SAT::Manager::View* satView = satMgr->newView(*ev, st.opts.backend);
 
     assert(!(satView->sat(&clauseVars)));
 
-    set<ID> latches = st.coi.cCOI();
+    COI::range latchRange = st.coi.cCOI();
     //Prepare primed assignment
     SAT::Assignment asgn;
-    for(set<ID>::const_iterator it = latches.begin(); it != latches.end(); ++it) {
+    for(vector<ID>::const_iterator it = latchRange.first; it != latchRange.second; ++it) {
       asgn.insert(SAT::Assignment::value_type(ev->prime(*it), SAT::Unknown));
     }
  
@@ -3401,7 +5198,13 @@ namespace {
 
     set<unsigned> keep;
 
+    int timeout = st.m.options()["fair_pp_timeout"].as<int>();
     while(!clauseVarsIndices.empty()) {
+      if (timeout > 0) {
+        int64_t elapsed = Util::get_user_cpu_time() - startTime;
+        if (elapsed > timeout)
+          break;
+      }
       //Disable a clause
       unsigned index = *(clauseVarsIndices.begin());
       clauseVars[index] = ev->apply(Expr::Not, clauseVars[index]);
@@ -3427,6 +5230,10 @@ namespace {
         }
       }
       else {
+        if (st.m.options()["fair_weakenPfEfrt"].as<int>() < 1) {
+          clauseVars[index] = ev->apply(Expr::Not, clauseVars[index]);
+          continue;
+        }
         //Apply down. Since down can fail, take a snapshot of the current
         //state to be able to revert
         vector<ID> clauseVarsTmp = clauseVars;
@@ -3507,7 +5314,7 @@ namespace {
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Weaker proof derived: ";
       printProofSize(proof);
-      cout << "Time elapsed = " << (endTime - startTime) / 1000000.0 << "s" << endl;
+      cout << "Time elapsed (weaker) = " << (endTime - startTime) / 1000000.0 << "s" << endl;
     }
     int numClausesPost = proof.size();
 
@@ -3526,13 +5333,17 @@ namespace {
 
     //Apply each of deriveStrongerProof and deriveWeakerProof once
     bool strengthened = deriveStrongerProof(st, proof, opts);
+    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
     bool weakened = deriveWeakerProof(st, proof);
+    assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
 
     while(weakened && !proof.empty()) {
       strengthened = deriveStrongerProof(st, proof, opts, true);
+      assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
       weakened = false;
       if(strengthened && !proof.empty()) {
         weakened = deriveWeakerProof(st, proof);
+        assert(verifyProof(st.m, proof, opts.constraints, opts, &st.gprop));
       }
     }
 
@@ -3541,7 +5352,7 @@ namespace {
     if(st.m.verbosity() > Options::Informative) {
       cout << "IC3: Smaller proof derived: ";
       printProofSize(proof);
-      cout << "Time elapsed = " << (endTime - startTime) / 1000000.0 << "s" << endl;
+      cout << "Time elapsed (smaller) = " << (endTime - startTime) / 1000000.0 << "s" << endl;
     }
 
   }
@@ -3930,11 +5741,13 @@ namespace IC3 {
                         bool * bmcProof) {
     RchAttachment const * rat = (RchAttachment *) m.constAttachment(Key::RCH);
     unsigned int clb = useRAT ? rat->cexLowerBound() : 0;
+    if (opts.useRAT_stem && rat->hasTvInfo() && opts.stem == 0)
+      opts.stem = rat->stemLength();
     m.constRelease(rat);
     MC::ReturnValue rv;
-    if (clb <= 1) {
-      size_t k = opts.bmcsz ? 2 : 1;
-      //size_t k = 1000;
+    SAT::Clauses unrolling1, unrolling2;
+    if (clb <= 1 || opts.stem > 0) {
+      size_t k = opts.bmcsz ? 2 : max(1, opts.stem+1);
       BMC::BMCOptions bopts;
       bopts.useCOI = false;
       bopts.lo = opts.bmcsz ? 1 : clb;
@@ -3945,7 +5758,18 @@ namespace IC3 {
       bopts.iictl_clauses = opts.iictl_clauses;
       bopts.silent = opts.silent;
       bopts.proofProc = opts.proofProc;
-      rv = BMC::check(m, bopts, cexTrace, proofCNF);
+      bopts.timeout = opts.timeout;
+      int64_t stime = Util::get_user_cpu_time();
+      rv = BMC::check(m, bopts, cexTrace, proofCNF, 
+                      opts.stem > 0 ? &unrolling1 : NULL,
+                      opts.stem > 0 ? &unrolling2 : NULL);
+      int64_t bmcTime = (Util::get_user_cpu_time() - stime) / 1000000;
+      if (opts.timeout > 0) {
+        if (bmcTime >= opts.timeout && rv.returnType == MC::Unknown)
+          return rv;
+        opts.timeout -= bmcTime;
+      }
+
     }
     if (rv.returnType != MC::Unknown) {
       if(opts.printCex) {
@@ -3962,13 +5786,20 @@ namespace IC3 {
       *bmcProof = false;
     if (m.verbosity() > Options::Silent && !opts.silent)
       cout << "IC3: starting" << (opts.reverse ? " (reverse)" : "") << endl;
+    if (m.verbosity() > Options::Terse && !opts.silent)
+      cout << "IC3: Using " << opts.backend << " as backend" << endl;
     int rseed = m.options()["rand"].as<int>();
     if(rseed != -1) {
       srand(rseed);
       Sim::RandomGenerator::generator.seed(static_cast<unsigned int>(rseed));
     }
     SharedState sstate(m, opts, cubes, propClauses);
+    if (opts.stem > 0) {
+      sstate.stem = &unrolling1;
+      sstate.stem_plus = &unrolling2;
+    }
     MC::ReturnValue rt;
+    CubeSet _indCubes;
     try {
       check(sstate, !proofCNF);
     }
@@ -3983,6 +5814,65 @@ namespace IC3 {
           ev->sort(it->state.begin(), it->state.end());
           ev->sort(it->inputs.begin(), it->inputs.end());
         }
+        //Concretize
+        ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+        Expr::IDMap cur;
+        const Transition & init = cexTrace->front();
+        for (vector<ID>::const_iterator it = init.state.begin(); it != init.state.end(); ++it) {
+          bool pos = ev->op(*it) == Expr::Not ? false : true;
+          ID var = pos ? *it : ev->apply(Expr::Not, *it);
+          cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
+        }
+        for (vector<ID>::const_iterator it = init.inputs.begin(); it != init.inputs.end(); ++it) {
+          bool pos = ev->op(*it) == Expr::Not ? false : true;
+          ID var = pos ? *it : ev->apply(Expr::Not, *it);
+          cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
+        }
+        for (vector<Transition>::iterator trIt = cexTrace->begin()+1; trIt != cexTrace->end(); ++trIt) {
+          vector<ID> next = eat->nextStateFns();
+          varSub(*ev, cur, next);
+          cur.clear();
+          trIt->state.clear();
+          for (unsigned i = 0; i < next.size(); ++i) {
+            assert(next[i] == ev->btrue() || next[i] == ev->bfalse());
+            ID stateVar = eat->stateVars()[i];
+            trIt->state.push_back(next[i] == ev->btrue() ? stateVar : ev->apply(Expr::Not, stateVar));
+            cur.insert(Expr::IDMap::value_type(stateVar, next[i]));
+          }
+          for (vector<ID>::const_iterator it = trIt->inputs.begin(); it != trIt->inputs.end(); ++it) {
+            bool pos = ev->op(*it) == Expr::Not ? false : true;
+            ID var = pos ? *it : ev->apply(Expr::Not, *it);
+            cur.insert(Expr::IDMap::value_type(var, pos ? ev->btrue() : ev->bfalse()));
+          }
+        }
+        //Error state
+        cexTrace->push_back(Transition());
+        vector<ID> next = eat->nextStateFns();
+        varSub(*ev, cur, next);
+        for (unsigned i = 0; i < next.size(); ++i) {
+          assert(next[i] == ev->btrue() || next[i] == ev->bfalse());
+          ID stateVar = eat->stateVars()[i];
+          cexTrace->back().state.push_back(next[i] == ev->btrue() ? stateVar : ev->apply(Expr::Not, stateVar));
+        }
+        //Sanity check: make sure state is bad. Use a SAT query rather than
+        //varSub to account for models for which the property is a function of
+        //primary inputs
+        SAT::Manager * sman = m.newSATManager();
+        SAT::Manager::View * sview = sman->newView(*ev);
+        SAT::Clauses npi;
+        tseitin(*ev, eat->outputFns()[0], npi);
+        try {
+          sview->add(npi);
+        }
+        catch (SAT::Trivial tr) {
+          assert(false); //Property is true?!
+        }
+        bool sat = sview->sat(&cexTrace->back().state);
+        assert(sat);
+        delete sview;
+        delete sman;
+
+        m.constRelease(eat);
         delete ev;
       }
       if(cubes != NULL) {
@@ -4010,17 +5900,50 @@ namespace IC3 {
     catch (Timeout to) {
       rt.returnType = MC::Unknown;
 
-      if (!sstate.opts.reverse) {
+      //if (!sstate.opts.reverse) {
         // do the incremental thing here, as well
-        if (indCubes) {
+        if (indCubes || sstate.opts.propNconstr) {
+          if (m.verbosity() > Options::Informative)
+            cout << "Number of F_inf cubes = " << sstate.infCubes.size() << endl;
           int timeout = sstate.opts.timeout;
           sstate.opts.timeout = -1;
           State st(sstate);
-          initSAT(st);
+          if (sstate.opts.reverse)
+            initReverseSAT(st);
+          else
+            initSAT(st);
           renewSAT(st);
-          for (uint k = 0; k <= st.cubes.size()-2; ++k) extend(st, k);
-          propagateClausesSpecial(st, st.cubes.size()-2, *indCubes);
+          propagateClausesSpecial(st, st.cubes.size()-2, _indCubes);
           sstate.opts.timeout = timeout;
+          if (indCubes) *indCubes = _indCubes;
+          if (sstate.opts.propNconstr && !_indCubes.empty()) {
+            if (m.verbosity() > Options::Informative)
+              cout << "Total F_inf cubes = " << _indCubes.size() << endl;
+            Expr::Manager::View * ev = m.newView();
+            ExprAttachment * eat = (ExprAttachment*) m.attachment(Key::EXPR);
+            for (CubeSet::const_iterator it = _indCubes.begin(); it != _indCubes.end();
+                 ++it) {
+              ostringstream oss;
+              unsigned idx = eat->constraints().size();
+              oss << "dc" << idx;
+              assert(!ev->varExists(oss.str()));
+              ID discConstr = ev->newVar(oss.str());
+              vector<ID> cube = *it;
+              eat->addConstraint(discConstr, ev->apply(Expr::Not, ev->apply(Expr::And, cube)));
+              if (m.verbosity() > Options::Verbose) {
+                vector<ID> cls;
+                complement(*ev, *it, cls);
+                for(vector<ID>::const_iterator it2 = cls.begin(); it2 != cls.end();
+                    ++it2) {
+                  cout << Expr::stringOf(*ev, *it2) << " ";
+                }
+                cout << endl;
+              }
+            }
+            m.release(eat);
+            delete ev;
+          }
+ 
           if (cubes && sstate.opts.incremental) {
             CubeSet result;
             set_difference(sstate.cubes.back().begin(), sstate.cubes.back().end(),
@@ -4033,12 +5956,12 @@ namespace IC3 {
           *cubes = sstate.cubes;
           // IGNORE propClauses
         }
-      }
+      //}
 
       if (useRAT) {
         RchAttachment * rat = (RchAttachment *) m.constAttachment(Key::RCH);
         Expr::Manager::View * ev = m.newView();
-        for (unsigned int i = 0; i < sstate.cubes.size(); ++i) {
+        for (unsigned int i = 1; i < sstate.cubes.size(); ++i) {
           const CubeSet & cs = sstate.cubes[i];
           vector< vector<ID> > lvl(cs.begin(), cs.end());
           for (vector< vector<ID> >::iterator it = lvl.begin(); it != lvl.end(); it++)
@@ -4067,7 +5990,11 @@ namespace IC3 {
 
     if(opts.stats)
       sstate.stats.print();
-    
+
+    if (sstate.ev) {
+      sstate.ev->end_local();
+      delete sstate.ev;
+    }
     return rt;
   }
 
@@ -4079,240 +6006,50 @@ namespace IC3 {
     proof.insert(proof.end(), cs.begin(), cs.end());
   }
 
-  bool verifyProof(Model & m, vector< vector<ID> > & proof, vector<SAT::Clauses> * constraints, IC3Options & opts, vector<ID> * gprop = NULL) {
-
-    if (m.verbosity() == Options::Silent) return true;
-
-    if(m.verbosity() > Options::Informative) {
-      cout << "IC3: Verifying proof" << endl;
-    }
-   
-    SAT::Manager * propertyMgr = m.newSATManager();
-    SAT::Manager * proofMgr = m.newSATManager();
-    Expr::Manager::View * ev = m.newView();
-
-    ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
-    ID npi = eat->outputFnOf(eat->outputs()[0]);
-    vector<ID> init(eat->initialConditions());
-    m.constRelease(eat);
-
-    vector< vector< ID> > property;
-    Expr::tseitin(*ev, ev->apply(Expr::Not, npi), property);
-
-    CNFAttachment * cnfat = (CNFAttachment *) m.constAttachment(Key::CNF);
-    vector< vector<ID> > transRel = cnfat->getCNF();
-    m.constRelease(cnfat);
-
-    vector< vector<ID> > negPropertyPrimed;
-    Expr::tseitin(*ev, Expr::primeFormula(*ev, npi), negPropertyPrimed);
-
-    ID proofID = ev->btrue();
-    for(unsigned i = 0; i < proof.size(); ++i) {
-      ID clauseID = ev->bfalse();
-      for(unsigned j = 0; j < proof[i].size(); ++j) {
-        clauseID = ev->apply(Expr::Or, clauseID, proof[i][j]);
-      }
-      proofID = ev->apply(Expr::And, proofID, clauseID);
-    }
-    vector< vector<ID> > negProof;
-    Expr::tseitin(*ev, ev->apply(Expr::Not, proofID), negProof);
-    vector< vector<ID> > negProofPrimed(negProof);
-    for (vector< vector<ID> >::iterator it = negProofPrimed.begin(); it != negProofPrimed.end(); ++it)
-      Expr::primeFormulas(*ev, *it);
-
-    // include user-provided constraints
-    vector< vector<ID> > ccls;
-    if (constraints)
-      for (unsigned i = 0; i < constraints->size(); ++i)
-        ccls.insert(ccls.end(), (*constraints)[i].begin(), (*constraints)[i].end());
-
-    if (opts.constraints)
-      for (unsigned i = 0; i < opts.constraints->size(); ++i)
-        ccls.insert(ccls.end(), (*opts.constraints)[i].begin(), (*opts.constraints)[i].end());
-
-    bool init_sat = true, prop_sat = true, proof_sat = true;
-
-    {
-      SharedState sst(m, opts);
-      State _st(sst);
-      initSAT(_st);
-      if (sst.simpleInit) {
-        SAT::Manager * initMgr = m.newSATManager();
-        SAT::Manager::View* initView = initMgr->newView(*ev);
-        try {
-          for (size_t i = 0; i < init.size(); ++i) {
-            vector<ID> cls(1, init[i]);
-            initMgr->add(cls);
-          }
-          initMgr->add(negProof);
-          init_sat = initView->sat();
-        }
-        catch (SAT::Trivial tr) {
-          assert (!tr.value());
-          init_sat = false;
-        }
-        delete initView;
-        delete initMgr;
-      }
-      else {
-        try {
-          _st.ss.init->add(negProof);
-          init_sat = _st.init->sat();
-        }
-        catch (SAT::Trivial tr) {
-          assert (!tr.value());
-          init_sat = false;
-        }
-      }
-    }
-
-    SAT::Manager::View* propertyView = propertyMgr->newView(*ev);
-    try {
-      //propertyMgr->add(property);
-      propertyMgr->add(transRel);
-      propertyMgr->add(proof);
-      propertyMgr->add(negPropertyPrimed);
-      propertyMgr->add(ccls);
-      prop_sat = propertyView->sat();
-    }
-    catch (SAT::Trivial tr) {
-      assert (!tr.value());
-      prop_sat = false;
-    }
-    delete propertyView;
-
-    SAT::Manager::View* proofView = proofMgr->newView(*ev);
-    try {
-      //proofMgr->add(property);
-      if(gprop) {
-        for(vector<ID>::iterator it = gprop->begin(); it != gprop->end();
-            ++it) {
-          vector<ID> cls;
-          cls.push_back(*it);
-          proofMgr->add(cls);
-        }
-      }
-      proofMgr->add(transRel);
-      proofMgr->add(proof);
-      proofMgr->add(negProofPrimed);
-      proofMgr->add(ccls);
-      proof_sat = proofView->sat();
-    } 
-    catch (SAT::Trivial tr) {
-      assert (!tr.value());
-      proof_sat = false;
-    }
-    delete proofView;
-
-    if(m.verbosity() > Options::Informative) {
-      cout << "Initial condition satisfied? " << (init_sat? "No" : "Yes") << endl;
-      cout << "Property inductive? " << (prop_sat? "No" : "Yes") << endl;
-      cout << "Proof inductive? " << (proof_sat? "No" : "Yes") << endl;
-    }
-
-    delete ev;
-    delete propertyMgr;
-    delete proofMgr;
-
-    return !(init_sat || prop_sat || proof_sat);
-  }
-
-
   void postProcessProof(Model & m, vector< vector<ID> > & proof, ProofProcType type,
       IC3Options & opts, vector<ID> * gprop) {
     if(proof.empty()) //Nothing to process
       return;
 
+    //Disable CTG handling
+    int ctgs = opts.ctgs;
+    opts.ctgs = 0;
+
+    //Disable abstraction (TODO: use final abstraction that obtained proof)
+    int abstract = opts.abstract;
+    opts.abstract = 0;
+
     ProofPostProcState st(m, opts);
     if(gprop && !opts.iictl)
       st.gprop = *gprop;
     initProofPostProcState(st);
-    
-    //assert(verifyProof(m, proof, opts.constraints, opts));
+
+    assert(verifyProof(m, proof, opts.constraints, opts, gprop));
 
     if (type == STRENGTHEN) {
       //Strengthen proof
       deriveStrongerProof(st, proof, opts);
       clean(proof);
-      //assert(verifyProof(m, proof, opts.constraints, opts, gprop));
     }
     else if (type == WEAKEN) {
       //Weaken proof
       deriveWeakerProof(st, proof);
       clean(proof);
-      //assert(verifyProof(m, proof, opts.constraints, opts, gprop));
     }
     else if (type == SHRINK) {
       deriveSmallerProof(st, proof, opts);
       clean(proof);
-      //assert(verifyProof(m, proof, opts.constraints, opts, gprop));
     }
     else
       assert(false);
-  }
 
-  MC::ReturnValue reach(Model & m, IC3Options & opts,
-                        vector< vector< vector<ID> > > & proofs,
-                        vector<Transition> * cex) {
+    if (gprop && !opts.iictl)
+      *gprop = st.gprop;
 
-    vector< vector<ID> > rawProof;
-    vector<ID> gprop;
+    assert(verifyProof(m, proof, opts.constraints, opts, gprop));
 
-    bool old_cycle = opts.cycle;
-    opts.eqprop = false;
-    opts.cycle = true;
-    MC::ReturnValue rv = check(m, opts, cex, &rawProof, &gprop, NULL, NULL, NULL, false);
-    opts.cycle = old_cycle;
-    int timeout = opts.timeout;
-    opts.timeout = -1;
-    
-    if(rv.returnType == MC::Proof) {
-
-      if (rawProof.size() > 0) {
-       
-        assert(!gprop.empty());
-
-        ProofPostProcState st(m, gprop, opts.constraints, opts);
-        initProofPostProcState(st);
-    
-        assert(verifyProof(m, rawProof, opts.constraints, opts));
-
-        if(opts.proofProc == STRENGTHEN) {
-          vector< vector<ID> > strongerProof = rawProof;
-          deriveStrongerProof(st, strongerProof, opts);
-          strongerProof.push_back(st.gprop);
-          clean(strongerProof);
-          proofs.push_back(strongerProof);
-          assert(verifyProof(m, strongerProof, opts.constraints, opts));
-        }
-        else if (opts.proofProc == WEAKEN) {
-          vector< vector<ID> > weakerProof = rawProof;
-          deriveWeakerProof(st, weakerProof);
-          weakerProof.push_back(st.gprop);
-          clean(weakerProof);
-          proofs.push_back(weakerProof);
-          assert(verifyProof(m, weakerProof, opts.constraints, opts));
-        }
-        else if (opts.proofProc == SHRINK) {
-          vector< vector<ID> > smallerProof = rawProof;
-          deriveSmallerProof(st, smallerProof, opts);
-          smallerProof.push_back(st.gprop);
-          clean(smallerProof);
-          proofs.push_back(smallerProof);
-          assert(verifyProof(m, smallerProof, opts.constraints, opts));
-        }
-      }
-      else {
-        rawProof.push_back(gprop);
-        clean(rawProof);
-        proofs.push_back(rawProof);
-        assert(verifyProof(m, rawProof, opts.constraints, opts));
-      }
-    }
-
-    opts.timeout = timeout;
-
-    return rv;
+    opts.ctgs = ctgs;
+    opts.abstract = abstract;
   }
 
   MC::ReturnValue reach2(Model & m, IC3Options & opts,
@@ -4330,15 +6067,16 @@ namespace IC3 {
       proofs->push_back(vector< vector<ID> >());
       rawProof = &((*proofs)[0]);
     }
-    vector<ID> gprop;
+    vector<ID> gprop, concrete;
     bool bmcProof = true;
-    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes, propClauses, indCubes, false, &bmcProof);
+    MC::ReturnValue rv = check(m, opts, cex, rawProof, &gprop, cubes, 
+                               propClauses, indCubes, false, &bmcProof);
     opts.cycle = old_cycle;
     int timeout = opts.timeout;
     opts.timeout = -1;
-    
+
     if(rv.returnType == MC::Proof && rawProof && !bmcProof) {
-      if(!opts.proofProc == NONE) 
+      if(opts.proofProc != NONE) 
         postProcessProof(m, *rawProof, opts.proofProc, opts, &gprop);
       if(!opts.iictl)
         rawProof->push_back(gprop);
@@ -4349,17 +6087,28 @@ namespace IC3 {
   }
 
   bool mic(Model & m, IC3Options & opts, vector<ID> & cube) {
-    
+    if (m.verbosity() > Options::Informative) {
+      cout << "MIC: Starting" << endl;
+    }
+    int abs = opts.abstract;
+    opts.abstract = 0;
+    int ctgs = opts.ctgs;
+    opts.ctgs = 0;
+
     SharedState sst(m, opts);
     State _st(sst);
     initSAT(_st);
     extend(_st, 0);
 
+    opts.abstract = abs;
+
     set<ID> dummy;
     if(down(_st, 1, dummy, cube)) {
       mic(_st, 1, cube, true);
+      opts.ctgs = ctgs;
       return true;
     }
+    opts.ctgs = ctgs;
     return false;
   }
 }

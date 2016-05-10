@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -67,6 +67,35 @@ string BddTrAttachment::string(bool includeDetails) const {
 
 
 /**
+ * Compose auxiliary functions recursively into a BDD.
+ */
+void BddTrAttachment::composeAuxiliaryFunctions(
+  BddAttachment const * bat,
+  BDD & f,
+  unordered_map<int, ID> const & index2id)
+{
+  vector<unsigned int> support = f.SupportIndices();
+  queue< vector<unsigned int> > q;
+  q.push(support);
+  while (!q.empty()) {
+    vector<unsigned int> supp = q.front();
+    q.pop();
+    for (vector<unsigned int>::const_iterator j = supp.begin();
+         j != supp.end(); ++j) {
+      unordered_map<int,ID>::const_iterator cit = index2id.find(*j);
+      if (cit != index2id.end()) {
+        BDD g = bat->bdd(cit->second);
+        BDD a = bddManager().bddVar(*j);
+        f = f.AndAbstract(a.Xnor(g),a);
+        vector<unsigned int> addSupp = g.SupportIndices();
+        q.push(addSupp);
+      }
+    }
+  }
+}
+
+
+/**
  * Build BDDs for the transition relation of the model.
  */
 void BddTrAttachment::build()
@@ -115,20 +144,14 @@ void BddTrAttachment::build()
       bwAbsCube &= y;
       ID nsf = eat->nextStateFnOf(*i);
       BDD f = bat->bdd(nsf);
+      if (verbosity > Options::Informative)
+        if (f.IsVar())
+          cout << "Found a variable next-state function" << endl; 
       BDD t = y.Xnor(f);
       if (verbosity > Options::Verbose)
         reportBDD(stringOf(*v, nsv) + " <-> " + stringOf(*v, nsf),
                   t, nvars, verbosity, Options::Verbose);
       conjuncts.push_back(t);
-    }
-
-    // Add relational constraints.
-    const vector<ID> constr = eat->constraints();
-    for (vector<ID>::const_iterator i = constr.begin(); 
-         i != constr.end(); ++i) {
-      BDD cn = bat->bdd(*i);
-      conjuncts.push_back(cn);
-      _constr.push_back(cn);
     }
 
     // Process auxiliary variables.
@@ -142,43 +165,45 @@ void BddTrAttachment::build()
       inputCube &= v;
     }
     conjuncts.insert(conjuncts.end(), conjAux.begin(), conjAux.end());
+    // Build map from BDD variable indices to expression IDs.
+    unordered_map<int, ID> index2id;
+    for (unordered_map<ID, int>::const_iterator it = auxVar.begin();
+         it != auxVar.end(); ++it) {
+      index2id[it->second] = it->first;
+    }
+
+    // Add invariant constraints.
+    const vector<ID> constr = eat->constraintFns();
+    for (vector<ID>::const_iterator i = constr.begin(); 
+         i != constr.end(); ++i) {
+      BDD cn = bat->bdd(*i);
+      composeAuxiliaryFunctions(bat, cn, index2id);
+      _constr.push_back(cn);
+      BDD cny = cn.ExistAbstract(inputCube);
+      cny = cny.SwapVariables(_yvars, _xvars);
+      reportBDD("Invariant constraint", cn, nvars, verbosity, Options::Terse);
+      conjuncts.push_back(cn);
+      conjuncts.push_back(cny);
+    }
 
     unsigned int clusterLimit = 2500;
     if (_model.options().count("bdd_tr_cluster")) {
       clusterLimit = _model.options()["bdd_tr_cluster"].as<unsigned int>();
     }
 
-    // Collect output functions quantifying auxiliary variables.
-    unordered_map<int, ID> index2id;
-    for (unordered_map<ID, int>::const_iterator it = auxVar.begin();
-         it != auxVar.end(); ++it) {
-      index2id[it->second] = it->first;
-    }
+    // Collect output functions applying invariant constraints and substituting
+    // auxiliary variables.
     const vector<ID> outf = eat->outputs();
     for (vector<ID>::const_iterator i = outf.begin(); i != outf.end(); ++i) {
       BDD of = bat->bdd(eat->outputFnOf(*i));
       // Apply invariant constraints.
       for (vector<BDD>::iterator i = _constr.begin(); i != _constr.end(); ++i)
         of &= *i;
-      vector<unsigned int> support = of.SupportIndices();
-      queue< vector<unsigned int> > q;
-      q.push(support);
-      while (!q.empty()) {
-        vector<unsigned int> supp = q.front();
-        q.pop();
-        for (vector<unsigned int>::const_iterator j = supp.begin();
-             j != supp.end(); ++j) {
-          if (index2id.find(*j) != index2id.end()) {
-            BDD g = bat->bdd(index2id[*j]);
-            BDD a = bddManager().bddVar(*j);
-            of = of.AndAbstract(a.Xnor(g),a);
-            vector<unsigned int> addSupp = g.SupportIndices();
-            q.push(addSupp);
-          }
-        }
-      }
+      composeAuxiliaryFunctions(bat, of, index2id);
       // Finally, remove primary inputs.
-      of = of.ExistAbstract(inputCube);
+      if (_model.defaultMode() != Model::mFAIR) {
+        of = of.ExistAbstract(inputCube);
+      }
       _inv.push_back(of);
       reportBDD("Output function", of, _xvars.size(), verbosity,
                 Options::Terse);

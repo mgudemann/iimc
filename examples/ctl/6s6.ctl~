@@ -1,0 +1,26 @@
+#PASS: (0-9)
+AF AG signal477 # 650
+AF AG signal420 # 624
+AF AG signal414 # 620
+AF AG signal885 # 754
+AF AG !signal881 # 752
+AF AG signal880 # 750
+AF AG signal879 # 748
+AF AG signal878 # 746
+AF AG signal877 # 744
+AF AG signal870 # 742
+
+#FAIL: (10-12)
+AF AG signal469 # 648
+AG AF signal469 # 648
+AF AG signal881 # 752
+
+#PASS: (13-14)
+AG EF signal469 # 648
+AG AF signal400 # 612
+
+AF AG signal2035 # 988
+AF AG !signal2035 # 988
+AF AG signal478  # 652
+AF AG !signal478 # 652
+

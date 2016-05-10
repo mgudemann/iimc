@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -80,8 +80,8 @@ namespace {
 
 }
 
-void test_AIGER(const string & file, int verbosity) {
-  Model model;
+void test_AIGER(const string & file, var_map vm, int verbosity) {
+  Model model(vm);
   model.attach(new ExprAttachment(model));
   Parser::parseAIGER(file, model);
   if (verbosity) {
@@ -134,12 +134,12 @@ int main(int argc, char * argv[]) {
 
   if (vm.count("file")) {
     const string file = vm["file"].as<string>();
-    if (format == 0) test_AIGER(file,verbosity);
+    if (format == 0) test_AIGER(file,vm,verbosity);
     else test_DIMACS(file,verbosity);
   } else {
     string srcdir = Util::get_env_var("srcdir");
     const string file_0 = srcdir + default_file_0;
-    test_AIGER(file_0,verbosity);
+    test_AIGER(file_0,vm,verbosity);
     const string file_1 = srcdir + default_file_1;
     test_DIMACS(file_1,verbosity);
   }

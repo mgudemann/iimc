@@ -1,0 +1,18 @@
+aig 26 2 4 1 20
+7
+24
+44
+52
+12
+
+!+i0 in
+i1 gi
+l0 phi
+l1 gate
+l2 r0
+l3 r1
+o0 out
+c
+bliftoaig
+1.9
+gatedClock.blif

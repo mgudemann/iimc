@@ -566,12 +566,7 @@ void CSolver::delete_unrelevant_clauses(void) {
     }
 
     count++;
-    int max_activity = _params.cls_deletion.head_activity -
-                       (_params.cls_deletion.head_activity -
-                        _params.cls_deletion.tail_activity) *
-                       count/num_conf_cls;
     int max_conf_cls_size;
-
     if (head_count > 0) {
       max_conf_cls_size = _params.cls_deletion.head_num_lits;
       --head_count;
@@ -579,8 +574,14 @@ void CSolver::delete_unrelevant_clauses(void) {
       max_conf_cls_size = _params.cls_deletion.tail_num_lits;
     }
 
-    if (cl.activity() > max_activity)
-      continue;
+    if(num_conf_cls != 0){
+      int max_activity = _params.cls_deletion.head_activity -
+                        (_params.cls_deletion.head_activity -
+                         _params.cls_deletion.tail_activity) *
+                        count/num_conf_cls;
+      if (cl.activity() > max_activity)
+	continue;
+    }
 
     int val_0_lits = 0, val_1_lits = 0, unknown_lits = 0, lit_value;
     for (unsigned i = 0; i < cl.num_lits(); ++i) {
@@ -1861,11 +1862,11 @@ int CSolver::add_clause_incr(int * lits, int num_lits, int gid) {
 }
 
 //AARON
-void CSolver::_unit_ante(int * lid, int * nlid, char * did, ClauseIdx cid) {
+void CSolver::_unit_ante(vector<int> & lid, char * did, ClauseIdx cid) {
   CClause & cls = clause(cid);
   if (cls.num_lits() == 1) {
     //int ante = variable(cls.literal(0).var_index()).get_antecedent();
-    lid[(*nlid)++] = cls.literal(0).s_var();
+    lid.push_back(cls.literal(0).s_var());
   }
   for(unsigned i = 0, sz = cls.num_lits(); i < sz; ++i) {
     int vid = cls.literal(i).var_index();
@@ -1874,12 +1875,12 @@ void CSolver::_unit_ante(int * lid, int * nlid, char * did, ClauseIdx cid) {
       ClauseIdx ncid = variable(vid).get_antecedent();
       assert (ncid != NULL_CLAUSE);
       if (ncid != cid)
-	_unit_ante(lid, nlid, did, ncid);
+	_unit_ante(lid, did, ncid);
     }
   }
 }
-int CSolver::unit_antecedents(int * lid) {
-  if (_conflicts.empty()) return -1;
+void CSolver::unit_antecedents(vector<int> & lid) {
+  if (_conflicts.empty()) return;
 
   if (_didn < _variables.size()) {
     if (_did) free(_did);
@@ -1890,15 +1891,14 @@ int CSolver::unit_antecedents(int * lid) {
     _didn = _variables.size();
   }
 
-  int nlid;
   int confid = 0;
 #ifdef MULT_CONFLICTS
   int best_nlid = 100000;
   int k;
   for(k = _conflicts.size() - 1; k >= 0; --k) {
-    nlid = 0;
     memset(_did, 0, _didn);
     _unit_ante(lid, &nlid, _did, _conflicts[k]);
+    int nlid = lid.size();
     if (nlid <= best_nlid) {
       best_nlid = nlid;
       confid = k;
@@ -1907,12 +1907,9 @@ int CSolver::unit_antecedents(int * lid) {
   if (confid != 0) 
 #endif
   {
-    nlid = 0;
     memset(_did, 0, _didn);
-    _unit_ante(lid, &nlid, _did, _conflicts[confid]);
+    _unit_ante(lid, _did, _conflicts[confid]);
   }
-
-  return nlid;
 }
 
 bool CSolver::merge(list<unsigned int> & into, const vector<unsigned int> & vec) {

@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -57,13 +57,31 @@ namespace Expr {
 	    unsigned int limit = 0, bool sweep = false,
             Options::Verbosity verbosity = Options::Silent);
   /**
-   * Build the BDD for a set of expressions.
+   * Build the BDDs for a set of expressions.
    */
   IdBddMap bddOf(Manager::View & v, std::vector<ID> & ids,
                  Model const & model, std::unordered_map<ID, int>& orderMap,
 		 std::unordered_map<ID, int>& auxVarMap,
 		 unsigned int limit = 0, bool sweep = false,
                  Options::Verbosity verbosity = Options::Silent);
+
+  /**
+   * Build the BDD for an expression.
+   * Model-independent version of bddOf.  Does not allow sweeping.
+   */
+  BDD bddOf(Manager::View & v, ID id, Cudd const & bddMgr,
+            std::unordered_map<ID, int>& orderMap,
+            std::unordered_map<ID, int>& auxVarMap, unsigned int limit,
+            Options::Verbosity verbosity);
+
+  /**
+   * Build the BDDs for a set of expressions.
+   * Model-independent version of bddOf.  Does not allow sweeping.
+   */
+  IdBddMap bddOf(Manager::View & v, std::vector<ID> & ids,
+                 Cudd const & bddMgr, std::unordered_map<ID, int>& orderMap,
+                 std::unordered_map<ID, int>& auxVarMap, unsigned int limit,
+                 Options::Verbosity verbosity);
 
   /**
    * Compute an order for the variables of an expressions.

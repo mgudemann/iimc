@@ -1,0 +1,49 @@
+aig 96 0 20 0 76 0 0 1
+85
+91
+97
+103
+109
+115
+121
+127
+133
+139
+145
+151
+157
+163
+169
+175
+181
+187
+193
+41
+1
+2
+
+"&*.26:>BFKIOGECA?=#;&9+7.53361;/>-C+F)K'N%S#V![^cfknsv{~ƒ†	‹“–l0 state<19>
+l1 state<18>
+l2 state<17>
+l3 state<16>
+l4 state<15>
+l5 state<14>
+l6 state<13>
+l7 state<12>
+l8 state<11>
+l9 state<10>
+l10 state<9>
+l11 state<8>
+l12 state<7>
+l13 state<6>
+l14 state<5>
+l15 state<4>
+l16 state<3>
+l17 state<2>
+l18 state<1>
+l19 state<0>
+j0 fair0
+c
+bliftoaig
+1.9
+lasso.blif

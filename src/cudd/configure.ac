@@ -6,7 +6,7 @@ AC_INIT([cudd], [2.5.0], [Fabio@Colorado.EDU])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE(
-  [-Wall -Werror foreign subdir-objects color-tests silent-rules]
+  [1.11 -Wall -Werror foreign subdir-objects color-tests silent-rules]
 )
 AC_CONFIG_SRCDIR([epd.h])
 #AC_CONFIG_HEADERS([config.h])
@@ -18,12 +18,13 @@ AC_CONFIG_SRCDIR([epd.h])
 : ${CFLAGS="-g -O3"}
 AC_PROG_CXX
 AC_PROG_CC
+m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 AC_PROG_RANLIB
 
 # Checks for libraries.
 
 # Checks for header files.
-AC_CHECK_HEADERS([float.h math.h assert.h sys/times.h sys/time.h sys/resource.h])
+AC_CHECK_HEADERS([float.h math.h assert.h sys/times.h sys/time.h sys/resource.h errno.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE

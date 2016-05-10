@@ -619,9 +619,9 @@ Mtr_PrintGroups(
     }
     if (!silent) {
 #if SIZEOF_VOID_P == 8
-	(void) printf("%u", root->low + root->size - 1);
+	(void) printf("%u", (MtrHalfWord) (root->low + root->size - 1));
 #else
-	(void) printf("%hu", root->low + root->size - 1);
+	(void) printf("%hu", (MtrHalfWord) (root->low + root->size - 1));
 #endif
 	if (root->flags != MTR_DEFAULT) {
 	    (void) printf("|");

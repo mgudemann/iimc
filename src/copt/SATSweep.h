@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include "Model.h"
+#include "options.h"
 #include "AIGAttachment.h"
 #include "CombAttachment.h"
 
@@ -91,6 +92,8 @@ public:
     requires(Key::AIG, &aigFactory);
   }
   virtual void exec();
+private:
+  static ActionRegistrar action;
 };
 
 } //namespace Action

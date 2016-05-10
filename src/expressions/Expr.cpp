@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -357,7 +357,7 @@ namespace Expr {
     return n;
   }
 
-  const ID * const Manager::View::arguments(ID id, int * nArgs) {
+  const ID * Manager::View::arguments(ID id, int * nArgs) {
     if (MASK_NEG & id) {
       *nArgs = 1;
       childrenIDs1[0] = MASK_NEG ^ id;

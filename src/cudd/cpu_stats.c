@@ -22,14 +22,14 @@
 #define end _end
 #endif
 
-#ifndef __CYGWIN32__
+#ifndef __CYGWIN__
 extern int end, etext, edata;
 #endif
 
 void
 util_print_cpu_stats(FILE *fp)
 {
-#if HAVE_SYS_RESOURCE_H && !defined(__CYGWIN32__)
+#if HAVE_SYS_RESOURCE_H && !defined(__CYGWIN__)
     struct rusage rusage;
 #ifdef RLIMIT_DATA
     struct rlimit rlp;

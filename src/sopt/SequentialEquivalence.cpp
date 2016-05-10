@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -34,6 +34,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "ExprUtil.h"
 #include "SequentialEquivalence.h"
+#include "Sim.h"
 
 #include <set>
 #include <unordered_map>
@@ -45,6 +46,73 @@ namespace {
 
   typedef vector< set<ID> > Partition;
   typedef unordered_map<ID, ID> FMap;
+  typedef unordered_map< ID, set<ID> > IDIDSetMap;
+  typedef unordered_map< ID, pair<set<ID>, ID> > CacheMap;
+
+  class SimRefine : public Sim::StateFunctor64 {
+  public:
+    SimRefine(Model & m, Expr::Manager::View * _ev, Partition & _parts,
+              FMap & _fmap) : ev(_ev), parts(_parts), fmap(_fmap) {
+      ExprAttachment const * eat = (ExprAttachment *) m.constAttachment(Key::EXPR);
+      const vector<ID> & latches = eat->stateVars();
+      for (unsigned int i = 0; i < latches.size(); ++i)
+        latchOrder.insert(OMap::value_type(latches[i], i));
+      m.constRelease(eat);
+    }
+
+    virtual bool operator()(vector<uint64_t>::const_iterator stateBegin,
+                            vector<uint64_t>::const_iterator stateEnd) {
+      Partition newParts;
+      for (Partition::iterator it = parts.begin(); it != parts.end(); ++it) {
+        ID rep;
+        uint64_t repVal;
+        if (it->find(ev->bfalse()) != it->end()) {
+          rep = ev->bfalse();
+          repVal = 0;
+        }
+        else if (it->find(ev->btrue()) != it->end()) {
+          rep = ev->btrue();
+          repVal = 0xFFFFFFFFFFFFFFFFLL;
+        }
+        else {
+          rep = *(it->begin());
+          repVal = *(stateBegin + latchOrder[rep]);
+        }
+        set<ID> eq;
+        ValIDSetMap neq;
+        eq.insert(rep);
+        for (set<ID>::const_iterator pit = it->begin(); pit != it->end(); ++pit) {
+          if (*pit == rep) continue;
+          uint64_t pitVal = *(stateBegin + latchOrder[*pit]);
+          if (repVal == pitVal)
+            eq.insert(*pit);
+          else {
+            neq[pitVal].insert(*pit);
+          }
+        }
+        if (eq.size() > 1)
+          newParts.push_back(eq);
+        else
+          fmap.erase(*(eq.begin()));
+        for (ValIDSetMap::const_iterator classIt = neq.begin(); classIt != neq.end(); ++classIt) {
+          if (classIt->second.size() > 1)
+            newParts.push_back(classIt->second);
+          else
+            fmap.erase(*(classIt->second.begin()));
+        }
+      }
+      parts = newParts;
+      return (parts.size() > 0);
+    }
+
+  private:
+    Expr::Manager::View * ev;
+    Partition & parts;
+    FMap & fmap;
+    typedef unordered_map<ID, unsigned> OMap;
+    typedef unordered_map< uint64_t, set<ID> > ValIDSetMap;
+    OMap latchOrder;
+  };
 
   class EqualFn {
   public:
@@ -106,20 +174,17 @@ namespace {
     SAT::Manager * sman;
   };
 
-  bool refine(Expr::Manager::View * ev, Partition & parts, const FMap & roots, EqualFn & equal) {
+  bool refine(Expr::Manager::View * ev, Partition & parts, const FMap & roots, FMap & fmap, EqualFn & equal) {
     bool changed = false;
     Partition newParts;
     equal.reset();
-    for (Partition::iterator it = parts.begin(); it != parts.end();) {
-      bool has_false = false, has_true = false;
+    for (Partition::iterator it = parts.begin(); it != parts.end(); ++it) {
       ID rep, rrep;
       if (it->find(ev->bfalse()) != it->end()) {
-        has_false = true;
         rep = ev->bfalse();
         rrep = ev->bfalse();
       }
       else if (it->find(ev->btrue()) != it->end()) {
-        has_true = true;
         rep = ev->btrue();
         rrep = ev->btrue();
       }
@@ -127,7 +192,8 @@ namespace {
         rep = *(it->begin());
         rrep = roots.find(rep)->second;
       }
-      set<ID> eq, neq;
+      set<ID> eq;
+      IDIDSetMap neq;
       eq.insert(rep);
       for (set<ID>::const_iterator pit = it->begin(); pit != it->end(); ++pit) {
         if (*pit == rep) continue;
@@ -135,22 +201,34 @@ namespace {
         if (equal(rrep, rpit->second))
           eq.insert(*pit);
         else {
-          neq.insert(*pit);
+          neq[rpit->second].insert(*pit);
           changed = true;
         }
       }
-      if ((!has_false && !has_true) || eq.size() > 1)
+      if (eq.size() > 1)
         newParts.push_back(eq);
-      if (neq.size() > 0)
-        *it = neq;
-      if (neq.size() == 0)
-        ++it;
+      else
+        fmap.erase(*(eq.begin()));
+      for (IDIDSetMap::const_iterator classIt = neq.begin(); classIt != neq.end(); ++classIt) {
+        if (classIt->second.size() > 1)
+          newParts.push_back(classIt->second);
+        else
+          fmap.erase(*(classIt->second.begin()));
+      }
     }
     parts = newParts;
     return changed;
   }
 
-  void iterate(Expr::Manager::View * ev, ExprAttachment * const eat, Partition & parts, FMap & fmap) {
+  void substitute(const set<ID> & support, set<ID> & subSupport, const FMap & lmap) {
+    for (set<ID>::const_iterator it = support.begin(); it != support.end(); ++it) {
+      FMap::const_iterator subIt = lmap.find(*it);
+      ID sub = subIt != lmap.end() ? subIt->second : *it;
+      subSupport.insert(sub);
+    }
+  }
+
+  void iterate(Expr::Manager::View * ev, ExprAttachment * const eat, Partition & parts, FMap & fmap, const IDIDSetMap & nsfSupport, CacheMap & cache) {
     // 1. map each latch to its EC's representative
     FMap lmap;
     for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
@@ -163,13 +241,39 @@ namespace {
     // 2. varSub the latch map to form new roots
     if (lmap.size() > 0) {
       vector<ID> roots;
+      vector<ID> allRoots;
+      vector<unsigned> indices;
       // assumes iteration in same order
-      for (FMap::const_iterator it = fmap.begin(); it != fmap.end(); ++it)
-        roots.push_back(it->second);
+      unsigned j = 0;
+      for (FMap::const_iterator it = fmap.begin(); it != fmap.end(); ++it, ++j) {
+        const set<ID> & support = nsfSupport.find(it->first)->second;
+        set<ID> subSupport;
+        substitute(support, subSupport, lmap);
+        CacheMap::const_iterator cacheIt = cache.find(it->first);
+        if (cacheIt == cache.end() || subSupport != cacheIt->second.first) {
+          roots.push_back(it->second);
+          indices.push_back(j);
+          allRoots.push_back(ev->btrue()); //Arbitrary, will be replaced by roots
+        }
+        else {
+          allRoots.push_back(cacheIt->second.second);
+        }
+      }
       Expr::varSub(*ev, lmap, roots);
+      //Replace the nsfs that were varSubbed
+      for (unsigned j = 0; j < indices.size(); ++j) {
+        allRoots[indices[j]] = roots[j];
+      }
+      cache.clear();
       unsigned int i = 0;
-      for (FMap::iterator it = fmap.begin(); it != fmap.end(); ++it, ++i)
-        it->second = roots[i];
+      for (FMap::iterator it = fmap.begin(); it != fmap.end(); ++it, ++i) {
+        it->second = allRoots[i];
+        //Cache results
+        const set<ID> & support = nsfSupport.find(it->first)->second;
+        set<ID> subSupport;
+        substitute(support, subSupport, lmap);
+        cache.insert(CacheMap::value_type(it->first, make_pair(subSupport, allRoots[i])));
+      }
     }
   }
 
@@ -192,8 +296,9 @@ void SequentialEquivalenceAction::exec() {
   vector<ID> vars = eat->stateVars();
   for (vector<ID>::const_iterator it = vars.begin(); it != vars.end(); ++it)
     fmap.insert(FMap::value_type(*it, eat->nextStateFnOf(*it)));
-
-  FMap uninitializedLatches = fmap;
+ 
+  //uninitialized latches or those that get dropped out of ECs
+  FMap singletonLatches = fmap; 
 
   // currently only works for AIGER 1.9 initial conditions
   Partition parts;
@@ -204,11 +309,11 @@ void SequentialEquivalenceAction::exec() {
   for (vector<ID>::const_iterator it = init.begin(); it != init.end(); ++it) {
     if (ev->op(*it) == Expr::Var) {
       tpart.insert(*it);
-      uninitializedLatches.erase(*it);
+      singletonLatches.erase(*it);
     }
     else {
       fpart.insert(ev->apply(Expr::Not, *it));
-      uninitializedLatches.erase(ev->apply(Expr::Not,*it));
+      singletonLatches.erase(ev->apply(Expr::Not,*it));
     }
   }
 
@@ -219,10 +324,27 @@ void SequentialEquivalenceAction::exec() {
   parts.push_back(fpart);
   parts.push_back(tpart);
 
+  // Construct map of latches to fan-in latches.
+  IDIDSetMap nsfSupport;
+  for (vector<ID>::const_iterator it = vars.begin(); it != vars.end(); ++it) {
+    set<ID> support;
+    eat->supportStateVars(*ev, eat->nextStateFnOf(*it), support);
+    nsfSupport.insert(IDIDSetMap::value_type(*it, support));
+  }
+
   if (model().verbosity() > Options::Terse)
     cout << "SequentialEquivalenceAction starting" << endl;
   if (model().verbosity() > Options::Silent)
     cout << "SequentialEquivalence: Initial # latches = " << vars.size() << endl;
+
+  //Refine classes
+  if (model().verbosity() > Options::Informative)
+    cout << "SequentialEquivalence: Simulation refinement" << endl;
+  SimRefine simRefine(model(), ev, parts, fmap);
+  sequentialSimulateRandom64(model(), 100, simRefine);
+
+  CacheMap cache;
+  ev->begin_local();
   for (vector<EqualFn *>::iterator eq = eqs.begin(); eq != eqs.end(); ++eq) {
     for (;;) {
       if (model().verbosity() > Options::Informative) {
@@ -233,10 +355,9 @@ void SequentialEquivalenceAction::exec() {
 #endif
         cout << endl;
       }
-      ev->begin_local();
       FMap curr(fmap);
-      iterate(ev, eat, parts, curr);
-      if (!refine(ev, parts, curr, **eq)) {
+      iterate(ev, eat, parts, curr, nsfSupport, cache);
+      if (!refine(ev, parts, curr, fmap, **eq)) {
         if (eq+1 == eqs.end()) {
           // globalize roots
           vector<ID> roots;
@@ -250,13 +371,19 @@ void SequentialEquivalenceAction::exec() {
           // save as fmap
           fmap = curr;
         }
-        ev->end_local();
         break;
       }
-      ev->end_local();
     }
   }
+  ev->end_local();
   model().constRelease(eat);
+
+  //Add latches that were dropped from ECs
+  for (vector<ID>::const_iterator it = vars.begin(); it != vars.end(); ++it) {
+    if (fmap.find(*it) == fmap.end())
+      singletonLatches.insert(FMap::value_type(*it, eat->nextStateFnOf(*it)));
+  }
+
 
   bool changed = false;
   for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it)
@@ -274,12 +401,13 @@ void SequentialEquivalenceAction::exec() {
       seqat->nextStateFns = eat->nextStateFns();
     }
     eat->clearNextStateFns();
+    map<ID, ID> latchToNsf;
     for (Partition::const_iterator it = parts.begin(); it != parts.end(); ++it) {
       // set next state function
       set<ID>::const_iterator rep = it->begin();
       if (*rep != ev->bfalse() && *rep != ev->btrue()) {
         FMap::const_iterator rit = fmap.find(*rep);
-        eat->setNextStateFn(*rep, rit->second);
+        latchToNsf.insert(map<ID, ID>::value_type(*rep, rit->second));
       }
       // build map of latch to representative latch
       set<ID>::const_iterator pit = rep;
@@ -288,10 +416,14 @@ void SequentialEquivalenceAction::exec() {
         seqat->optimized.insert(unordered_map<ID, ID>::value_type(*pit, *rep));
       }
     }
-    for(FMap::const_iterator it = uninitializedLatches.begin();
-        it != uninitializedLatches.end(); ++it) {
+    for(FMap::const_iterator it = singletonLatches.begin();
+        it != singletonLatches.end(); ++it) {
       ID nsf = Expr::varSub(*ev, lmap, it->second);
-      eat->setNextStateFn(it->first, nsf);
+      latchToNsf.insert(map<ID, ID>::value_type(it->first, nsf));
+    }
+    for (map<ID, ID>::const_iterator it = latchToNsf.begin();
+        it != latchToNsf.end(); ++it) {
+      eat->setNextStateFn(it->first, it->second);
     }
     ev->keep(eat->nextStateFnOf(eat->stateVars()));
 
@@ -307,15 +439,16 @@ void SequentialEquivalenceAction::exec() {
         eat->addInitialCondition(*it);
 
     vector<ID> constraints(eat->constraints());
+    vector<ID> constraintFns(eat->constraintFns());
     eat->clearConstraints();
-    for (vector<ID>::iterator it = constraints.begin(); it != constraints.end(); ++it) {
+    for (vector<ID>::size_type i = 0; i != constraintFns.size(); ++i) {
       //Changed by Zyad 11/08/2011
       //if (Expr::varSub(*ev, lmap, *it) == *it)
         //eat->addConstraint(*it);
-      ID f = Expr::varSub(*ev, lmap, *it);
-      eat->addConstraint(f);
+      ID f = Expr::varSub(*ev, lmap, constraintFns[i]);
+      eat->addConstraint(constraints[i], f);
     }
-    ev->keep(eat->constraints());
+    ev->keep(eat->constraintFns());
 
     vector<ID> outputs(eat->outputs());
     vector<ID> outputFns(eat->outputFnOf(outputs));

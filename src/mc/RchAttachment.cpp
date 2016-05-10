@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -75,9 +75,19 @@ ID RchAttachment::updateBound(ID update, ID bound, Expr::Op op)
 
 
 unsigned int RchAttachment::updateCexLowerBound(unsigned int newLb) {
-  return (_cex_lb = std::max(_cex_lb, newLb));
+  return (_cex_lb = max(_cex_lb, newLb));
 
 } // RchAttachment::updateCexLowerBound
+
+
+void RchAttachment::setTvInfo(unsigned int stem, unsigned int loop,
+                              unsigned int stable, bool widened) {
+  _has_tv_info = true;
+  _stem_length = stem;
+  _loop_length = loop;
+  _stabilized = stable;
+  _widened = widened;
+}
 
 
 void RchAttachment::setForwardBddLowerBound(BDD newFwLb) {

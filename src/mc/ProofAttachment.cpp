@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -37,8 +37,61 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ProofAttachment.h"
 #include "SeqAttachment.h"
 #include "Util.h"
+#include <boost/regex.hpp>
 
 using namespace std;
+
+namespace {
+  struct nameCompare {
+    nameCompare(Expr::Manager::View *v) : v(v) {}
+    bool operator ()(ID const a, ID const b) const {
+      std::string aString = stringOf(*v, a);
+      std::string bString = stringOf(*v, b);
+      std::string aName, bName;
+      boost::smatch m;
+
+      if (aString[0] == '!')  aString = aString.substr(1);
+      if (bString[0] == '!')  bString = bString.substr(1);
+
+      bool aIsPred = !std::strncmp(aString.c_str(), "p_xx", 2);
+      bool bIsPred = !std::strncmp(bString.c_str(), "p_xx", 2);
+      // put the predicates at the end (they are also poorly sorted)
+      if (aIsPred && bIsPred){
+	// strip off predicate prefix and continue
+	aString = aString.substr(2);
+	bString = bString.substr(2);
+      }
+      else if (aIsPred)
+	return false;
+      else if (bIsPred)
+	return true;
+
+      boost::regex getName ("(.*?)(<\\*?\\d\\*?>)"); // find name in !name<3> or name<*2*>
+      boost::regex_search(aString, m, getName);
+      aName = m[1].str();
+      boost::regex_search(bString, m, getName);
+      bName = m[1].str();
+      if (aName != bName)
+	return aName < bName;
+
+      // only support single multi-dimensional Ex:  reg [3:0] X [2:0];
+      boost::regex getBit ("<(\\d*?)>"); // find 3 in ...<3>...
+      boost::regex getWidth ("<\\*(\\d*?)\\*>"); // find 3 in ...<*3*>...
+      int bvalA = boost::regex_search(aString, m, getBit) ? atoi(m[1].str().c_str()) : -1;
+      int wvalA = boost::regex_search(aString, m, getWidth) ? atoi(m[1].str().c_str()) : -1;
+      int bvalB = boost::regex_search(bString, m, getBit) ? atoi(m[1].str().c_str()) : -1;
+      int wvalB = boost::regex_search(bString, m, getWidth) ? atoi(m[1].str().c_str()) : -1;
+
+      if (wvalA != wvalB)
+	return wvalA < wvalB;
+      else
+	return bvalA < bvalB;
+    }
+  private:
+    Expr::Manager::View *v;
+  };
+}
+
 /**
  * Make string out of attachment.
  */
@@ -123,7 +176,8 @@ void ProofAttachment::restoreDroppedLatches() {
     //original model
     COIAttachment const * coiat = (COIAttachment *) model().constAttachment(Key::COI);
     if(coiat) {
-      set<ID> coi = coiat->coi().cCOI();
+      COI::range latchRange = coiat->coi().cCOI();
+      set<ID> coi(latchRange.first, latchRange.second);
       model().constRelease(coiat);
       //Missing latches is the difference
       set<ID> diff;
@@ -301,28 +355,81 @@ void ProofAttachment::printCex(std::ostream& os) const
   assert(_hasConclusion && _safe == 1);
   Expr::Manager::View * v = _model.newView();
 
+  assert(_model.options().count("print_cex")); // delete this?
+
   os << std::endl << "Counterexample Trace:" << std::endl;
-  for(unsigned i = 0; i < _cex.size(); ++i) {
-    os << "State " << i << ":" << std::endl;
-    if(!_cex[i].state.empty()) {
-      os << stringOf(*v, _cex[i].state[0]);
-      for(unsigned j = 1; j < _cex[i].state.size(); ++j) {
-        os << " & " << stringOf(*v, _cex[i].state[j]);
+
+
+  std::vector<Transition> cex(_cex);
+
+  // compute changing latches/inputs, take state intersection after sorting by ID
+  std::vector <ID> newState (_cex[0].state);
+  std::vector <ID> newInputs (_cex[0].inputs);
+  std::vector <ID> diffState (_cex[0].state);
+  std::vector <ID> diffInputs (_cex[0].inputs);
+  if (!_cex.empty()){
+    std::sort(cex[0].state.begin(), cex[0].state.end());
+    std::sort(cex[0].inputs.begin(), cex[0].inputs.end());
+  }
+  unsigned i;
+  for(i = 1; i < _cex.size(); ++i) {
+    std::vector<ID>::iterator endIt;
+    std::sort(cex[i].state.begin(), cex[i].state.end()); // by ID, for intersection
+    
+    endIt = set_difference(cex[i].state.begin(), cex[i].state.end(),
+			   cex[i-1].state.begin(), cex[i-1].state.end(), diffState.begin());
+    cex[i-1].state = newState;
+    newState = std::vector<ID>(diffState.begin(), endIt);
+    
+    std::sort(cex[i].inputs.begin(), cex[i].inputs.end());
+    endIt = set_difference(cex[i].inputs.begin(), cex[i].inputs.end(),
+			   cex[i-1].inputs.begin(), cex[i-1].inputs.end(), diffInputs.begin());
+    cex[i-1].inputs = newInputs;
+    newInputs = std::vector<ID>(diffInputs.begin(), endIt);
+  }
+  cex[i-1].state = newState;
+  cex[i-1].inputs = newInputs;
+
+
+  // lexographically sort states
+  for(unsigned i = 0; i < cex.size(); ++i) {
+    sort(cex[i].state.begin(), cex[i].state.end(), nameCompare(v));
+    sort(cex[i].inputs.begin(), cex[i].inputs.end(), nameCompare(v));
+  }
+
+  // traverse and print each cex state
+  for(unsigned i = 0; i < cex.size(); ++i) {
+    vector <ID> state (cex[i].state);
+    vector <ID> inputs (cex[i].inputs);
+
+    os << "--State " << i << ":" << endl;
+    if(!state.empty()) {
+      for(unsigned j = 0; j < state.size(); ++j) {
+	bool isNeg = v->op(state[j]) == Expr::Not;
+	ID baseId = isNeg ? v->apply(Expr::Not, state[j]) : state[j];
+	// indentation can be used by some editors to do text folding
+	os << "  " << stringOf(*v, baseId) << ":" << !isNeg << endl;
       }
-      os << std::endl;
     }
-    os << "Inputs: " << std::endl;
-    if(!_cex[i].inputs.empty()) {
-      os << stringOf(*v, _cex[i].inputs[0]);
-      for(unsigned j = 1; j < _cex[i].inputs.size(); ++j) {
-        os << " & " << stringOf(*v, _cex[i].inputs[j]);
+    else
+      os << "  No latch change" << std::endl;
+
+    os << "--Inputs: " << std::endl;
+    if(!inputs.empty()) {
+      for(unsigned j = 0; j < inputs.size(); ++j) {
+	bool isNeg = v->op(inputs[j]) == Expr::Not;
+	ID baseId = isNeg ? v->apply(Expr::Not, inputs[j]) : inputs[j];
+	os << "  " << stringOf(*v, baseId) << ":" << !isNeg << endl;
       }
-      os << std::endl;
     }
+    else
+      os << "  No input change" << std::endl;
+
     os << std::endl;
   }
   delete v;
 }
+
 
 void ProofAttachment::printProof(std::ostream& os) const
 {

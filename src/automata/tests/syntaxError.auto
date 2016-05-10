@@ -1,0 +1,5 @@
+Structure
+   1 { [l0 == o1] 1 [!(o0 == o1)] 2} # Missing comma
+   2 { [true] 2}
+Buechi Fairness
+2

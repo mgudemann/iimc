@@ -161,9 +161,9 @@ EXTERN void SAT_Prefer(SAT_Manager        mng,
   solver->prefer(v_idx, val);
 }
 
-EXTERN int SAT_UA(SAT_Manager mng, int * lits) {
+EXTERN void SAT_UA(SAT_Manager mng, vector<int> & lits) {
   CSolver * solver = (CSolver*) mng;
-  return solver->unit_antecedents(lits);
+  solver->unit_antecedents(lits);
 }
 //AARON
 

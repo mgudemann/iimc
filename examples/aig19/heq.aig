@@ -1,0 +1,15 @@
+aig 9 1 3 1 5
+1
+2
+18
+10
+
+i0 i0
+l0 l0
+l1 l1
+l2 l2
+o0 o0
+c
+bliftoaig
+1.9
+heq.blif

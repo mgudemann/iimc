@@ -1,5 +1,5 @@
 /********************************************************************
-Copyright (c) 2010-2012, Regents of the University of Colorado
+Copyright (c) 2010-2013, Regents of the University of Colorado
 
 All rights reserved.
 
@@ -972,6 +972,17 @@ void satSweep(Model& model, AIGAttachment const * const aat,
   //Second create clauses for all output functions
   vector<ID> ids = tseitin(aig, aig.outputFnRefs(), *modelView, clauses,
       idOfAigRef, &satIdOfRef, false);
+  tseitin(aig, aig.badFnRefs(), *modelView, clauses, idOfAigRef,
+      &satIdOfRef, false);
+  tseitin(aig, aig.constraintFnRefs(), *modelView, clauses, idOfAigRef,
+      &satIdOfRef, false);
+  for (vector< vector<NodeRef> >::const_iterator it = aig.justiceFnSetRefs().begin();
+       it != aig.justiceFnSetRefs().end(); ++it) {
+    tseitin(aig, *it, *modelView, clauses, idOfAigRef,
+        &satIdOfRef, false);
+  }
+  tseitin(aig, aig.fairnessFnRefs(), *modelView, clauses, idOfAigRef,
+      &satIdOfRef, false);
   //If property assumption is set, assert the property
   vector<NodeIndex> outputConesIndices;
   if(model.options().count("satsweep_assumeProperty")) {
@@ -1007,7 +1018,10 @@ void satSweep(Model& model, AIGAttachment const * const aat,
   }
 
   //Create a view of the SAT manager
-  SAT::Manager::View* satView = satMgr->newView(*modelView);
+  string backend = model.options()["satsweep_backend"].as<string>();
+  if(verbosity > Options::Terse)
+    cout << ss << "Using " << backend << " as backend" << endl;
+  SAT::Manager::View* satView = satMgr->newView(*modelView, SAT::toSolver(backend));
   //Add all clauses to the view
   satView->add(clauses);
 
@@ -1096,7 +1110,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
         NodeIndex nodeIndex = *nodeIter;
         //Skip checking if depth is larger than current depth threshold
         if(aig.depth(nodeIndex) > (size_t)(depthThreshold) ||
-            (numNodes == 2 && !clustered) || numNodes == MAX_LITS - 1) {
+            (numNodes == 2 && !clustered)) {
           break;
         }
         ++numNodes;
@@ -1336,7 +1350,7 @@ void satSweep(Model& model, AIGAttachment const * const aat,
             }
             catch(SAT::Trivial tr) {
             }
-            if(verbosity >= Options::Verbose) {
+            if(verbosity > Options::Verbose) {
               cout << ss << "Merging node " << *nodeIt << " with "
                    << rep << endl;
             }
