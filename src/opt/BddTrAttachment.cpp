@@ -126,9 +126,9 @@ void BddTrAttachment::build()
     const vector<ID> constr = eat->constraints();
     for (vector<ID>::const_iterator i = constr.begin(); 
          i != constr.end(); ++i) {
-      ID primed = Expr::primeFormula(*v, *i);
-      BDD cn = bat->bdd(v->apply(Expr::And, *i, primed));
+      BDD cn = bat->bdd(*i);
       conjuncts.push_back(cn);
+      _constr.push_back(cn);
     }
 
     // Process auxiliary variables.
@@ -149,30 +149,17 @@ void BddTrAttachment::build()
     }
 
     // Collect output functions quantifying auxiliary variables.
-#if 1
     unordered_map<int, ID> index2id;
     for (unordered_map<ID, int>::const_iterator it = auxVar.begin();
          it != auxVar.end(); ++it) {
       index2id[it->second] = it->first;
     }
-#endif
     const vector<ID> outf = eat->outputs();
     for (vector<ID>::const_iterator i = outf.begin(); i != outf.end(); ++i) {
-#if 0
-      vector<BDD> outConj;
-      outConj.push_back(bat->bdd(eat->outputFnOf(*i)));
-      outConj.insert(outConj.end(), conjAux.begin(), conjAux.end());
-      vector<BDD> sortedOutConj = linearArrangement(outConj);
-      assert(sortedOutConj.size() == outConj.size());
-      outConj.clear();
-      vector<BDD> clusteredOutConj =
-        clusterConjuncts(sortedOutConj, inputCube, clusterLimit, verbosity);
-      assert(sortedOutConj.size() == 0);
-      inputCube = quantifyLocalInputs(clusteredOutConj, inputCube,
-                                      clusterLimit, verbosity);
-      BDD of = flattenOutput(clusteredOutConj, inputCube);
-#else
       BDD of = bat->bdd(eat->outputFnOf(*i));
+      // Apply invariant constraints.
+      for (vector<BDD>::iterator i = _constr.begin(); i != _constr.end(); ++i)
+        of &= *i;
       vector<unsigned int> support = of.SupportIndices();
       queue< vector<unsigned int> > q;
       q.push(support);
@@ -192,7 +179,6 @@ void BddTrAttachment::build()
       }
       // Finally, remove primary inputs.
       of = of.ExistAbstract(inputCube);
-#endif
       _inv.push_back(of);
       reportBDD("Output function", of, _xvars.size(), verbosity,
                 Options::Terse);

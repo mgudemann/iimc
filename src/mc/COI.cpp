@@ -173,7 +173,7 @@ void COIAttachment::build() {
     cout << "COIAttachment: building" << endl;
 
   // If we read CTL properties, the attachment is modified.
-  ExprAttachment * const eat = (ExprAttachment *) model().attachment(Key::EXPR);
+  ExprAttachment * const eat = (ExprAttachment *) model().constAttachment(Key::EXPR);
   vector<ID> latches(eat->stateVars());
   vector<ID> nsfs(eat->nextStateFnOf(latches));
 
@@ -203,5 +203,5 @@ void COIAttachment::build() {
   _coi = coi;
 
   delete v;
-  model().release(eat);
+  model().constRelease(eat);
 }

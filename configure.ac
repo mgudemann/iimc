@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([iimc], [1.1])
+AC_INIT([iimc], [1.2])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE(

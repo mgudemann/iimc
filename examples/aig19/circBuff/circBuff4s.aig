@@ -1,0 +1,74 @@
+aig 364 5 28 1 331
+190
+228
+266
+274
+8
+302
+388
+416
+374
+432
+440
+456
+352
+468
+10
+526
+534
+324
+550
+566
+574
+492
+2
+598
+624
+632
+512
+0
+728
+,,!#44$"9722<	-$?
+lA"UlGirj`TuTvP$]-`+no}Äöá?>G"t+≤FPDt@f>t`'v*wmú)÷l`jRfzd^ÜMäPõìób£Xõü^‹Åˇ®
+pÏ$˝˚z
+óÖÛΩJhX∆aeÕÙd°èk¬n‚t	Èêã@öt¯ìÅˇˆLŒ•-’≠ÏÀ%Œ#–‘$ÁÂ	©ZÆ~≤ßãπΩTÀ
+¡˘û¸, Ç	—’NÿNû¢ú´&§vÄ˜∞˙RÓÄ/ıúï‡8Ç√[âöÄ0ÿ’â⁄yç◊ê§6®ùCØÀ*¥ö∏≠ßø√@œ«À:àâ“öñ#ó%¢õ8™|6ﬁêF.–‚∫ÎSÎ»Ÿ‹Ô∆ñ¥ò∞¿û¥ ÔÿÜ∆∫¬¨∞ Äˆ®ﬁ¶⁄ö»¶Ü4 2&Ä$88
+Ü-+
+•i0 randInput<1>
+i1 pop
+i2 push
+i3 randInput<0>
+i4 randInput<2>
+l0 uutCircBuff.buff<*0*><2>
+l1 uutCircBuff.buff<*1*><1>
+l2 uutCircBuff.buff<*2*><0>
+l3 uutCircBuff.hd<0>
+l4 X<0>
+l5 dataIn<2>
+l6 uutCircBuff.outReg<1>
+l7 uutCircBuff.tl<1>
+l8 uutCircBuff.buff<*3*><1>
+l9 uutCircBuff.buff<*0*><0>
+l10 uutCircBuff.hd<2>
+l11 uutCircBuff.buff<*1*><2>
+l12 uutCircBuff.buff<*2*><1>
+l13 dataIn<0>
+l14 X<2>
+l15 uutCircBuff.outReg<2>
+l16 uutCircBuff.tl<2>
+l17 uutCircBuff.buff<*0*><1>
+l18 uutCircBuff.buff<*1*><0>
+l19 uutCircBuff.buff<*3*><0>
+l20 uutCircBuff.hd<1>
+l21 uutCircBuff.buff<*2*><2>
+l22 X<1>
+l23 dataIn<1>
+l24 uutCircBuff.outReg<0>
+l25 uutCircBuff.tl<0>
+l26 uutCircBuff.buff<*3*><2>
+l27 uutCircBuff.p<0>
+o0 error
+c
+bliftoaig
+1.9
+circBuff4s.blif

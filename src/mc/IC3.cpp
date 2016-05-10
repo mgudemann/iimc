@@ -2694,23 +2694,60 @@ namespace {
     sst.cons = st.m.newSATManager();
 
     CNFAttachment * cnfat = (CNFAttachment *) st.m.constAttachment(Key::CNF);
-    vector< vector<ID> > tr = cnfat->getPlainCNF();
+    vector< vector<ID> > cons_clauses = cnfat->getPlainCNF();
     st.m.constRelease(cnfat);
-
-    sst.cons->add(tr);
     if(st.ss.opts.constraints) {
       for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i)
-        sst.cons->add((*st.ss.opts.constraints)[i]);
+        cons_clauses.insert(cons_clauses.end(),
+                            (*st.ss.opts.constraints)[i].begin(),
+                            (*st.ss.opts.constraints)[i].end());
     }
+
+    sst.cons->add(cons_clauses);
     st.cons = sst.cons->newView(st.ev);
 
     CubeSet cubes = st.cubes[k+1];
 
     if(st.opts.initCube) {
-      assert(st.ss.simpleInit);
-      //Need to change st.ss.initially which is used by consecution
-      st.ss.initially.clear();
-      st.ss.initially.insert(st.opts.initCube->begin(), st.opts.initCube->end());
+      if(st.ss.simpleInit) {
+        //Need to change st.ss.initially which is used by consecution
+        st.ss.initially.clear();
+        st.ss.initially.insert(st.opts.initCube->begin(), st.opts.initCube->end());
+      }
+      else {
+        assert(!st.ss.bddInit);
+        delete st.icons;
+        delete st.ss.icons;
+        delete st.init;
+        delete st.ss.init;
+        SAT::Clauses init_clauses;
+        for (vector<ID>::const_iterator it = st.opts.initCube->begin();
+             it != st.opts.initCube->end(); ++it) {
+          vector<ID> cls;
+          cls.push_back(*it);
+          init_clauses.push_back(cls);
+        }
+        SAT::Clauses icons_clauses(cons_clauses);
+        icons_clauses.insert(icons_clauses.end(), init_clauses.begin(), init_clauses.end());
+        ExprAttachment const * eat = (ExprAttachment *) st.m.constAttachment(Key::EXPR);
+        for (vector<ID>::const_iterator it = eat->constraints().begin(); it != eat->constraints().end(); ++it)
+          Expr::tseitin(st.ev, *it, init_clauses);
+        st.m.constRelease(eat);
+
+        st.ss.icons = st.m.newSATManager();
+        st.icons = st.ss.icons->newView(st.ev);
+        st.ss.icons->add(icons_clauses);
+
+        st.ss.init = st.m.newSATManager();
+        st.init = st.ss.init->newView(st.ev);
+        st.ss.init->add(init_clauses);
+
+        if(st.ss.opts.constraints)
+          for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i) {
+            st.ss.init->add((*st.ss.opts.constraints)[i]);
+          }
+
+      }
       //Remove clauses that are not implied by the provided initial condition
       for(CubeSet::iterator it = cubes.begin(); it != cubes.end();) {
         vector<ID> cube = *it;
@@ -2752,11 +2789,7 @@ namespace {
       delete sst.cons;
       sst.cons = st.m.newSATManager();
 
-      sst.cons->add(tr);
-      if(st.ss.opts.constraints) {
-        for (unsigned i = 0; i < st.ss.opts.constraints->size(); ++i)
-          sst.cons->add((*st.ss.opts.constraints)[i]);
-      }
+      sst.cons->add(cons_clauses);
       st.cons = sst.cons->newView(st.ev);
 
       cubes = next;

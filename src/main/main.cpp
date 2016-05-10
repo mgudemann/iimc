@@ -72,7 +72,15 @@ int main(int argc, char * argv[]) {
   CommandLineOptions options;
   Model model(options.options(), "main");
 
-  int status = options.parseCommandLineOptions(model, argc, argv);
+  int status;
+  try {
+    status = options.parseCommandLineOptions(model, argc, argv);
+  }
+  catch(InputError ie) {
+    cerr << ie.what() << endl;
+    return 1;
+  }
+
   model.setVerbosity(
     options.options().count("verbosity") 
     ? (Options::Verbosity) options.options()["verbosity"].as<int>()

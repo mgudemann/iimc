@@ -98,6 +98,7 @@ public:
   std::vector<BDD> currentStateVars() const { return _xvars; }
   std::vector<BDD> nextStateVars() const { return _yvars; }
   std::vector<BDD> invariants() const { return _inv; }
+  std::vector<BDD> constraints() const { return _constr; }
   BDD img(const BDD& from) const;
   BDD preimg(const BDD& from) const;
   void resetBddManager(const std::string bdd_to) const;
@@ -144,6 +145,7 @@ private:
   BDD _init;
   std::vector<BDD> _xvars, _yvars;
   std::vector<BDD> _inv;
+  std::vector<BDD> _constr;
 };
 
 #endif // _BddTrAttachment_

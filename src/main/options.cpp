@@ -302,7 +302,7 @@ namespace Options {
 
       ("bdd_rand",
        value<unsigned int>(),
-       "BDD reorderinng randomization factor")
+       "BDD reordering randomization factor")
 
       ("bdd_threshold",
        value<unsigned int>()->default_value(2000),

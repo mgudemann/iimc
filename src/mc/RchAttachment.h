@@ -43,7 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Model.h"
 
 /**
- * A class to hold reachability infomatio on a model.
+ * A class to hold reachability infomation on a model.
  */
 class RchAttachment : public Model::Attachment {
 public:

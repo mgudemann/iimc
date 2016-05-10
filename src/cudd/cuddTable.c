@@ -2608,7 +2608,7 @@ ddResizeTable(
 	** larger one; move all old subtables, and initialize the new
 	** subtables up to index included.
 	*/
-	newsize = (index < 0) ? amount : index + amount;
+	newsize = (index < 0) ? amount + oldsize : index + amount;
 #ifdef DD_VERBOSE
 	(void) fprintf(unique->err,
 		       "Increasing the table size from %d to %d\n",

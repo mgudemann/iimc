@@ -112,7 +112,7 @@ namespace IIC {
         eat->setOutputFn(bad[pi], badFns[pi]);
         model().setDefaultMode(Model::mIC3);
       }
-      else if (eat->justice().size() > 0) { // progress
+      else if (eat->justice().size() > 0 && pi - eat->bad().size() < eat->justice().size()) { // progress
         pi -= eat->bad().size();
         assert(pi < eat->justice().size());
         if (model().verbosity() > Options::Silent && eat->justice().size() > 1)
@@ -136,10 +136,17 @@ namespace IIC {
         eat->clearJusticeSets();
         model().setDefaultMode(Model::mFAIR);
       }
-      else if (eat->outputs().size() > 0) { // AIGER 1.0: safety
+      else if (eat->bad().empty() && eat->justice().empty() && pi < eat->outputs().size()) { // AIGER 1.0: safety
+        std::vector<ID> outputs = eat->outputs();
+        std::vector<ID> outputFns = eat->outputFns();
+        eat->clearOutputFns();
+        eat->setOutputFn(outputs[pi], outputFns[pi]);
         if (model().verbosity() > Options::Silent && eat->outputs().size() > 1)
-          std::cout << "IGNORING ALL BUT FIRST OUTPUT" << std::endl;
+          std::cout << "IGNORING ALL BUT OUTPUT " << pi << std::endl;
         model().setDefaultMode(Model::mIC3);
+      }
+      else {
+        throw InputError("Property index out of range");
       }
       model().release(eat);
     }

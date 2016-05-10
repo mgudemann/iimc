@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ExprUtil.h"
 #include "ExprAttachment.h"
 #include "BddAttachment.h"
+#include "SeqAttachment.h"
 #include "Util.h"
 
 #include <fstream>
@@ -500,18 +501,30 @@ vector<ID> BddAttachment::readOrder(
   const std::string& filename, 
   unordered_map<ID, bool> leaves)
 {
-  vector<ID> gateList;
-  unordered_set<ID> seen;
   ifstream ifs(filename.c_str());
   if (!ifs.good())
     throw InputError("Cannot open order file.");
+  // Build set of leaves that have been removed by optimizations (e.g., COI).
+  SeqAttachment const *seat =
+    (SeqAttachment const *) _model.constAttachment(Key::SEQ);
+  unordered_set<ID> original(seat->inputs.begin(), seat->inputs.end());
+  for (auto it = seat->optimized.begin(); it != seat->optimized.end(); ++it)
+    original.insert(it->first);
+  _model.constRelease(seat);
+  // Read order file.
+  vector<ID> gateList;
+  unordered_set<ID> seen;
   std::string name;
   while (ifs >> name) {
     ID id = v.newVar(name);
-    if (leaves.find(id) == leaves.end())
-      throw InputError("Unrecognized leaf in order file.");
+    if (leaves.find(id) == leaves.end()) {
+      if (original.find(id) == original.end())
+        throw InputError(std::string("Unrecognized leaf (" + name + ") in order file."));
+      else
+        continue;
+    }
     if (seen.find(id) != seen.end())
-      throw InputError("Duplicate name in order file.");
+      throw InputError(std::string("Duplicate name (" + name + ") in order file."));
     seen.insert(id);
     gateList.push_back(id);
   }

@@ -54,7 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 /** namespace of BMC */
 namespace BMC {
   struct BMCOptions {
-    BMCOptions() : timeout(-1), sim(false), useCOI(true), printCex(false), constraints(NULL), iictl(false), proofProc(IC3::STRENGTHEN) {}
+    BMCOptions() : timeout(-1), sim(false), useCOI(true), printCex(false), constraints(NULL), iictl(false), silent(false), proofProc(IC3::STRENGTHEN) {}
     size_t lo;
     size_t * bound;
     int timeout;

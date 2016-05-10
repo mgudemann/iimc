@@ -92,7 +92,7 @@ void BddFwReachAction::doFwReachability(Model& model) {
   model.constRelease(rat);
 
   bool keepGoing = model.options().count("bdd_trav");
-  if (!keepGoing && invariants[0].IsZero()) {  // AIGER-specific
+  if (!keepGoing && invariants[0].IsZero()) {  // AIGER/iimc-specific
     // Trivial case of passing property.
     if (verbosity > Options::Terse)
       cout << "Empty set of bad states" << endl;
