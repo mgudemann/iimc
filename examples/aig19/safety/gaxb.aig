@@ -1,0 +1,16 @@
+aig 11 1 4 1 6
+12
+17
+20
+22
+6
+	i0 x
+l0 p0
+l1 p1
+l2 q0
+l3 q1
+o0 p1
+c
+bliftoaig
+20071012
+gaxb.blif

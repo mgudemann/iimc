@@ -1,0 +1,49 @@
+aig 165 5 11 2 149 0 0 2
+88
+116
+144
+172
+184
+244
+260
+272
+292
+308
+330
+96
+124
+1
+1
+96
+124
+ ,3.-="C
+
+?,,E*UNM	UaVgToho	otb\f(|‹€‚po
+
+.k‡ <4’²•œ£
+›¤Â£¶¿ÂÅ¿ À¼ÂÀÔİÂáå¢IÑú°¨<¹÷S¦€òñ„
+Jİ‡şñŸl
+
+˜}—¥¦ˆ¬Œ
+¨i0 start<1>
+i1 nd
+i2 clock
+i3 start<0>
+i4 start<2>
+l0 ba.lock
+l1 busMgmt.prop1.state<0>
+l2 meteo.prop1.state<0>
+l3 busMgmt.state<1>
+l4 meteo.prop1.state<1>
+l5 meteo.state<0>
+l6 cm.state
+l7 busMgmt.prop1.state<1>
+l8 meteo.state<1>
+l9 ba.locker
+l10 busMgmt.state<0>
+o0 fair1
+o1 fair2
+c
+bliftoaig
+1.9
+pf.auto.blif

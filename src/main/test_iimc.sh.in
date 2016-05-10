@@ -1,0 +1,40 @@
+#! /bin/sh
+
+# A simple script to test iimc.  Each item in argslist corresponds to one run.
+
+EXE=@EXEEXT@
+srcdir=@srcdir@
+aigdir=${srcdir}/examples/aig19
+
+# The separator IFS is set to a comma so that we can have spaces between
+# arguments.
+
+IFS=,
+argslist="\
+-t print_expr -t print_dot -t print_verilog ${aigdir}/safety/counter3.aig > /dev/null,\
+-t sr -t ic3 ${aigdir}/safety/counter3.aig,\
+-t sr -t ic3 --cnf_techmap ${aigdir}/safety/gaxb.aig,\
+-t bmc --bmc_bound 10 ${aigdir}/safety/sss.aig,\
+-t sr -t bdd_fw_reach --bdd_sweeping ${aigdir}/safety/gaxb.aig,\
+-t bddsweep -t fair ${aigdir}/liveness/cnt3bits.aig,\
+-t sr -t satsweep -t bmc --bmc_bound 4 -t ic3r ${aigdir}/safety/sss.aig,\
+-t bmc --bmc_bound 1 -t ic3 ${aigdir}/safety/sss.aig"
+
+verbosity=0
+
+exitstatus=0
+count=0
+for args in $argslist
+do
+  echo "executing" "./iimc$EXE -v $verbosity $args"
+  eval "./iimc$EXE -v $verbosity $args"
+  failed=`expr $? != 0`
+  exitstatus=`expr $exitstatus + $failed`
+  count=`expr $count + 1`
+done
+
+date +"%m %Y"|cal
+#echo
+echo "$exitstatus failed sub-tests out of $count"
+
+exit $exitstatus

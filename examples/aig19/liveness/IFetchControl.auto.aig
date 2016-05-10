@@ -1,0 +1,250 @@
+aig 654 32 57 41 565 2 0 1
+414
+424
+436
+446
+476
+492
+502
+510
+520
+546
+584
+606
+624
+634
+644
+654
+664
+674
+684
+728
+738
+748
+758
+768
+778
+806
+828
+854
+868
+884
+898
+908
+948
+980
+990
+1000
+1010
+1020
+1030
+1040
+1048
+1058
+1078
+1088
+1098
+1108
+1122
+1138
+1164
+1176
+1192
+1198
+1208
+1218
+1228
+1238
+1254
+160
+78
+76
+598
+1258
+1269
+66
+1260
+1270
+1272
+504
+1275
+84
+138
+244
+154
+1280
+120
+1284
+162
+116
+208
+1287
+1288
+150
+178
+1290
+1292
+1294
+1297
+1298
+90
+1301
+140
+1304
+76
+262
+15
+1306
+1308
+932
+1306
+1308
+1
+932
+q3""p(K)#w/¾x)Y]Á oE"'¡I"—O©R!ŸW±˜]· c½PÁXÅ^Éd&&00<<HHNeV¢ibÂp48=CKS]glƒÀ‡ë|ŸN	\ajq|…Š£Ý¦Š[{„‹•Ÿ£»õ¾¢
+
+…äŠèÛ5÷š”ƒä¡í9åBªÉ,ôÎ+óúƒƒ
+
+‘=s€ÔØCÜF—I§@ëUØX‡[µDÜ'Ý)¬­	Ö‹¥(ú©)ãƒgÛ‹T·Ùöé
+ñI¡XÇÍ·ãÆÊ…K±Î“ößØ
+Ü•MÅæO÷öð¥Q%Òú­Rõ…µTó™½W•˜ƒÆóøÿ1ƒ*‹‰³°
+“+­#"'&ï[ËÎ÷]íhØ?ÀB™E‡`ÿkí×¸ÚýÝ—eõŠæ#é%Á¬¹’Ú×³*ßãÕÞí½ô
+ê“²Öù¦†êà¤©çPê÷ÌdÐhémº ¦‚ÜàÄ³É±µÒØÌ
+ÙªÜÑßç$äK‡³êLŽºâòþ#¥™† ±t‹M¯Û°ß
+Ü
+à¾½Á«¤®Í±×yóÞÔßzÓ	ßç}×Žèï~ÛóÝšàËãÿƒº„ï–òÉõ‡˜¼Ÿ§¼É¢Ÿˆ™‘­“”ö ™¯ùÄÀÊ@¹¤ÊfÏj”«#†Ú2Þ6ÉˆŒ°Ü» –Úßé”ó	…	òûú™ù’üòš	…€ˆé‹ì¿®	•Ÿ£’¸	¡µ	
+Â	¥£ñÜÉÇÍ	Ò	ÙØ	èyƒê‡	Í©	9Ð	­	'éÛ×	µ	8È	×BçUö	
+Ä	æ‰³!ìÃ	Û	£	-ž	'i0 PCPacketNum_s2i<1>
+i1 ICacheLineValid_s2r
+i2 BNEnext_s1e
+i3 Match_v2r
+i4 L2Miss_s2
+i5 SIsNegative_v1e
+i6 MipsMode_s2e
+i7 Phi1
+i8 PC_bit31_s2i
+i9 Except_s1w
+i10 BLTZnext_s1e
+i11 EPCSel_s1m
+i12 PCPacketNum_s2i<0>
+i13 Reset_s1
+i14 BGEZnext_s1e
+i15 ItlbMiss_v2e
+i16 BDynamicBit_v1r
+i17 EPCNSel_s1m
+i18 MemStall_s1
+i19 SystemBit_s2e
+i20 Stall_s1
+i21 nd
+i22 PCOffset_s2i
+i23 BLEZnext_s1e
+i24 BGTZnext_s1e
+i25 NonCacheable_s1
+i26 SEqualsT_v1e
+i27 ExtDataValid_s2
+i28 RegPC_s1e
+i29 BEQnext_s1e
+i30 ImmPC_s1e
+i31 ADynamicBit_v1r
+l0 LatchDataReg_s1
+l1 ADynamicBit_s1e
+l2 PrevState_s2<2>
+l3 BDynamicBit_s1e
+l4 prop0.state<1>
+l5 IStall_s1
+l6 Hold_s2e
+l7 IStall_s2
+l8 BDynamicBit_s2r
+l9 LatchNonCachePkt_s2
+l10 prop1.state<0>
+l11 SecondIssue_s1e
+l12 ExtMuxSelect_s1
+l13 PCOffset_s1r
+l14 PresState_s1<3>
+l15 PresState_s1<0>
+l16 Reset_s2
+l17 ReadCache_s2r
+l18 PCPacketNum_s1r<1>
+l19 IncPC_s2e
+l20 MipsMode_s1
+l21 ADrvB_s1e
+l22 Except_s2w
+l23 ItlbMiss_s2
+l24 PrevState_s2<1>
+l25 AKill_s1e
+l26 prop0.state<0>
+l27 ADrvB_s2r
+l28 ItlbMiss_s1
+l29 SecondIssueMips_s1e
+l30 prop1.state<1>
+l31 SecondIssue_s2e
+l32 prop2.state<1>
+l33 WriteCache_s2
+l34 PCOffset_s2r
+l35 PresState_s1<2>
+l36 EPCSel_s2m
+l37 NonCacheableHeld_s1
+l38 EPCNSel_s2m
+l39 PrevState_s2<3>
+l40 Hold_s1e
+l41 PrevState_s2<0>
+l42 BKill_s1e
+l43 IFetchStall_s2
+l44 TakenBranch_s2e
+l45 SecondIssueCond_s1e
+l46 NonCacheable_s2
+l47 IFetchStall_s1
+l48 BDrvA_s2r
+l49 ReadCache_s2i
+l50 prop2.state<0>
+l51 ReadCache_s1r
+l52 ADynamicBit_s2r
+l53 PresState_s1<1>
+l54 BDrvA_s1e
+l55 PCPacketNum_s1r<0>
+l56 LatchShiftReg_s1
+o0 IFetchStall_s1
+o1 HoldPC_s2e
+o2 Jump4_s1e
+o3 HoldPC_s2r
+o4 EPCBufEnable_s2m
+o5 DataEnable_s2
+o6 LatchDataReg_s1
+o7 WriteData_s2
+o8 Jump3_s1e
+o9 IAddrError_v2i
+o10 PCUnitPsi2_s2
+o11 Gamma1_s1
+o12 LatchNonCachePkt_s2
+o13 EPCMuxSel_s2m
+o14 WritePack_s2<0>
+o15 TakenBranch_s2e
+o16 LatchInstrs_s1r
+o17 ADrvB_s2r
+o18 Jump2_s1e
+o19 BDrvA_s2r
+o20 AKill_s1e
+o21 ICacheMiss_v2r
+o22 KillOne_s1e
+o23 RestoreIStallPC_s1
+o24 BKill_s1e
+o25 LatchShiftReg_s1
+o26 latchEPC_s1w
+o27 Jump1_s1e
+o28 LatchTags_s1r
+o29 WritePack_s2<1>
+o30 Jump5_v1e
+o31 ExtMuxSelect_s1
+o32 TagEnable_s2
+o33 NonCacheableHeld_s1
+o34 Jump0_s1e
+o35 IStall_s1
+o36 WriteTag_s2
+o37 MipsMode_b_s2e
+o38 safe0
+o39 safe1
+o40 fair2
+c
+bliftoaig
+1.9
+IFetchControl.auto.blif

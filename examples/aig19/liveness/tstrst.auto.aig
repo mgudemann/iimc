@@ -1,0 +1,20 @@
+aig 28 0 5 2 23 1
+46
+10
+54
+5 1
+8 1
+4
+56
+56
+ 2l0 prop2.state<0>
+l1 o
+l2 prop2.state<1>
+l3 s
+l4 t
+o0 o
+o1 safe2
+c
+bliftoaig
+1.9
+tstrst.auto.blif

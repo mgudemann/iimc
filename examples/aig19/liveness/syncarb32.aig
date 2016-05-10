@@ -1,0 +1,240 @@
+aig 273 33 98 1 142 0 0 1
+192
+266
+246
+270
+274
+424
+48
+222
+204
+428
+432
+18
+436
+440
+64
+444
+54
+28
+4
+190
+448
+452
+58
+150
+40
+456
+460
+162
+464
+146
+136
+468
+10
+202
+250
+46
+472
+122
+476
+258
+480
+72
+212
+484
+164
+16
+66
+82
+232
+488
+52
+30
+2
+492
+496
+22
+60
+38
+24
+500
+8
+68
+134
+504
+44
+143
+14
+248
+106
+508
+515
+12
+224
+518
+50
+32
+522
+114
+156
+20
+62
+36
+126
+526
+56
+530
+534
+26
+6
+128
+199
+152
+538
+542
+42
+260
+84
+546
+412
+1
+412
+;Ü/ã6•JyYDÅEÇn†4H™&HÇ|<t$\é@f∫6∂2HxÆ:v^`¨
+XZr|‡\tdhf6⁄@¶ÜåºBé¨¬ƒ<ÆñlÀ{‹ÙÉÀÉ—ä‘í°2≈√œ”Ç≥ù:Àª„’|Â«πÒ^ï—&«èB•◊xß›lÁ„f•…@øﬂhìø
+Öª<Ø≠â∑$ˇ≥<√ı6©bË∞≠éë´ó°H…°≠£¨±õn—ùZıôtÉi0 req<20>
+i1 req<22>
+i2 req<24>
+i3 req<26>
+i4 req<28>
+i5 req<10>
+i6 req<31>
+i7 req<12>
+i8 req<14>
+i9 req<16>
+i10 req<18>
+i11 req<0>
+i12 req<2>
+i13 req<4>
+i14 req<6>
+i15 req<8>
+i16 nd
+i17 req<21>
+i18 req<23>
+i19 req<25>
+i20 req<27>
+i21 req<29>
+i22 req<30>
+i23 req<11>
+i24 req<13>
+i25 req<15>
+i26 req<17>
+i27 req<19>
+i28 req<1>
+i29 req<3>
+i30 req<5>
+i31 req<7>
+i32 req<9>
+l0 c5.token
+l1 c8.waiting
+l2 c24.token
+l3 c22.waiting
+l4 c0.waiting
+l5 prop.ast<0>
+l6 lreq<11>
+l7 c28.token
+l8 c9.token
+l9 c21.waiting
+l10 c7.waiting
+l11 lreq<14>
+l12 c27.waiting
+l13 c19.waiting
+l14 lreq<7>
+l15 c13.waiting
+l16 lreq<17>
+l17 lreq<4>
+l18 lreq<22>
+l19 c7.token
+l20 c14.waiting
+l21 c30.waiting
+l22 lreq<1>
+l23 c26.token
+l24 lreq<25>
+l25 c18.waiting
+l26 c28.waiting
+l27 c30.token
+l28 c6.waiting
+l29 c13.token
+l30 c22.token
+l31 c20.waiting
+l32 lreq<28>
+l33 c3.token
+l34 c21.token
+l35 lreq<30>
+l36 c1.waiting
+l37 c31.token
+l38 c23.waiting
+l39 c12.token
+l40 c9.waiting
+l41 c25.token
+l42 c19.token
+l43 c11.waiting
+l44 c16.token
+l45 lreq<12>
+l46 lreq<9>
+l47 c29.token
+l48 c15.token
+l49 c16.waiting
+l50 lreq<15>
+l51 lreq<6>
+l52 lreq<20>
+l53 c26.waiting
+l54 c4.waiting
+l55 lreq<18>
+l56 lreq<3>
+l57 lreq<23>
+l58 lreq<0>
+l59 c25.waiting
+l60 lreq<26>
+l61 c6.token
+l62 c4.token
+l63 c3.waiting
+l64 lreq<29>
+l65 c0.ntoken
+l66 lreq<31>
+l67 c2.token
+l68 c8.token
+l69 c10.waiting
+l70 prop.ast<1>
+l71 lreq<10>
+l72 c18.token
+l73 c24.waiting
+l74 lreq<13>
+l75 lreq<8>
+l76 c2.waiting
+l77 c27.token
+l78 c17.token
+l79 lreq<16>
+l80 lreq<5>
+l81 lreq<21>
+l82 c14.token
+l83 c29.waiting
+l84 lreq<19>
+l85 c17.waiting
+l86 c5.waiting
+l87 lreq<2>
+l88 lreq<24>
+l89 c23.token
+l90 c1.token
+l91 c20.token
+l92 c31.waiting
+l93 c15.waiting
+l94 lreq<27>
+l95 c11.token
+l96 c10.token
+l97 c12.waiting
+o0 fair
+c
+bliftoaig
+20071012
+syncarb32.blif

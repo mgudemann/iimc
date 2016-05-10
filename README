@@ -1,0 +1,238 @@
+This is release 1.0 of IImc, an Incremental Inductive model checker. IImc
+features novel formal engines such as IC3[1,2] and FAIR[3].
+
+IImc is developed by MC@CU, the model checking group at the University of
+Colorado at Boulder. IImc's authors are Aaron Bradley, Arlen Cox, Zyad Hassan,
+Fabio Somenzi, and Yan Zhang.
+
+To build IImc, you will need
+
+  * GNU C++ (g++) version 4.3 or later (to support -std=c++0x option)
+  * GNU's make utility
+  * The boost library (at the very least, the "Boost Program Options" and the
+    "Boost Random" libraries)
+
+-------------------------------------------------------------------------------
+* Useful Addresses
+
+The IImc home page and forum are on:
+
+    http://iimc.colorado.edu
+
+The most recent version of the GNU tools:
+
+    http://www.gnu.org
+
+The most recent version of the boost libraries:
+
+    http://www.boost.org
+
+-------------------------------------------------------------------------------
+* Building IImc
+
+1. Download the most recent version of IImc from:
+
+    http://vlsi.colorado.edu/iimc
+
+   into a convenient directory, (e.g. /tmp).
+
+2. Move to where you would like to build IImc and unpack the distribution:
+
+    $ cd /home/iimc                           # for example
+    $ tar xvzf /tmp/iimc-1.0.tar.gz
+
+3. Move into the iimc-1.0 directory and run configure, which will determine
+   some system-specific parameters and create the Makefile
+
+    $ cd iimc-1.0
+    $ ./configure
+
+4. Build IImc by running make:
+
+    $ make
+
+   This builds an executable "iimc" in the current directory.
+
+5. Verify IImc works by running it on some of the examples included
+   in the distribution:
+
+    $ make check
+
+-------------------------------------------------------------------------------
+* Using IImc
+
+  IImc includes a number of formal engines as well as a number of combinational
+  and sequential circuit simplification engines. Each of those engines is
+  called an action or a tactic. Applying a certain tactic can be done by
+  supplying the "-t" option followed by the tactic's name. Multiple tactics can
+  be applied in sequence by preceding each of the tactic's names by the "-t"
+  option and writing them in the desired order , e.g., -t tactic1 -t tactic2.
+  
+  This is the list of formal engines currently available in IImc with the
+  corresponding tactic name:
+
+  a. BDD Backward Reachability: bdd_bw_reach
+  b. BDD Forward Reachability:  bdd_fw_reach
+  c. BMC:                       bmc
+  d. FSIS[4]:                   fsis
+  e. IC3:                       ic3
+  f. Reverse IC3:               ic3r
+
+  The list of circuit simplification engines currently available in IImc with
+  the corresponding tactic name follows.
+
+  a. BDD Sweeping:                                        bddsweep
+  b. Cut Sweeping:                                        cutsweep
+  c. SAT Sweeping:                                        satsweep
+  c. Cone-of-Influence Reduction:                         coi
+  d. Latch Sequential Equivalence (Latch Correspondence): se
+  e. Latch Stuck-at-Value Detection:                      stuck
+  f. Sequential Reduction (applies coi, stuck, and se):   sr
+
+  For each tactic, there are usually multiple options available (e.g., timeout,
+  parameters, etc.). Supplying options can be done using
+  --<option-name> <option-value-if-available>, which can be written anywhere in
+  the command-line arguments. For example:
+
+    -t ic3 --ic3_timeout 10
+
+  is the same as
+
+    --ic3_timeout 10 -t ic3
+
+  To view a list of available options, do
+
+    ./iimc -h
+
+  OR
+   
+    ./iimc --help
+
+-------------------------------------------------------------------------------
+* Example Sessions
+
+1. To run IImc's IC3 engine on the gcd16flat.aig example, use the following:
+
+    ./iimc -t ic3 examples/aig/gcd16flat.aig
+
+   which would produce:
+
+    1
+
+   indicating that the property is SAT. To run with more verbosity, use -v
+   <1-4> with 1 indicating less verbose and 4 indicating maximum verbosity.
+
+2. To perform cone-of-influence reduction and follow that by 10 seconds of
+   BMC and 5 seconds of IC3 on the smult8aflat example, and run that with
+   verbosity level 1, do:
+
+    ./iimc -v1 -t sr -t bmc --bmc_timeout 10 -t ic3 --ic3_timeout 5 examples/aig/smult8aflat.aig
+
+   which produces:
+
+    Input File is examples/aig/smult8aflat.aig
+    COI: Initial # latches = 21
+    COI: Final # latches = 5
+    BMC: Checking up to 1000
+    1
+
+   where IC3 did not get to run because BMC already found the property to be
+   SAT.
+
+3. To run cut sweeping followed by SAT sweeping followed by BDD forward
+   reachability with verbosity level of 2 on the sfeistelp1 example, do
+
+    ./iimc -v2 -t cutsweep -t satsweep -t bdd_fw_reach examples/aig/sfeistelp1.aig
+ 
+   which produces:
+
+   Input File is examples/aig/sfeistelp1.aig
+   # ./optimized/iimc -v2 -t cutsweep -t satsweep -t bdd_fw_reach
+   # examples/aig/sfeistelp1.aig
+   ExprAttachment: building from file
+   AIGAttachment: Building AIG for model main
+   CombAttachment: building
+   Cut Sweeping: timeout disabled
+   Cut Sweeping: before cut sweeping, AIG has 7763 nodes (Use -v4 to dump AIG)
+   Cut Sweeping: in process (s=250, N=1)...
+   Cut Sweeping: found 1120 merges
+   Cut Sweeping: generated 13116 cuts
+   Cut Sweeping: used 6241 cuts in enumeration
+   Cut Sweeping: 0.03s spent in sweeping
+   Cut Sweeping: new AIG has 5186 nodes
+   SAT Sweeping: Number of AIG nodes = 5186
+   SAT Sweeping: Running with a timeout of 10 seconds + 0 seconds of relayed
+   time
+   SAT Sweeping: Merged a total of 31 nodes.
+   SAT Sweeping: New AIG has 5079 nodes
+   SAT Sweeping: 0.07s spent in sweeping
+   SAT Sweeping: Percentage Reduction = 2.06%
+   SAT Sweeping: Number of SAT checks = 70 (39 SAT/31 UNSAT/0 Timed Out)
+   SAT Sweeping: Number of ignored candidate equivalences due to SAT solver
+   timeout = 0
+   ExprAttachment: building from AIG
+   CombAttachment: building
+   Building BDDs for model main
+   Static BDD variable ordering method: interleaving
+   4803 BDD nodes
+   0 auxiliary variables
+   Computing transition relation for model main
+   number of variables = 654
+   BDD reordering with sifting: from 5229 to ... 4948 nodes in 0.13 sec
+   Output function: 1047 nodes 1 leaves 4.97323e+86 minterms
+   BDD reordering with sifting: from 9897 to ... 7979 nodes in 0.4 sec
+   BDD reordering with sifting: from 15959 to ... 8344 nodes in 0.43 sec
+   BDD reordering with sifting: from 16689 to ... 8661 nodes in 0.44 sec
+   BDD reordering with sifting: from 17323 to ... 8703 nodes in 0.46 sec
+   BDD reordering with sifting: from 17407 to ... 9168 nodes in 0.48 sec
+   BDD reordering with sifting: from 18337 to ... 9345 nodes in 0.48 sec
+   BDD reordering with sifting: from 18691 to ... 12056 nodes in 0.77 sec
+   BDD reordering with sifting: from 24113 to ... 11733 nodes in 0.62 sec
+   BDD reordering with sifting: from 23467 to ... 13065 nodes in 0.75 sec
+   BDD reordering with sifting: from 26131 to ... 13528 nodes in 0.77 sec
+   BDD reordering with sifting: from 27057 to ... 14982 nodes in 0.89 sec
+   Number of clusters/nodes = 12/6537
+   Initial condition: 294 nodes 1 leaves 1 minterms
+   Building proof attachment for model main
+   RchAttachment: building
+   Forward Reachability analysis
+   frontier 0: 294 nodes 1 leaves 1 minterms
+   frontier 1: 459 nodes 1 leaves 5.53402e+19 minterms
+   frontier 2: 966 nodes 1 leaves 3.40282e+38 minterms
+   frontier 3: 1146 nodes 1 leaves 1.25542e+58 minterms
+   BDD reordering with sifting: from 29962 to ... 25524 nodes in 1.94 sec
+   frontier 4: 2556 nodes 1 leaves 1.25542e+58 minterms
+   frontier 5: 727 nodes 1 leaves 1.25542e+58 minterms
+   frontier 6: 2760 nodes 1 leaves 1.25542e+58 minterms
+   frontier 7: 725 nodes 1 leaves 1.25542e+58 minterms
+   frontier 8: 2758 nodes 1 leaves 1.25542e+58 minterms
+   BDD reordering with sifting: from 51048 to ... 24375 nodes in 1.11 sec
+   frontier 9: 1546 nodes 1 leaves 1.25542e+58 minterms
+   frontier 10: 3327 nodes 1 leaves 1.25542e+58 minterms
+   BDD reordering with sifting: from 48740 to ... 36784 nodes in 3.01 sec
+   frontier 11: 6068 nodes 1 leaves 2.51084e+58 minterms
+   BDD reordering with sifting: from 73545 to ... 59540 nodes in 3.39 sec
+   frontier 12: 4242 nodes 1 leaves 2.31584e+77 minterms
+   frontier 13: 7530 nodes 1 leaves 2.31584e+77 minterms
+   Failure for output: 4486 nodes 1 leaves 4.97323e+86 minterms
+   1
+
+-------------------------------------------------------------------------------
+
+* References:
+
+[1] A. R. Bradley, "k-step relative inductive generalization.", Technical
+    Report, CU Boulder, Mar. 2010. http://arxiv.org/abs/1003.3649.
+
+[2] A. R. Bradley, "SAT-based model checking without unrolling.", In
+    Verification, Model Checking, and Abstract Interpretation (VMCAI'11), pages
+    70-87, Austin, TX, Jan. 2011. LNCS 6538.
+
+[3] A. R. Bradley, F. Somenzi, Z. Hassan, and Y. Zhang, "An incremental
+    approach to model checking progress properties.", In Formal Methods in
+    Computer Aided Design (FMCAD'11), pages 144-153, Austin, TX, Nov. 2011.
+
+[4] A. R. Bradley and Z. Manna, "Checking safety by inductive generalization of
+    counterexamples to induction.", In Formal Methods in Computer Aided Design
+    (FMCAD'07), pages 173-180, Austin, TX, Nov. 2007
+

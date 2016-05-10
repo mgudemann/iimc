@@ -1,0 +1,18 @@
+#! /bin/sh
+
+EXE=@EXEEXT@
+srcdir=@srcdir@
+
+datafiles=${@:-"r7x8.1.mat"}
+count=`echo $datafiles | wc -w`
+
+exitstatus=0
+for file in $datafiles
+do
+  ./testcudd$EXE ${srcdir}/$file
+  failed=`expr $? != 0`
+  exitstatus=`expr $exitstatus + $failed`
+done
+echo "$exitstatus failed sub-tests out of $count"
+
+exit $exitstatus
