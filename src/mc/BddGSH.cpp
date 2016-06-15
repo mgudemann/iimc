@@ -375,6 +375,7 @@ void BddGSHAction::exec(void) {
     if (empty || nonEmpty) { // we have a conclusion
       auto pat = m.attachment<ProofAttachment>(Key::PROOF);
       assert(pat != 0);
+      std::cout << "---\nGSH conclusion is " << (empty ? 0 : 1) << "\n----\n";
       pat->setConclusion(empty ? 0 : 1);
       m.release(pat);
       if (verbosity > Options::Silent) {

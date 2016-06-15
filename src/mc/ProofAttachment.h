@@ -42,6 +42,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ExprAttachment.h"
 #include "Model.h"
 
+#include <mutex>
+
 struct Transition {
   Transition(void) { };
   Transition(const std::vector<ID> & _state, const std::vector<ID> & _inputs) :
@@ -79,9 +81,14 @@ public:
   bool hasConclusion(void) const { return _hasConclusion; }
   int conclusion(void) const { return _safe; }
   void printConclusion(std::ostream& os = std::cout) const;
-  void setConclusion(const int conclusion) { 
+  void setConclusion(const int conclusion) {
+    std::lock_guard<std::mutex> lock(_conclusion_mutex);
+    std::cout << "----\nSETTING _safe: " << _safe << " conclusion " << conclusion <<
+      "\n----" << std::endl;
     assert(conclusion == 0 || conclusion == 1);
     if (_hasConclusion) {
+      if (_safe != conclusion)
+        std::cout << "ERROR: _safe: " << _safe << " conclusion " << conclusion << std::endl;
       assert(_safe == conclusion);
     } else {
       _safe = conclusion; 
@@ -117,6 +124,8 @@ private:
   void unfoldCounterexample(void);
   void printCex(std::ostream& os = std::cout) const;
   void printWitness(std::ostream& os = std::cout);
+
+  std::mutex _conclusion_mutex;
 
   bool _hasConclusion;
   int _safe;

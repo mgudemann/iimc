@@ -254,6 +254,7 @@ void KLiveAction::exec() {
 
   MC::ReturnValue rv = klive.check(timeout, bound, klive_backend);
   if (rv.returnType != MC::Unknown) {
+    std::cout << "----\nKLive conclusion " << (rv.returnType == MC::Proof ? 0 : 1) << "\n----\n";
     if (model().verbosity() > Options::Silent)
       cout << "Conclusion found by KLive." << endl;
     auto pat = model().attachment<ProofAttachment>(Key::PROOF);
