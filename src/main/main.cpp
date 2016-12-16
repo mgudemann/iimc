@@ -40,6 +40,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <sys/resource.h>
 */
 #endif
+#include <sys/resource.h>
 
 #include "Error.h"
 #include "Key.h"
@@ -99,6 +100,22 @@ int main(int argc, char * argv[]) {
   }
   */
 #endif
+
+  const rlim_t kStackSize = 32L * 1024L * 1024L; // 32M
+  rlimit rl;
+  int result;
+  result = getrlimit(RLIMIT_STACK, &rl);
+  cout << "rlim_cur: " << rl.rlim_cur << endl;
+  cout << "rlim_max: " << rl.rlim_max << endl;
+  assert(result == 0);
+  if(rl.rlim_cur<kStackSize)
+  {
+    rl.rlim_cur = kStackSize;
+    result = setrlimit(RLIMIT_STACK, &rl);
+    assert(result == 0);
+    cout << "rlim_new: " << kStackSize << endl;
+  }
+
   CommandLineOptions options;
   Model model(options.options(), "main");
 
