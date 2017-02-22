@@ -140,7 +140,7 @@ namespace IC3 {
       abs_prunelo = opts["ic3_absprunelo"].as<int>();
       abs_prunehi = opts["ic3_absprunehi"].as<int>();
       action = act;
-      backend = _backend ? *_backend : opts["ic3_backend"].as<std::string>();
+      backend = opts["ic3_backend"].as<std::string>();
       pushLast = opts.count("ic3_pushLast");
       minCex = opts.count("ic3_minCex");
     }
