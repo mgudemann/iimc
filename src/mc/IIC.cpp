@@ -380,7 +380,7 @@ namespace IIC {
     delete ev;
     model().constRelease(eat);
     // Choose number of threads.
-    unsigned nthreads = ceil((4000000)/modelSize);
+    unsigned nthreads = modelSize > 0 ? ceil((4000000)/modelSize) : thread_limit;
     nthreads = nthreads < thread_limit ? nthreads : thread_limit;
     unsigned long reorder_timeout = 1500*nthreads;
     // Push tactics at the front of the tactic queue in reverse order.
